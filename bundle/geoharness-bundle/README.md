@@ -25,6 +25,10 @@ metadata and canonical display GeoJSON, verifies lineage/parents/feature counts,
 client add derived layers. Selecting a successful Task step highlights exactly its output Layer
 rows and SVG map features.
 
+Six independent regression suites execute the same DAGs and require capability coverage, output
+Layer aliases, an independent GeoPandas spatial oracle and exact expected statistics. Run them
+with `pnpm run verify:phase8`.
+
 The default local provider launches one short-lived, cancellable Python runner per request and
 isolates persistent GeoPackage workspaces by Harness session and Scenario. Override `python`,
 `backendRoot`, `scenarioRoot` or `workspaceRoot` in the plugin row only when the repository layout

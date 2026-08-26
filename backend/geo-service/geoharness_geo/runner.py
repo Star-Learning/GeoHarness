@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .operations import GeoTools
+from .regression import ScenarioRegression
 from .registry import LayerRegistry
 
 
@@ -58,6 +59,11 @@ def dispatch(payload: dict[str, Any]) -> Any:
             }
             for item in registry.list_layers()
         ]
+    if action == "regression":
+        return ScenarioRegression(
+            registry,
+            {str(key): str(value) for key, value in dict(payload["layer_aliases"]).items()},
+        ).validate(str(payload["scenario_id"]))
     raise ValueError(f"Unknown runner action: {action}")
 
 

@@ -195,3 +195,30 @@ Phase 9。
 Phase 7 证明单个真实 Scenario 的 `Task Step ↔ Layer ↔ Map` 链路。六个 Scenario 的
 capability、required layers、spatial correctness 和 expected statistics 全量自动验收属于
 Phase 8。
+
+## Phase 8 — Scenario Regression Tests
+
+状态：完成（2026-08-27）
+
+- [x] 为六个 Scenario 分别建立独立回归测试与独立临时 workspace；每项测试从该
+  Scenario 自己的 Task Graph、数据、expected plan/result 开始真实执行。
+- [x] Required capability gate 验证 expected capability 全部出现在成功 Task steps；
+  Required layers gate 验证每个 required alias 都存在于真实 Layer map。
+- [x] 新增独立 Python/GeoPandas oracle，直接读取持久化 GeoPackage，复算几何有效性、
+  面积、河流/道路距离、分区计数和多约束布尔逻辑；不复用待测 ToolResult 文本。
+- [x] Expected statistics 对适用字段做深比较；Map Verification 还必须为 `ready`，避免
+  统计正确但 step/layer/map 投影断裂。
+- [x] Scenario 01：12 个 Polygon、0 invalid、1 个 height 缺失、面积为正。
+- [x] Scenario 02：5 个候选，全部距离河流不超过 500 m。
+- [x] Scenario 03：12 个建筑，两个 District 分别 6/6，分区面积和均为正。
+- [x] Scenario 04：3 个候选，District 为 3/0，全部距主要道路不超过 300 m。
+- [x] Scenario 05：初始 500 m buffer 与 4 个候选通过；1 km 修订及 history 明确交由
+  Phase 9，不以假数据提前通过。
+- [x] Scenario 06：2 个候选，全部距主要道路不超过 300 m 且距河流至少 800 m。
+- [x] 第一轮发现 regression action 的 `scenarioId` 被 provider 消费后未传入 Python；
+  改用内部协议 `scenario_id` 后第二轮 6/6 通过。
+
+## Phase 8 边界
+
+六个初始 Scenario 均已自动验收。Scenario 05 的自然语言参数修改、上游复用、下游
+失效/重跑、run history 和 lineage 更新属于 Phase 9。

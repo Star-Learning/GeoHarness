@@ -30,6 +30,12 @@ Phase 7 已通过官方 Connection RPC 将真实 Task Graph execution、Layer Re
 与 canonical map GeoJSON 绑定。Scenario 02 的 lineage、parents、feature count、step
 outputs 和浏览器 Layer 高亮均已验证；不再是活跃集成阻塞。
 
+### 六 Scenario 自动回归
+
+Phase 8 已用六个独立 workspace 自动运行全部 Scenario，并通过 capability、required
+layers、独立空间 oracle 和 expected statistics 四道门禁。Scenario 05 的修订字段是
+Phase 9 的明确阶段边界，不是 Phase 8 阻塞。
+
 ## 活跃风险与后续门禁
 
 ### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题
