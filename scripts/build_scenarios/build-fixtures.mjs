@@ -251,6 +251,222 @@ const definitions = [
   },
 ]
 
+const taskGraphSteps = {
+  '01-building-data-inspection': [
+    {
+      id: 'inspect_buildings', title: 'Inspect building dataset', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'calculate_building_geometry', title: 'Calculate building geometry', tool: 'calculate_geometry',
+      dependencies: ['inspect_buildings'],
+      parameters: { input_layer: { $layer: 'buildings' }, output_name: 'buildings_with_geometry' },
+      outputs: ['buildings_with_geometry'],
+    },
+    {
+      id: 'summarize_buildings', title: 'Summarize fields and geometry', tool: 'analyze_distribution',
+      dependencies: ['calculate_building_geometry'],
+      parameters: { input_layer: { $layer: 'buildings_with_geometry' }, fields: ['height_m', 'use', 'area_m2'] },
+      outputs: [],
+    },
+  ],
+  '02-river-building-query': [
+    {
+      id: 'inspect_buildings', title: 'Inspect buildings', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'inspect_rivers', title: 'Inspect river boundaries', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'rivers' } }, outputs: [],
+    },
+    {
+      id: 'transform_rivers', title: 'Transform rivers to metric CRS', tool: 'transform_crs',
+      dependencies: ['inspect_rivers'],
+      parameters: { input_layer: { $layer: 'rivers' }, target_crs: 'EPSG:32618', output_name: 'rivers_metric' },
+      outputs: ['rivers_metric'],
+    },
+    {
+      id: 'buffer_rivers', title: 'Create 500 m river buffer', tool: 'create_buffer',
+      dependencies: ['transform_rivers'],
+      parameters: { input_layer: { $layer: 'rivers_metric' }, distance: 500, unit: 'meter', output_name: 'river_buffer' },
+      outputs: ['river_buffer'],
+    },
+    {
+      id: 'filter_buildings', title: 'Select buildings inside river buffer', tool: 'spatial_filter',
+      dependencies: ['inspect_buildings', 'buffer_rivers'],
+      parameters: { input_layer: { $layer: 'buildings' }, mask_layer: { $layer: 'river_buffer' }, predicate: 'intersects', output_name: 'candidate_buildings' },
+      outputs: ['candidate_buildings'],
+    },
+    {
+      id: 'summarize_candidates', title: 'Summarize candidate buildings', tool: 'analyze_distribution',
+      dependencies: ['filter_buildings'],
+      parameters: { input_layer: { $layer: 'candidate_buildings' }, fields: ['building_id', 'use'] }, outputs: [],
+    },
+  ],
+  '03-building-statistics-by-district': [
+    {
+      id: 'inspect_buildings', title: 'Inspect buildings', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'inspect_districts', title: 'Inspect districts', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'districts' } }, outputs: [],
+    },
+    {
+      id: 'calculate_building_geometry', title: 'Calculate building area', tool: 'calculate_geometry',
+      dependencies: ['inspect_buildings'],
+      parameters: { input_layer: { $layer: 'buildings' }, output_name: 'buildings_with_geometry' },
+      outputs: ['buildings_with_geometry'],
+    },
+    {
+      id: 'join_buildings_to_districts', title: 'Join district attributes', tool: 'spatial_join',
+      dependencies: ['calculate_building_geometry', 'inspect_districts'],
+      parameters: { left_layer: { $layer: 'buildings_with_geometry' }, right_layer: { $layer: 'districts' }, predicate: 'within', output_name: 'buildings_with_district' },
+      outputs: ['buildings_with_district'],
+    },
+    {
+      id: 'aggregate_districts', title: 'Aggregate count and area by district', tool: 'aggregate_by_region',
+      dependencies: ['calculate_building_geometry', 'inspect_districts'],
+      parameters: { input_layer: { $layer: 'buildings_with_geometry' }, regions_layer: { $layer: 'districts' }, group_field: 'district_id', output_name: 'district_statistics' },
+      outputs: ['district_statistics'],
+    },
+  ],
+  '04-road-accessibility': [
+    {
+      id: 'inspect_inputs', title: 'Inspect building dataset', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'filter_major_roads', title: 'Select major roads', tool: 'spatial_filter',
+      dependencies: [],
+      parameters: { input_layer: { $layer: 'roads' }, where: { road_class: 'major' }, output_name: 'major_roads' },
+      outputs: ['major_roads'],
+    },
+    {
+      id: 'transform_major_roads', title: 'Transform major roads to metric CRS', tool: 'transform_crs',
+      dependencies: ['filter_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads' }, target_crs: 'EPSG:32618', output_name: 'major_roads_metric' },
+      outputs: ['major_roads_metric'],
+    },
+    {
+      id: 'buffer_major_roads', title: 'Create 300 m road buffer', tool: 'create_buffer',
+      dependencies: ['transform_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads_metric' }, distance: 300, unit: 'meter', output_name: 'major_road_buffer' },
+      outputs: ['major_road_buffer'],
+    },
+    {
+      id: 'filter_accessible_buildings', title: 'Select accessible buildings', tool: 'spatial_filter',
+      dependencies: ['inspect_inputs', 'buffer_major_roads'],
+      parameters: { input_layer: { $layer: 'buildings' }, mask_layer: { $layer: 'major_road_buffer' }, predicate: 'intersects', output_name: 'accessible_buildings' },
+      outputs: ['accessible_buildings'],
+    },
+    {
+      id: 'join_accessible_districts', title: 'Join accessible buildings to districts', tool: 'spatial_join',
+      dependencies: ['filter_accessible_buildings'],
+      parameters: { left_layer: { $layer: 'accessible_buildings' }, right_layer: { $layer: 'districts' }, predicate: 'within', output_name: 'accessible_buildings_with_district' },
+      outputs: ['accessible_buildings_with_district'],
+    },
+    {
+      id: 'aggregate_accessibility', title: 'Aggregate accessibility by district', tool: 'aggregate_by_region',
+      dependencies: ['filter_accessible_buildings'],
+      parameters: { input_layer: { $layer: 'accessible_buildings' }, regions_layer: { $layer: 'districts' }, group_field: 'district_id', output_name: 'accessibility_by_district' },
+      outputs: ['accessibility_by_district'],
+    },
+  ],
+  '05-parameter-revision': [
+    {
+      id: 'inspect_buildings', title: 'Inspect buildings', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'filter_major_roads', title: 'Select major roads', tool: 'spatial_filter',
+      dependencies: [],
+      parameters: { input_layer: { $layer: 'roads' }, where: { road_class: 'major' }, output_name: 'major_roads' },
+      outputs: ['major_roads'],
+    },
+    {
+      id: 'transform_major_roads', title: 'Transform major roads to metric CRS', tool: 'transform_crs',
+      dependencies: ['filter_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads' }, target_crs: 'EPSG:32618', output_name: 'major_roads_metric' },
+      outputs: ['major_roads_metric'],
+    },
+    {
+      id: 'buffer_major_roads', title: 'Create 500 m road buffer', tool: 'create_buffer',
+      dependencies: ['transform_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads_metric' }, distance: 500, unit: 'meter', output_name: 'major_road_buffer' },
+      outputs: ['major_road_buffer'],
+    },
+    {
+      id: 'filter_candidate_buildings', title: 'Select candidate buildings', tool: 'spatial_filter',
+      dependencies: ['inspect_buildings', 'buffer_major_roads'],
+      parameters: { input_layer: { $layer: 'buildings' }, mask_layer: { $layer: 'major_road_buffer' }, predicate: 'intersects', output_name: 'candidate_buildings' },
+      outputs: ['candidate_buildings'],
+    },
+  ],
+  '06-multi-constraint-selection': [
+    {
+      id: 'inspect_buildings', title: 'Inspect buildings', tool: 'inspect_dataset',
+      dependencies: [], parameters: { input_layer: { $layer: 'buildings' } }, outputs: [],
+    },
+    {
+      id: 'filter_major_roads', title: 'Select major roads', tool: 'spatial_filter',
+      dependencies: [],
+      parameters: { input_layer: { $layer: 'roads' }, where: { road_class: 'major' }, output_name: 'major_roads' },
+      outputs: ['major_roads'],
+    },
+    {
+      id: 'transform_major_roads', title: 'Transform major roads to metric CRS', tool: 'transform_crs',
+      dependencies: ['filter_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads' }, target_crs: 'EPSG:32618', output_name: 'major_roads_metric' },
+      outputs: ['major_roads_metric'],
+    },
+    {
+      id: 'transform_rivers', title: 'Transform rivers to metric CRS', tool: 'transform_crs',
+      dependencies: [],
+      parameters: { input_layer: { $layer: 'rivers' }, target_crs: 'EPSG:32618', output_name: 'rivers_metric' },
+      outputs: ['rivers_metric'],
+    },
+    {
+      id: 'buffer_major_roads', title: 'Create 300 m road buffer', tool: 'create_buffer',
+      dependencies: ['transform_major_roads'],
+      parameters: { input_layer: { $layer: 'major_roads_metric' }, distance: 300, unit: 'meter', output_name: 'major_road_buffer' },
+      outputs: ['major_road_buffer'],
+    },
+    {
+      id: 'buffer_rivers', title: 'Create 800 m river exclusion buffer', tool: 'create_buffer',
+      dependencies: ['transform_rivers'],
+      parameters: { input_layer: { $layer: 'rivers_metric' }, distance: 800, unit: 'meter', output_name: 'river_exclusion_buffer' },
+      outputs: ['river_exclusion_buffer'],
+    },
+    {
+      id: 'filter_road_candidates', title: 'Select buildings near major roads', tool: 'spatial_filter',
+      dependencies: ['inspect_buildings', 'buffer_major_roads'],
+      parameters: { input_layer: { $layer: 'buildings' }, mask_layer: { $layer: 'major_road_buffer' }, predicate: 'intersects', output_name: 'road_candidates' },
+      outputs: ['road_candidates'],
+    },
+    {
+      id: 'exclude_river_buffer', title: 'Exclude buildings near rivers', tool: 'spatial_filter',
+      dependencies: ['filter_road_candidates', 'buffer_rivers'],
+      parameters: { input_layer: { $layer: 'road_candidates' }, mask_layer: { $layer: 'river_exclusion_buffer' }, predicate: 'disjoint', output_name: 'candidate_buildings' },
+      outputs: ['candidate_buildings'],
+    },
+    {
+      id: 'summarize_candidates', title: 'Summarize final candidates', tool: 'analyze_distribution',
+      dependencies: ['exclude_river_buffer'],
+      parameters: { input_layer: { $layer: 'candidate_buildings' }, fields: ['building_id', 'use'] }, outputs: [],
+    },
+  ],
+}
+
+function taskGraph(definition) {
+  return {
+    schema_version: '1.0',
+    scenario_id: definition.id,
+    goal: definition.prompt,
+    steps: taskGraphSteps[definition.id],
+  }
+}
+
 function scenarioManifest(definition) {
   return {
     schema_version: '1.0',
@@ -262,6 +478,7 @@ function scenarioManifest(definition) {
     data: definition.data.map(name => `data/${name}.geojson`),
     expected_plan: 'expected-plan.json',
     expected_result: 'expected-result.json',
+    task_graph: 'task-graph.json',
     supports_revision: Boolean(definition.revisionPrompt),
     fixture_profile: 'deterministic-manhattan-scale-v1',
   }
@@ -289,7 +506,7 @@ ${definition.need}
 ${definition.revisionPrompt ? `\nRevision: > ${definition.revisionPrompt}\n` : ''}
 ## Why this Demo exists
 
-这个 Scenario 将一个真实空间需求、独立数据、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+这个 Scenario 将一个真实空间需求、独立数据、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
 
 ## Input data
 
@@ -308,6 +525,8 @@ ${behavior}
 ## Key GIS workflow
 
 ${steps}
+
+可执行 DAG 定义位于 \`task-graph.json\`，每个步骤显式声明 dependencies、Layer 输入引用和 outputs。
 
 ## Success criteria
 
@@ -330,6 +549,7 @@ function desiredFiles(definition) {
     ['scenario.json', json(scenarioManifest(definition))],
     ['expected-plan.json', json(definition.expectedPlan)],
     ['expected-result.json', json(definition.expectedResult)],
+    ['task-graph.json', json(taskGraph(definition))],
   ])
   if (definition.revisionPrompt) {
     files.set('revision-prompt.txt', `${definition.revisionPrompt}\n`)

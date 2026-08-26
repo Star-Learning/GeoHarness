@@ -14,6 +14,11 @@ packages, registers their vector layers, and renders an interactive SVG map with
 visibility, opacity, zoom, pan, fit-bounds and feature inspection controls. Geo computation and
 Harness Tool execution remain in the Host/Python layers rather than being hidden in the browser UI.
 
+Each Scenario also ships a validated `task-graph.json`. The Host `TaskGraphRuntime` executes those
+DAGs through `ctx.geo`, records pending/running/success/failed transitions, resolves canonical
+Layer aliases, and preserves ordered transition history. The client shows the same embedded plan,
+dependencies and declared outputs instead of maintaining a second hand-written Demo plan.
+
 The default local provider launches one short-lived, cancellable Python runner per request and
 isolates persistent GeoPackage workspaces by Harness session and Scenario. Override `python`,
 `backendRoot`, `scenarioRoot` or `workspaceRoot` in the plugin row only when the repository layout

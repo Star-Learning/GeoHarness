@@ -11,6 +11,7 @@
   ],
   "expected_plan": "expected-plan.json",
   "expected_result": "expected-result.json",
+  "task_graph": "task-graph.json",
   "supports_revision": false,
   "fixture_profile": "deterministic-manhattan-scale-v1"
 }

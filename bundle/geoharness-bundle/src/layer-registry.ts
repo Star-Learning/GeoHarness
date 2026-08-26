@@ -27,10 +27,24 @@ export interface EmbeddedScenario {
     region: string
     data: string[]
     supports_revision: boolean
+    task_graph: string
   }
   prompt: string
   expectedPlan: Record<string, unknown>
   expectedResult: Record<string, unknown>
+  taskGraph: {
+    schema_version: string
+    scenario_id: string
+    goal: string
+    steps: Array<{
+      id: string
+      title: string
+      tool: string
+      dependencies: string[]
+      parameters: Record<string, unknown>
+      outputs: string[]
+    }>
+  }
   data: Record<string, GeoJsonFeatureCollection>
 }
 

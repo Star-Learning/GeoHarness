@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "01-building-data-inspection",
+  "goal": "帮我看看这个建筑数据有什么特点。",
+  "steps": [
+    {
+      "id": "inspect_buildings",
+      "title": "Inspect building dataset",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "calculate_building_geometry",
+      "title": "Calculate building geometry",
+      "tool": "calculate_geometry",
+      "dependencies": [
+        "inspect_buildings"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "output_name": "buildings_with_geometry"
+      },
+      "outputs": [
+        "buildings_with_geometry"
+      ]
+    },
+    {
+      "id": "summarize_buildings",
+      "title": "Summarize fields and geometry",
+      "tool": "analyze_distribution",
+      "dependencies": [
+        "calculate_building_geometry"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings_with_geometry"
+        },
+        "fields": [
+          "height_m",
+          "use",
+          "area_m2"
+        ]
+      },
+      "outputs": []
+    }
+  ]
+}

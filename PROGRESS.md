@@ -140,3 +140,30 @@ Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `c
 当前环境没有外部模型 API Key，因此没有把一次付费/联网模型生成作为离线验收条件。
 模型可见 schema、system prompt、官方 ToolRuntime 到 Python GIS 的完整边界已用真实
 实现测试。Task Graph 的运行状态与依赖调度属于 Phase 6。
+
+## Phase 6 — Task Graph
+
+状态：完成（2026-08-27）
+
+- [x] 六个独立 Scenario 各自增加真实 `task-graph.json`，与自己的 Prompt、数据、
+  expected plan/result 同目录；生成器和新鲜度检查覆盖这些 DAG。
+- [x] 实现 Task Graph 校验：稳定 step id、依赖存在性、自依赖、循环、重复 output
+  alias、参数/输出结构均有明确失败。
+- [x] 实现可观察状态机：`pending → running → success/failed`，每次转换写入有序 history，
+  snapshot 同时包含 dependencies、resolved parameters、outputs 和 Layer alias map。
+- [x] 实现 DAG 调度：成功依赖解锁下游；失败依赖明确阻断其分支，独立分支继续；Tool
+  exception、失败 ToolResult 和输出数量不符都不会被误标为成功。
+- [x] 实现 Harness `TaskGraphRuntime` Service：安全读取 Scenario DAG，通过 `ctx.geo`
+  真实执行，并按 workspace + Scenario 保存最近一次运行。
+- [x] 正式客户端嵌入同一份 DAG，Agent 面板真实显示 step、tool、dependencies、outputs
+  和 pending 状态，不维护第二套手写 Demo 计划。
+- [x] 3 项 Phase 6 测试通过；其中 Scenario 02 经真实 Python provider 完成 6 步、
+  12 次转换并得到 5 个候选建筑，另覆盖循环拒绝和失败分支传播。
+- [x] 完整 Harness Web 再次成功加载 Host 插件和 GeoHarness client；新 profile 尚未选择
+  workspace 时按上游设计只显示品牌标记，DAG 客户端产物由可复现构建测试验证。
+
+## Phase 6 边界
+
+本阶段建立执行与状态真相源，但尚未把成功 step 的派生 Layer/GeoJSON 投影到浏览器
+地图；`Task Step ↔ Layer ↔ Map` 的验证投影属于 Phase 7。参数修改与部分重跑属于
+Phase 9。

@@ -16,7 +16,7 @@
 
 ## Why this Demo exists
 
-这个 Scenario 将一个真实空间需求、独立数据、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+这个 Scenario 将一个真实空间需求、独立数据、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
 
 ## Input data
 
@@ -41,6 +41,8 @@
 ## Key GIS workflow
 
 `inspect_dataset` → `transform_crs` → `create_buffer` → `spatial_filter` → `analyze_distribution`
+
+可执行 DAG 定义位于 `task-graph.json`，每个步骤显式声明 dependencies、Layer 输入引用和 outputs。
 
 ## Success criteria
 

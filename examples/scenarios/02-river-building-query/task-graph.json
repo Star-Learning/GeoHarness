@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "02-river-building-query",
+  "goal": "找出距离 Hudson River 和 East River 500 米以内的建筑，并告诉我一共有多少栋。",
+  "steps": [
+    {
+      "id": "inspect_buildings",
+      "title": "Inspect buildings",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "inspect_rivers",
+      "title": "Inspect river boundaries",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "rivers"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "transform_rivers",
+      "title": "Transform rivers to metric CRS",
+      "tool": "transform_crs",
+      "dependencies": [
+        "inspect_rivers"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "rivers"
+        },
+        "target_crs": "EPSG:32618",
+        "output_name": "rivers_metric"
+      },
+      "outputs": [
+        "rivers_metric"
+      ]
+    },
+    {
+      "id": "buffer_rivers",
+      "title": "Create 500 m river buffer",
+      "tool": "create_buffer",
+      "dependencies": [
+        "transform_rivers"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "rivers_metric"
+        },
+        "distance": 500,
+        "unit": "meter",
+        "output_name": "river_buffer"
+      },
+      "outputs": [
+        "river_buffer"
+      ]
+    },
+    {
+      "id": "filter_buildings",
+      "title": "Select buildings inside river buffer",
+      "tool": "spatial_filter",
+      "dependencies": [
+        "inspect_buildings",
+        "buffer_rivers"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "mask_layer": {
+          "$layer": "river_buffer"
+        },
+        "predicate": "intersects",
+        "output_name": "candidate_buildings"
+      },
+      "outputs": [
+        "candidate_buildings"
+      ]
+    },
+    {
+      "id": "summarize_candidates",
+      "title": "Summarize candidate buildings",
+      "tool": "analyze_distribution",
+      "dependencies": [
+        "filter_buildings"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "candidate_buildings"
+        },
+        "fields": [
+          "building_id",
+          "use"
+        ]
+      },
+      "outputs": []
+    }
+  ]
+}

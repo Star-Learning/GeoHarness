@@ -339,9 +339,11 @@ function GeoHarnessShell() {
 
   const visibleCount = layers.filter(layer => layer.visible).length
   const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
+  const taskSteps = selected.payload.taskGraph.steps
+  const plannedOutputs = taskSteps.flatMap(step => step.outputs)
 
   return (
-    <main className="gh-shell" data-geoharness-phase="3">
+    <main className="gh-shell" data-geoharness-phase="6">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
@@ -412,8 +414,8 @@ function GeoHarnessShell() {
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
-            <span><b>Agent</b><small>Goal → Plan → Result</small></span>
-            <span className="gh-agent-state">Ready</span>
+            <span><b>Agent</b><small>Goal → Plan → Tools → Layers</small></span>
+            <span className="gh-agent-state">Planned</span>
           </div>
           <div className="gh-agent-scroll">
             <section className="gh-agent-block">
@@ -422,18 +424,28 @@ function GeoHarnessShell() {
             </section>
             <section className="gh-agent-block">
               <span className="gh-eyebrow">PLAN PREVIEW</span>
-              <ol className="gh-plan-list">
-                <li className="is-complete"><i>✓</i><span><b>Load Scenario</b><small>Package manifest resolved</small></span></li>
-                <li className="is-complete"><i>✓</i><span><b>Register layers</b><small>{layers.length} vector layers available</small></span></li>
-                <li className="is-active"><i>3</i><span><b>Verify inputs on map</b><small>Toggle or inspect a feature</small></span></li>
-                <li><i>4</i><span><b>Execute Geo Tools</b><small>Connected in Phase 4</small></span></li>
+              <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
+                {taskSteps.map((step, index) => <li
+                  className="is-pending"
+                  data-step-id={step.id}
+                  data-step-status="pending"
+                  key={step.id}
+                >
+                  <i>{index + 1}</i>
+                  <span>
+                    <b>{step.title}</b>
+                    <small>{step.tool} · deps {step.dependencies.length === 0 ? '—' : step.dependencies.join(', ')}</small>
+                    {step.outputs.length > 0 && <small>→ {step.outputs.join(', ')}</small>}
+                  </span>
+                </li>)}
               </ol>
             </section>
             <section className="gh-agent-block gh-current-step">
               <span className="gh-eyebrow">CURRENT STEP</span>
-              <div><span>Phase</span><b>Layers + Map</b></div>
-              <div><span>Scenario</span><b>{selected.number}</b></div>
-              <div><span>Status</span><b className="is-teal">{visibleCount}/{layers.length} visible</b></div>
+              <div><span>Phase</span><b>Task Graph</b></div>
+              <div><span>Steps</span><b>{taskSteps.length} pending</b></div>
+              <div><span>Outputs</span><b>{plannedOutputs.length}</b></div>
+              <div><span>Status</span><b className="is-teal">DAG validated</b></div>
             </section>
           </div>
         </aside>

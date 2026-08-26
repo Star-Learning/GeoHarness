@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "05-parameter-revision",
+  "goal": "找出距离主要道路 500 米以内的建筑。",
+  "steps": [
+    {
+      "id": "inspect_buildings",
+      "title": "Inspect buildings",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "filter_major_roads",
+      "title": "Select major roads",
+      "tool": "spatial_filter",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "roads"
+        },
+        "where": {
+          "road_class": "major"
+        },
+        "output_name": "major_roads"
+      },
+      "outputs": [
+        "major_roads"
+      ]
+    },
+    {
+      "id": "transform_major_roads",
+      "title": "Transform major roads to metric CRS",
+      "tool": "transform_crs",
+      "dependencies": [
+        "filter_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads"
+        },
+        "target_crs": "EPSG:32618",
+        "output_name": "major_roads_metric"
+      },
+      "outputs": [
+        "major_roads_metric"
+      ]
+    },
+    {
+      "id": "buffer_major_roads",
+      "title": "Create 500 m road buffer",
+      "tool": "create_buffer",
+      "dependencies": [
+        "transform_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads_metric"
+        },
+        "distance": 500,
+        "unit": "meter",
+        "output_name": "major_road_buffer"
+      },
+      "outputs": [
+        "major_road_buffer"
+      ]
+    },
+    {
+      "id": "filter_candidate_buildings",
+      "title": "Select candidate buildings",
+      "tool": "spatial_filter",
+      "dependencies": [
+        "inspect_buildings",
+        "buffer_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "mask_layer": {
+          "$layer": "major_road_buffer"
+        },
+        "predicate": "intersects",
+        "output_name": "candidate_buildings"
+      },
+      "outputs": [
+        "candidate_buildings"
+      ]
+    }
+  ]
+}

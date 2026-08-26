@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "04-road-accessibility",
+  "goal": "找出距离主要道路 300 米以内的建筑，并按 Community District 统计数量。",
+  "steps": [
+    {
+      "id": "inspect_inputs",
+      "title": "Inspect building dataset",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "filter_major_roads",
+      "title": "Select major roads",
+      "tool": "spatial_filter",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "roads"
+        },
+        "where": {
+          "road_class": "major"
+        },
+        "output_name": "major_roads"
+      },
+      "outputs": [
+        "major_roads"
+      ]
+    },
+    {
+      "id": "transform_major_roads",
+      "title": "Transform major roads to metric CRS",
+      "tool": "transform_crs",
+      "dependencies": [
+        "filter_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads"
+        },
+        "target_crs": "EPSG:32618",
+        "output_name": "major_roads_metric"
+      },
+      "outputs": [
+        "major_roads_metric"
+      ]
+    },
+    {
+      "id": "buffer_major_roads",
+      "title": "Create 300 m road buffer",
+      "tool": "create_buffer",
+      "dependencies": [
+        "transform_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads_metric"
+        },
+        "distance": 300,
+        "unit": "meter",
+        "output_name": "major_road_buffer"
+      },
+      "outputs": [
+        "major_road_buffer"
+      ]
+    },
+    {
+      "id": "filter_accessible_buildings",
+      "title": "Select accessible buildings",
+      "tool": "spatial_filter",
+      "dependencies": [
+        "inspect_inputs",
+        "buffer_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "mask_layer": {
+          "$layer": "major_road_buffer"
+        },
+        "predicate": "intersects",
+        "output_name": "accessible_buildings"
+      },
+      "outputs": [
+        "accessible_buildings"
+      ]
+    },
+    {
+      "id": "join_accessible_districts",
+      "title": "Join accessible buildings to districts",
+      "tool": "spatial_join",
+      "dependencies": [
+        "filter_accessible_buildings"
+      ],
+      "parameters": {
+        "left_layer": {
+          "$layer": "accessible_buildings"
+        },
+        "right_layer": {
+          "$layer": "districts"
+        },
+        "predicate": "within",
+        "output_name": "accessible_buildings_with_district"
+      },
+      "outputs": [
+        "accessible_buildings_with_district"
+      ]
+    },
+    {
+      "id": "aggregate_accessibility",
+      "title": "Aggregate accessibility by district",
+      "tool": "aggregate_by_region",
+      "dependencies": [
+        "filter_accessible_buildings"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "accessible_buildings"
+        },
+        "regions_layer": {
+          "$layer": "districts"
+        },
+        "group_field": "district_id",
+        "output_name": "accessibility_by_district"
+      },
+      "outputs": [
+        "accessibility_by_district"
+      ]
+    }
+  ]
+}

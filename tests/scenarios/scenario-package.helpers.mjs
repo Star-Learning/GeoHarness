@@ -12,10 +12,11 @@ async function readJson(path) {
 
 export async function validateScenarioPackage(id) {
   const root = resolve(scenariosRoot, id)
-  const [manifest, plan, result, prompt, readme] = await Promise.all([
+  const [manifest, plan, result, taskGraph, prompt, readme] = await Promise.all([
     readJson(resolve(root, 'scenario.json')),
     readJson(resolve(root, 'expected-plan.json')),
     readJson(resolve(root, 'expected-result.json')),
+    readJson(resolve(root, 'task-graph.json')),
     readFile(resolve(root, 'prompt.txt'), 'utf8'),
     readFile(resolve(root, 'README.md'), 'utf8'),
   ])
@@ -26,12 +27,26 @@ export async function validateScenarioPackage(id) {
   assert.equal(manifest.prompt, 'prompt.txt')
   assert.equal(manifest.expected_plan, 'expected-plan.json')
   assert.equal(manifest.expected_result, 'expected-result.json')
+  assert.equal(manifest.task_graph, 'task-graph.json')
   assert.equal(manifest.fixture_profile, 'deterministic-manhattan-scale-v1')
   assert.ok(prompt.trim().length > 0)
   assert.ok(Array.isArray(manifest.data) && manifest.data.length > 0)
   assert.ok(Array.isArray(plan.required_capabilities) && plan.required_capabilities.length > 0)
   assert.ok(Array.isArray(result.required_output_layers) && result.required_output_layers.length > 0)
   assert.ok(Array.isArray(result.checks) && result.checks.length > 0)
+  assert.equal(taskGraph.scenario_id, id)
+  assert.equal(taskGraph.goal, prompt.trim())
+  assert.ok(Array.isArray(taskGraph.steps) && taskGraph.steps.length > 0)
+  const taskIds = new Set(taskGraph.steps.map(step => step.id))
+  assert.equal(taskIds.size, taskGraph.steps.length)
+  for (const step of taskGraph.steps) {
+    assert.match(step.id, /^[a-z][a-z0-9_]*$/)
+    assert.ok(typeof step.title === 'string' && step.title.length > 0)
+    assert.ok(plan.required_capabilities.includes(step.tool))
+    assert.ok(Array.isArray(step.dependencies) && step.dependencies.every(dependency => taskIds.has(dependency)))
+    assert.ok(step.parameters && typeof step.parameters === 'object')
+    assert.ok(Array.isArray(step.outputs))
+  }
 
   for (const heading of [
     '## Real user need',
@@ -76,5 +91,5 @@ export async function validateScenarioPackage(id) {
     assert.equal(manifest.revision_prompt, null)
   }
 
-  return { root, manifest, plan, result, prompt: prompt.trim(), readme, data }
+  return { root, manifest, plan, result, taskGraph, prompt: prompt.trim(), readme, data }
 }

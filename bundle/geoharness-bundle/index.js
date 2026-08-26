@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { LocalPythonGeoProvider } from './host/provider.js'
 import { GeoRuntime } from './host/service.js'
+import { TaskGraphRuntime } from './host/task-graph.js'
 import { registerGeoTools } from './host/tools.js'
 
 export const name = 'geoharness'
@@ -20,7 +21,8 @@ export function apply(ctx, config = {}) {
     scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')),
     workspaceRoot: resolve(config.workspaceRoot ?? resolve(process.cwd(), '.geoharness/workspaces')),
   }))
+  new TaskGraphRuntime(ctx, { scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')) })
   registerGeoTools(ctx)
 }
 
-export { GeoRuntime, LocalPythonGeoProvider, registerGeoTools }
+export { GeoRuntime, LocalPythonGeoProvider, TaskGraphRuntime, registerGeoTools }

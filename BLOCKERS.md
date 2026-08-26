@@ -38,9 +38,9 @@ GeoHarness 不应直接修改 `../deepseek-harness` 规避此问题。若后续�
 
 ### 2. Task Step 与地图绑定尚未进入实现阶段
 
-Phase 3 已完成输入层地图能力，但 `Task Step ↔ Layer ↔ Map` 的中间结果绑定属于
-Phase 7。它不阻塞 Phase 4 的 Geo Backend 与工具实现；Phase 7 必须继续验证派生层
-生命周期、高亮和失败状态。
+Phase 6 已完成真实 DAG、状态转换、依赖调度和 output Layer alias 登记；Phase 3 已完成
+输入层地图能力。两者之间的中间结果投影仍属于 Phase 7，必须继续验证派生层生命周期、
+step 高亮、地图高亮和失败状态。它不阻塞 Phase 6 完成。
 
 ### 3. 上游版本升级门禁
 

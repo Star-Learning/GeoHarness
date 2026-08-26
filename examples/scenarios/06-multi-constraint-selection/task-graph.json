@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "06-multi-constraint-selection",
+  "goal": "找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。",
+  "steps": [
+    {
+      "id": "inspect_buildings",
+      "title": "Inspect buildings",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "filter_major_roads",
+      "title": "Select major roads",
+      "tool": "spatial_filter",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "roads"
+        },
+        "where": {
+          "road_class": "major"
+        },
+        "output_name": "major_roads"
+      },
+      "outputs": [
+        "major_roads"
+      ]
+    },
+    {
+      "id": "transform_major_roads",
+      "title": "Transform major roads to metric CRS",
+      "tool": "transform_crs",
+      "dependencies": [
+        "filter_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads"
+        },
+        "target_crs": "EPSG:32618",
+        "output_name": "major_roads_metric"
+      },
+      "outputs": [
+        "major_roads_metric"
+      ]
+    },
+    {
+      "id": "transform_rivers",
+      "title": "Transform rivers to metric CRS",
+      "tool": "transform_crs",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "rivers"
+        },
+        "target_crs": "EPSG:32618",
+        "output_name": "rivers_metric"
+      },
+      "outputs": [
+        "rivers_metric"
+      ]
+    },
+    {
+      "id": "buffer_major_roads",
+      "title": "Create 300 m road buffer",
+      "tool": "create_buffer",
+      "dependencies": [
+        "transform_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "major_roads_metric"
+        },
+        "distance": 300,
+        "unit": "meter",
+        "output_name": "major_road_buffer"
+      },
+      "outputs": [
+        "major_road_buffer"
+      ]
+    },
+    {
+      "id": "buffer_rivers",
+      "title": "Create 800 m river exclusion buffer",
+      "tool": "create_buffer",
+      "dependencies": [
+        "transform_rivers"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "rivers_metric"
+        },
+        "distance": 800,
+        "unit": "meter",
+        "output_name": "river_exclusion_buffer"
+      },
+      "outputs": [
+        "river_exclusion_buffer"
+      ]
+    },
+    {
+      "id": "filter_road_candidates",
+      "title": "Select buildings near major roads",
+      "tool": "spatial_filter",
+      "dependencies": [
+        "inspect_buildings",
+        "buffer_major_roads"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "mask_layer": {
+          "$layer": "major_road_buffer"
+        },
+        "predicate": "intersects",
+        "output_name": "road_candidates"
+      },
+      "outputs": [
+        "road_candidates"
+      ]
+    },
+    {
+      "id": "exclude_river_buffer",
+      "title": "Exclude buildings near rivers",
+      "tool": "spatial_filter",
+      "dependencies": [
+        "filter_road_candidates",
+        "buffer_rivers"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "road_candidates"
+        },
+        "mask_layer": {
+          "$layer": "river_exclusion_buffer"
+        },
+        "predicate": "disjoint",
+        "output_name": "candidate_buildings"
+      },
+      "outputs": [
+        "candidate_buildings"
+      ]
+    },
+    {
+      "id": "summarize_candidates",
+      "title": "Summarize final candidates",
+      "tool": "analyze_distribution",
+      "dependencies": [
+        "exclude_river_buffer"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "candidate_buildings"
+        },
+        "fields": [
+          "building_id",
+          "use"
+        ]
+      },
+      "outputs": []
+    }
+  ]
+}
