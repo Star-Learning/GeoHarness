@@ -1,0 +1,13 @@
+{
+  "required_output_layers": [
+    "river_buffer",
+    "candidate_buildings"
+  ],
+  "expected": {
+    "candidate_buildings_count": 5
+  },
+  "checks": [
+    "candidate_buildings_count == 5",
+    "all_candidates_within_500m_of_river == true"
+  ]
+}

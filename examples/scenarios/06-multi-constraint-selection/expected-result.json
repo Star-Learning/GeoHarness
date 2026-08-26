@@ -1,0 +1,15 @@
+{
+  "required_output_layers": [
+    "major_road_buffer",
+    "river_exclusion_buffer",
+    "candidate_buildings"
+  ],
+  "expected": {
+    "candidate_buildings_count": 2
+  },
+  "checks": [
+    "candidate_buildings_count == 2",
+    "all_candidates_within_300m_of_major_road == true",
+    "all_candidates_at_least_800m_from_river == true"
+  ]
+}

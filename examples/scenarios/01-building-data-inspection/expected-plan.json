@@ -1,0 +1,10 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "calculate_geometry",
+    "analyze_distribution"
+  ],
+  "constraints": {
+    "input_layer": "buildings"
+  }
+}

@@ -41,3 +41,10 @@ Phase 1 的 Map Workspace 是产品 Shell，不包含地图引擎。真实图层
 骨架精确对齐 DeepSeek Harness `0.1.1-rc.2` 与 Cordis `4.0.1`。升级上游时
 必须重新核对 `dsh.bundle`、`dsh.client`、客户端产物协议、Slot 名称和
 Service/Tool API，并重跑隔离 profile 验证。
+
+### 4. Demo 数据性质
+
+Phase 2 采用项目自有、CC0-1.0 的确定性 Manhattan-scale 合成 fixture，以保证
+离线、快速、可精确回归。它们不是 NYC 官方地籍、道路或水系数据，README 已明确
+披露。该选择不阻塞 v1.0 的工作流实现与空间正确性测试；如未来替换为生产级官方
+数据，必须重新生成固定统计并更新 Scenario 期望，不能静默替换。

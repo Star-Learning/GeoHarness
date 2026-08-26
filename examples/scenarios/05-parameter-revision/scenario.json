@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "id": "05-parameter-revision",
+  "title": "Parameter Revision",
+  "region": "Manhattan, New York City",
+  "prompt": "prompt.txt",
+  "revision_prompt": "revision-prompt.txt",
+  "data": [
+    "data/buildings.geojson",
+    "data/roads.geojson"
+  ],
+  "expected_plan": "expected-plan.json",
+  "expected_result": "expected-result.json",
+  "supports_revision": true,
+  "fixture_profile": "deterministic-manhattan-scale-v1"
+}

@@ -1,0 +1,19 @@
+{
+  "required_output_layers": [
+    "major_roads",
+    "major_road_buffer",
+    "accessible_buildings",
+    "accessibility_by_district"
+  ],
+  "expected": {
+    "accessible_buildings_count": 3,
+    "district_counts": {
+      "MN-DEMO-01": 3,
+      "MN-DEMO-02": 0
+    }
+  },
+  "checks": [
+    "accessible_buildings_count == 3",
+    "all_candidates_within_300m_of_major_road == true"
+  ]
+}

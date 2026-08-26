@@ -1,0 +1,17 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "transform_crs",
+    "create_buffer",
+    "spatial_filter",
+    "analyze_distribution"
+  ],
+  "constraints": {
+    "distance": 500,
+    "unit": "meter",
+    "river_names": [
+      "Hudson River",
+      "East River"
+    ]
+  }
+}

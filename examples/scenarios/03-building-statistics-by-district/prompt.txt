@@ -1,0 +1,1 @@
+按 Community District 统计建筑数量和建筑总面积。

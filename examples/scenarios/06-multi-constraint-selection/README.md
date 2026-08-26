@@ -1,0 +1,53 @@
+# Multi-Constraint Selection
+
+## Scenario
+
+- ID: `06-multi-constraint-selection`
+- Region: Manhattan, New York City
+- Fixture profile: `deterministic-manhattan-scale-v1`
+
+## Real user need
+
+把道路邻近与河流避让两个空间约束组合成可解释的布尔筛选工作流。
+
+## User prompt
+
+> 找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。
+
+## Why this Demo exists
+
+这个 Scenario 将一个真实空间需求、独立数据、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+
+## Input data
+
+| File | Dataset | Original provider | License / terms | Download / generation date |
+| --- | --- | --- | --- | --- |
+| `data/buildings.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+| `data/roads.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+| `data/rivers.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+
+### Data source and processing
+
+这些文件是 GeoHarness 为稳定回归测试创作的、小型 Manhattan-scale 合成矢量 fixture，并非 NYC 官方地籍或道路数据。坐标锚定在 Manhattan 附近，使用 OGC:CRS84；几何和属性由 `scripts/build_scenarios/build-fixtures.mjs` 确定性生成。处理包括固定 3.2 km 测试范围、最小字段集和 7 位小数坐标量化；未做几何简化。数据按 CC0-1.0 提供。
+
+## Expected Agent behavior
+
+1. Parse both spatial constraints
+1. Identify major roads
+1. Transform to a metric CRS
+1. Build 300 m road and 800 m river buffers
+1. Select inside-road candidates
+1. Exclude river-buffer candidates
+1. Explain and map the final result
+
+## Key GIS workflow
+
+`inspect_dataset` → `spatial_filter` → `transform_crs` → `create_buffer` → `spatial_filter` → `analyze_distribution`
+
+## Success criteria
+
+得到 2 个同时满足 road distance <= 300 m 且 river distance >= 800 m 的建筑。
+
+## Demo focus
+
+从单个 Tool Calling 升级到真正的 Agent Planning。

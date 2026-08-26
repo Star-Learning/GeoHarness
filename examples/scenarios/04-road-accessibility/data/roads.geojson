@@ -1,0 +1,64 @@
+{
+  "type": "FeatureCollection",
+  "name": "roads",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "metadata": {
+    "fixture": true,
+    "region": "Manhattan, New York City",
+    "coordinate_reference_system": "OGC:CRS84",
+    "source": "GeoHarness deterministic Manhattan-scale fixture",
+    "license": "CC0-1.0",
+    "generated_on": "2026-08-27"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "road-major-01",
+      "properties": {
+        "road_id": "road-major-01",
+        "name": "Manhattan Demo Avenue",
+        "road_class": "major"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -73.9882353,
+            40.6990991
+          ],
+          [
+            -73.9882353,
+            40.7279279
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "road-local-01",
+      "properties": {
+        "road_id": "road-local-01",
+        "name": "East Demo Street",
+        "road_class": "local"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -73.9705882,
+            40.6990991
+          ],
+          [
+            -73.9705882,
+            40.7279279
+          ]
+        ]
+      }
+    }
+  ]
+}

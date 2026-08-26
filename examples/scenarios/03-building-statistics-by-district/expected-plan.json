@@ -1,0 +1,15 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "calculate_geometry",
+    "spatial_join",
+    "aggregate_by_region"
+  ],
+  "constraints": {
+    "group_field": "district_id",
+    "metrics": [
+      "count",
+      "area_sum_m2"
+    ]
+  }
+}

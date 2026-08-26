@@ -1,0 +1,17 @@
+{
+  "required_output_layers": [
+    "major_road_buffer",
+    "candidate_buildings"
+  ],
+  "expected": {
+    "initial_candidate_count": 4,
+    "revised_candidate_count": 8,
+    "retained_history_entries": 2
+  },
+  "checks": [
+    "initial_candidate_count == 4",
+    "revised_candidate_count == 8",
+    "unchanged_upstream_steps_are_reused == true",
+    "downstream_lineage_is_updated == true"
+  ]
+}

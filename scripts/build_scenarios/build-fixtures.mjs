@@ -1,0 +1,371 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const scenariosRoot = resolve(repositoryRoot, 'examples', 'scenarios')
+const checkOnly = process.argv.includes('--check')
+const generatedOn = '2026-08-27'
+
+const round = value => Number(value.toFixed(7))
+const coordinate = (xMeters, yMeters) => [
+  round(-74 + xMeters / 85_000),
+  round(40.7 + yMeters / 111_000),
+]
+
+const polygon = (minX, minY, maxX, maxY) => ({
+  type: 'Polygon',
+  coordinates: [[
+    coordinate(minX, minY),
+    coordinate(maxX, minY),
+    coordinate(maxX, maxY),
+    coordinate(minX, maxY),
+    coordinate(minX, minY),
+  ]],
+})
+
+const line = (x1, y1, x2, y2) => ({
+  type: 'LineString',
+  coordinates: [coordinate(x1, y1), coordinate(x2, y2)],
+})
+
+const featureCollection = (name, features) => ({
+  type: 'FeatureCollection',
+  name,
+  crs: {
+    type: 'name',
+    properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' },
+  },
+  metadata: {
+    fixture: true,
+    region: 'Manhattan, New York City',
+    coordinate_reference_system: 'OGC:CRS84',
+    source: 'GeoHarness deterministic Manhattan-scale fixture',
+    license: 'CC0-1.0',
+    generated_on: generatedOn,
+  },
+  features,
+})
+
+const buildingCenters = [
+  [150, 300, 18, 'residential', 12],
+  [400, 700, 28, 'mixed_use', 20],
+  [650, 1100, 12, 'commercial', 8],
+  [800, 1500, 35, 'residential', 24],
+  [1000, 1900, 42, 'office', 16],
+  [1200, 2300, 22, 'residential', 18],
+  [1600, 500, null, 'institutional', 6],
+  [1800, 900, 16, 'residential', 10],
+  [2200, 1300, 31, 'commercial', 14],
+  [2550, 1700, 26, 'mixed_use', 22],
+  [2700, 2100, 14, 'residential', 9],
+  [2850, 2500, 20, 'residential', 11],
+]
+
+const buildings = featureCollection('buildings', buildingCenters.map((entry, index) => {
+  const [x, y, height, use, units] = entry
+  const id = `b${String(index + 1).padStart(2, '0')}`
+  return {
+    type: 'Feature',
+    id,
+    properties: {
+      building_id: id,
+      name: `Demo Building ${String(index + 1).padStart(2, '0')}`,
+      use,
+      height_m: height,
+      units,
+    },
+    geometry: polygon(x - 30, y - 30, x + 30, y + 30),
+  }
+}))
+
+const roads = featureCollection('roads', [
+  {
+    type: 'Feature',
+    id: 'road-major-01',
+    properties: { road_id: 'road-major-01', name: 'Manhattan Demo Avenue', road_class: 'major' },
+    geometry: line(1000, -100, 1000, 3100),
+  },
+  {
+    type: 'Feature',
+    id: 'road-local-01',
+    properties: { road_id: 'road-local-01', name: 'East Demo Street', road_class: 'local' },
+    geometry: line(2500, -100, 2500, 3100),
+  },
+])
+
+const rivers = featureCollection('rivers', [
+  {
+    type: 'Feature',
+    id: 'river-hudson',
+    properties: { river_id: 'river-hudson', name: 'Hudson River' },
+    geometry: polygon(-100, -100, 0, 3100),
+  },
+  {
+    type: 'Feature',
+    id: 'river-east',
+    properties: { river_id: 'river-east', name: 'East River' },
+    geometry: polygon(3000, -100, 3100, 3100),
+  },
+])
+
+const districts = featureCollection('districts', [
+  {
+    type: 'Feature',
+    id: 'district-west',
+    properties: { district_id: 'MN-DEMO-01', name: 'Demo Community District West' },
+    geometry: polygon(-100, -100, 1500, 3100),
+  },
+  {
+    type: 'Feature',
+    id: 'district-east',
+    properties: { district_id: 'MN-DEMO-02', name: 'Demo Community District East' },
+    geometry: polygon(1500, -100, 3100, 3100),
+  },
+])
+
+const datasets = { buildings, roads, rivers, districts }
+
+const definitions = [
+  {
+    id: '01-building-data-inspection',
+    title: 'Building Data Inspection',
+    prompt: '帮我看看这个建筑数据有什么特点。',
+    data: ['buildings'],
+    need: '在不手工打开属性表或选择 GIS 工具的情况下理解一份建筑矢量数据。',
+    behavior: ['Inspect dataset', 'Identify geometry and CRS', 'Summarize fields and missing values', 'Validate geometries', 'Calculate area and basic statistics', 'Present a map summary'],
+    steps: ['inspect_dataset', 'calculate_geometry', 'analyze_distribution'],
+    success: '报告 12 个 Polygon 要素、OGC:CRS84、1 个缺失 height_m，且所有几何有效。',
+    video: 'AI 能不能自己看懂一份 GIS 数据？',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'calculate_geometry', 'analyze_distribution'],
+      constraints: { input_layer: 'buildings' },
+    },
+    expectedResult: {
+      required_output_layers: ['buildings'],
+      expected: { feature_count: 12, geometry_type: 'Polygon', crs: 'OGC:CRS84', invalid_geometry_count: 0, missing_height_m_count: 1 },
+      checks: ['feature_count == 12', 'geometry_type == Polygon', 'invalid_geometry_count == 0', 'total_building_area_m2 > 0'],
+    },
+  },
+  {
+    id: '02-river-building-query',
+    title: 'River Building Query',
+    prompt: '找出距离 Hudson River 和 East River 500 米以内的建筑，并告诉我一共有多少栋。',
+    data: ['buildings', 'rivers'],
+    need: '从建筑与水系图层中找出河流邻近建筑，而无需用户知道投影、缓冲区或空间筛选。',
+    behavior: ['Inspect both layers', 'Transform to a metric CRS', 'Create a 500 m river buffer', 'Filter intersecting buildings', 'Count candidates', 'Show intermediate and final layers'],
+    steps: ['inspect_dataset', 'transform_crs', 'create_buffer', 'spatial_filter', 'analyze_distribution'],
+    success: '生成 river_buffer 和 candidate_buildings，并得到 5 个候选建筑。',
+    video: '只说一句话，AI 自己完成 Buffer + 空间筛选。',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'transform_crs', 'create_buffer', 'spatial_filter', 'analyze_distribution'],
+      constraints: { distance: 500, unit: 'meter', river_names: ['Hudson River', 'East River'] },
+    },
+    expectedResult: {
+      required_output_layers: ['river_buffer', 'candidate_buildings'],
+      expected: { candidate_buildings_count: 5 },
+      checks: ['candidate_buildings_count == 5', 'all_candidates_within_500m_of_river == true'],
+    },
+  },
+  {
+    id: '03-building-statistics-by-district',
+    title: 'Building Statistics by District',
+    prompt: '按 Community District 统计建筑数量和建筑总面积。',
+    data: ['buildings', 'districts'],
+    need: '按行政区汇总建筑数量与面积，并把表格统计与专题图关联。',
+    behavior: ['Inspect buildings and districts', 'Calculate building area', 'Spatially join district attributes', 'Aggregate count and area', 'Render a thematic result'],
+    steps: ['inspect_dataset', 'calculate_geometry', 'spatial_join', 'aggregate_by_region'],
+    success: '两个 Demo Community District 各统计到 6 个建筑，总计 12 个，面积总和为正。',
+    video: '一句话让 AI 自动做分区统计。',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'calculate_geometry', 'spatial_join', 'aggregate_by_region'],
+      constraints: { group_field: 'district_id', metrics: ['count', 'area_sum_m2'] },
+    },
+    expectedResult: {
+      required_output_layers: ['buildings_with_district', 'district_statistics'],
+      expected: { total_buildings_count: 12, district_counts: { 'MN-DEMO-01': 6, 'MN-DEMO-02': 6 } },
+      checks: ['total_buildings_count == 12', 'district_count == 2', 'all_district_area_sums_m2 > 0'],
+    },
+  },
+  {
+    id: '04-road-accessibility',
+    title: 'Road Accessibility',
+    prompt: '找出距离主要道路 300 米以内的建筑，并按 Community District 统计数量。',
+    data: ['buildings', 'roads', 'districts'],
+    need: '组合属性过滤、距离分析和分区统计来理解主要道路可达建筑。',
+    behavior: ['Identify roads where road_class is major', 'Transform to a metric CRS', 'Create a 300 m road buffer', 'Filter buildings', 'Join districts', 'Aggregate candidate counts'],
+    steps: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer', 'spatial_join', 'aggregate_by_region'],
+    success: '筛选到 3 个建筑，全部位于 MN-DEMO-01，并生成可视化中间图层。',
+    video: 'AI 能否自己组合多个 GIS 工具？',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer', 'spatial_join', 'aggregate_by_region'],
+      constraints: { road_class: 'major', distance: 300, unit: 'meter', group_field: 'district_id' },
+    },
+    expectedResult: {
+      required_output_layers: ['major_roads', 'major_road_buffer', 'accessible_buildings', 'accessibility_by_district'],
+      expected: { accessible_buildings_count: 3, district_counts: { 'MN-DEMO-01': 3, 'MN-DEMO-02': 0 } },
+      checks: ['accessible_buildings_count == 3', 'all_candidates_within_300m_of_major_road == true'],
+    },
+  },
+  {
+    id: '05-parameter-revision',
+    title: 'Parameter Revision',
+    prompt: '找出距离主要道路 500 米以内的建筑。',
+    revisionPrompt: '改成 1 公里。',
+    data: ['buildings', 'roads'],
+    need: '证明自然语言修改可以更新已有 GIS 工作流参数并只重算下游步骤。',
+    behavior: ['Build and retain the initial Task Graph', 'Run a 500 m major-road query', 'Recognize a distance-only revision', 'Invalidate downstream steps', 'Rerun buffer and spatial filter at 1000 m', 'Preserve run history and lineage'],
+    steps: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer', 'spatial_filter'],
+    success: '初始结果为 4 个建筑；修改后为 8 个；仅 buffer 及其下游步骤重跑。',
+    video: '不是重新问一次，而是真正修改正在执行的 GIS 工作流。',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer'],
+      constraints: { road_class: 'major', distance: 500, unit: 'meter' },
+      revision: { prompt: '改成 1 公里。', distance: 1000, unit: 'meter', rerun_from_capability: 'create_buffer' },
+    },
+    expectedResult: {
+      required_output_layers: ['major_road_buffer', 'candidate_buildings'],
+      expected: { initial_candidate_count: 4, revised_candidate_count: 8, retained_history_entries: 2 },
+      checks: ['initial_candidate_count == 4', 'revised_candidate_count == 8', 'unchanged_upstream_steps_are_reused == true', 'downstream_lineage_is_updated == true'],
+    },
+  },
+  {
+    id: '06-multi-constraint-selection',
+    title: 'Multi-Constraint Selection',
+    prompt: '找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。',
+    data: ['buildings', 'roads', 'rivers'],
+    need: '把道路邻近与河流避让两个空间约束组合成可解释的布尔筛选工作流。',
+    behavior: ['Parse both spatial constraints', 'Identify major roads', 'Transform to a metric CRS', 'Build 300 m road and 800 m river buffers', 'Select inside-road candidates', 'Exclude river-buffer candidates', 'Explain and map the final result'],
+    steps: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer', 'spatial_filter', 'analyze_distribution'],
+    success: '得到 2 个同时满足 road distance <= 300 m 且 river distance >= 800 m 的建筑。',
+    video: '从单个 Tool Calling 升级到真正的 Agent Planning。',
+    expectedPlan: {
+      required_capabilities: ['inspect_dataset', 'spatial_filter', 'transform_crs', 'create_buffer', 'analyze_distribution'],
+      constraints: { road_class: 'major', maximum_road_distance: 300, minimum_river_distance: 800, unit: 'meter', boolean_logic: 'inside road buffer AND outside river buffer' },
+    },
+    expectedResult: {
+      required_output_layers: ['major_road_buffer', 'river_exclusion_buffer', 'candidate_buildings'],
+      expected: { candidate_buildings_count: 2 },
+      checks: ['candidate_buildings_count == 2', 'all_candidates_within_300m_of_major_road == true', 'all_candidates_at_least_800m_from_river == true'],
+    },
+  },
+]
+
+function scenarioManifest(definition) {
+  return {
+    schema_version: '1.0',
+    id: definition.id,
+    title: definition.title,
+    region: 'Manhattan, New York City',
+    prompt: 'prompt.txt',
+    revision_prompt: definition.revisionPrompt ? 'revision-prompt.txt' : null,
+    data: definition.data.map(name => `data/${name}.geojson`),
+    expected_plan: 'expected-plan.json',
+    expected_result: 'expected-result.json',
+    supports_revision: Boolean(definition.revisionPrompt),
+    fixture_profile: 'deterministic-manhattan-scale-v1',
+  }
+}
+
+function readme(definition) {
+  const dataRows = definition.data.map(name => `| \`data/${name}.geojson\` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | ${generatedOn} |`).join('\n')
+  const behavior = definition.behavior.map(item => `1. ${item}`).join('\n')
+  const steps = definition.steps.map(step => `\`${step}\``).join(' → ')
+  return `# ${definition.title}
+
+## Scenario
+
+- ID: \`${definition.id}\`
+- Region: Manhattan, New York City
+- Fixture profile: \`deterministic-manhattan-scale-v1\`
+
+## Real user need
+
+${definition.need}
+
+## User prompt
+
+> ${definition.prompt}
+${definition.revisionPrompt ? `\nRevision: > ${definition.revisionPrompt}\n` : ''}
+## Why this Demo exists
+
+这个 Scenario 将一个真实空间需求、独立数据、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+
+## Input data
+
+| File | Dataset | Original provider | License / terms | Download / generation date |
+| --- | --- | --- | --- | --- |
+${dataRows}
+
+### Data source and processing
+
+这些文件是 GeoHarness 为稳定回归测试创作的、小型 Manhattan-scale 合成矢量 fixture，并非 NYC 官方地籍或道路数据。坐标锚定在 Manhattan 附近，使用 OGC:CRS84；几何和属性由 \`scripts/build_scenarios/build-fixtures.mjs\` 确定性生成。处理包括固定 3.2 km 测试范围、最小字段集和 7 位小数坐标量化；未做几何简化。数据按 CC0-1.0 提供。
+
+## Expected Agent behavior
+
+${behavior}
+
+## Key GIS workflow
+
+${steps}
+
+## Success criteria
+
+${definition.success}
+
+## Demo focus
+
+${definition.video}
+`
+}
+
+function json(value) {
+  return `${JSON.stringify(value, null, 2)}\n`
+}
+
+function desiredFiles(definition) {
+  const files = new Map([
+    ['README.md', readme(definition)],
+    ['prompt.txt', `${definition.prompt}\n`],
+    ['scenario.json', json(scenarioManifest(definition))],
+    ['expected-plan.json', json(definition.expectedPlan)],
+    ['expected-result.json', json(definition.expectedResult)],
+  ])
+  if (definition.revisionPrompt) {
+    files.set('revision-prompt.txt', `${definition.revisionPrompt}\n`)
+  }
+  for (const name of definition.data) {
+    files.set(`data/${name}.geojson`, json(datasets[name]))
+  }
+  return files
+}
+
+async function persist(relativePath, contents) {
+  const absolutePath = resolve(scenariosRoot, relativePath)
+  const pathFromRoot = relative(scenariosRoot, absolutePath)
+  if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
+    throw new Error(`Refusing to write outside scenarios directory: ${absolutePath}`)
+  }
+  if (checkOnly) {
+    let current
+    try {
+      current = await readFile(absolutePath, 'utf8')
+    } catch {
+      throw new Error(`Missing generated Scenario file: ${relativePath}`)
+    }
+    if (current !== contents) {
+      throw new Error(`Stale generated Scenario file: ${relativePath}`)
+    }
+    return
+  }
+  await mkdir(dirname(absolutePath), { recursive: true })
+  await writeFile(absolutePath, contents, 'utf8')
+}
+
+for (const definition of definitions) {
+  for (const [file, contents] of desiredFiles(definition)) {
+    await persist(`${definition.id}/${file}`, contents)
+  }
+}
+
+console.log(`${checkOnly ? 'Verified' : 'Generated'} ${definitions.length} independent Scenario packages.`)

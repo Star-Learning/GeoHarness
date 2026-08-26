@@ -1,0 +1,19 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "spatial_filter",
+    "transform_crs",
+    "create_buffer"
+  ],
+  "constraints": {
+    "road_class": "major",
+    "distance": 500,
+    "unit": "meter"
+  },
+  "revision": {
+    "prompt": "改成 1 公里。",
+    "distance": 1000,
+    "unit": "meter",
+    "rerun_from_capability": "create_buffer"
+  }
+}

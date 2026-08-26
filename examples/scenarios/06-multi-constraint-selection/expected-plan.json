@@ -1,0 +1,16 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "spatial_filter",
+    "transform_crs",
+    "create_buffer",
+    "analyze_distribution"
+  ],
+  "constraints": {
+    "road_class": "major",
+    "maximum_road_distance": 300,
+    "minimum_river_distance": 800,
+    "unit": "meter",
+    "boolean_logic": "inside road buffer AND outside river buffer"
+  }
+}

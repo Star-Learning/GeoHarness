@@ -1,0 +1,18 @@
+{
+  "required_output_layers": [
+    "buildings_with_district",
+    "district_statistics"
+  ],
+  "expected": {
+    "total_buildings_count": 12,
+    "district_counts": {
+      "MN-DEMO-01": 6,
+      "MN-DEMO-02": 6
+    }
+  },
+  "checks": [
+    "total_buildings_count == 12",
+    "district_count == 2",
+    "all_district_area_sums_m2 > 0"
+  ]
+}

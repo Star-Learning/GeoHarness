@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "id": "03-building-statistics-by-district",
+  "title": "Building Statistics by District",
+  "region": "Manhattan, New York City",
+  "prompt": "prompt.txt",
+  "revision_prompt": null,
+  "data": [
+    "data/buildings.geojson",
+    "data/districts.geojson"
+  ],
+  "expected_plan": "expected-plan.json",
+  "expected_result": "expected-result.json",
+  "supports_revision": false,
+  "fixture_profile": "deterministic-manhattan-scale-v1"
+}

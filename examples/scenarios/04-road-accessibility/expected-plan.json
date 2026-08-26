@@ -1,0 +1,16 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "spatial_filter",
+    "transform_crs",
+    "create_buffer",
+    "spatial_join",
+    "aggregate_by_region"
+  ],
+  "constraints": {
+    "road_class": "major",
+    "distance": 300,
+    "unit": "meter",
+    "group_field": "district_id"
+  }
+}

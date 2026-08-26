@@ -43,3 +43,25 @@
 
 Phase 1 只提供可运行、可交互的 UI Shell。真实 Scenario 数据包、地图引擎、
 Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序实现。
+
+## Phase 2 — Six Scenario Packages
+
+状态：完成（2026-08-27）
+
+- [x] 建立六个独立需求目录；每个目录均包含 README、Prompt、Scenario manifest、
+  Expected Plan、Expected Result 和运行所需的独立数据副本。
+- [x] Scenario 05 额外包含独立的 `revision-prompt.txt`，明确 500 m → 1 km 的
+  参数修改目标与 4 → 8 的固定候选数量。
+- [x] 建立可复现的 `scripts/build_scenarios/build-fixtures.mjs`，支持生成和
+  `--check` 新鲜度验证。
+- [x] 数据使用 CC0-1.0、OGC:CRS84 的小型确定性 Manhattan-scale fixture；
+  每个 README 明确记录来源、许可、生成日期、处理方法和非官方数据性质。
+- [x] 为六个 Scenario 分别建立一个独立测试文件，验证目录自包含、数据合法、
+  Prompt/Plan/Result 契约和 Scenario 特定期望。
+- [x] 使用 GeoPandas/Shapely/UTM 18N 对关键固定空间结果做独立抽查：Scenario 02
+  为 5，Scenario 04 为 3，Scenario 05 为 4 → 8，Scenario 06 为 2。
+
+## Phase 2 边界
+
+本阶段只建立可执行需求包和固定测试数据。Scenario 自动加载、地图渲染和真实
+空间工具调用分别在 Phase 3、Phase 4 和 Phase 5 实现。
