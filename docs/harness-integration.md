@@ -217,15 +217,30 @@ channel，客户端把 `connection` 加入 Cordis inject 后通过
 `ctx.connection.rpc.call(...)` 调用。没有新增第二个 Web 服务，也没有绕过 Harness
 transport/trust fence。
 
-公开两个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
-projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果。请求只接受六个
-官方 Scenario id 和有界 workspace key。成功执行后 Host 会核对 Registry
+公开三个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
+projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
+`scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受六个
+官方 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
+0–100 km 的正距离。成功执行后 Host 会核对 Registry
 `generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
 全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
+
+修订没有重新创建整张 Task Graph：Host 在原 execution 上计算被修改 step 的下游闭包，
+只把这些 step 从 `success/failed` 退回 `pending`，清除其当前 alias 绑定并重跑；未受影响的
+上游 step、结果和 Layer ID 保持不变。每轮在 `run_history` 中记录参数变化、executed steps、
+reused steps 与用户原始理由。Registry 中被替代的派生 Layer 不删除，而是投影为
+`active=false` 并用历史 success transition 验证 lineage；客户端地图只合并 active Layers。
+这是建立在 Harness Connection RPC、Geo Service、Task Graph 与 Layer Registry 之上的局部
+修订，不是浏览器端伪造新结果。
 
 Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返回 Task Graph
 `success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 5 个要素；
 浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
+
+Phase 9 又在完整 Harness Web 中连续 POST `scenario/run` 与 `scenario/revise`：Scenario 05
+从 500 m / 4 个候选更新为 1 km / 8 个候选，history 为 2 轮；仅
+`buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
+Map Verification 仍为 `ready`。
 
 ## Phase 0 真实验证
 

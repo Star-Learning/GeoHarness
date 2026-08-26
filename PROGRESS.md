@@ -222,3 +222,30 @@ Phase 8。
 
 六个初始 Scenario 均已自动验收。Scenario 05 的自然语言参数修改、上游复用、下游
 失效/重跑、run history 和 lineage 更新属于 Phase 9。
+
+## Phase 9 — Conversational Revision
+
+状态：完成（2026-08-27）
+
+- [x] Scenario 05 的初次执行保持文档规定的 500 m，真实得到 4 个候选；用户输入
+  `改成 1 公里。` 后通过 Harness Connection RPC 将距离修订为 1000 m，真实得到 8 个候选。
+- [x] Task Graph 支持已完成 execution 的 bounded revision：计算目标 step 下游闭包，
+  仅将受影响 step 退回 pending，保留未受影响 success step 的结果和 Layer ID。
+- [x] 本例只重跑 `buffer_major_roads` 与 `filter_candidate_buildings`，复用
+  `inspect_buildings`、`filter_major_roads`、`transform_major_roads`；测试精确断言两组。
+- [x] 新增有序 `run_history`，每轮保存 initial/revision、参数 before/after、用户理由、
+  executed steps、reused steps 和最终状态；Scenario 05 修订后保留 2 轮记录。
+- [x] 被替代的派生 Layer 留在 Registry 作为可审计历史，Map Verification 用历史 success
+  transition 验证其 lineage 并标记 `active=false`；客户端只渲染当前 active 派生层。
+- [x] 新增 loopback-only `/geoharness/scenario/revise`，只接受 Scenario 05 且必须包含
+  有界数值距离；模糊修改、错误 Scenario 和超过 100 km 的输入显式拒绝。
+- [x] 客户端在初次成功后准备官方 `revision-prompt.txt`，提交修订后显示 history、
+  rerun/reused 摘要并把 Task step、当前 Layer 与地图重新同步。
+- [x] Python/GeoPandas oracle 同时覆盖 500 m 初始状态和 1000 m 修订状态；2 项 Phase 9
+  自动测试及完整 Harness Web 连续 RPC 验证通过。
+
+## Phase 9 边界
+
+v1.0 只承诺 Scenario 05 的显式距离修订，不将自由文本解析器扩展为通用规划器。其他
+Scenario 的任意 schema 变更或模型生成式重规划属于后续版本。Phase 10 负责六个独立
+Scenario 的真实截图、动图/视频、视频脚本与项目文档收尾。

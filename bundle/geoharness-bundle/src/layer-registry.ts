@@ -30,6 +30,7 @@ export interface EmbeddedScenario {
     task_graph: string
   }
   prompt: string
+  revisionPrompt: string | null
   expectedPlan: Record<string, unknown>
   expectedResult: Record<string, unknown>
   taskGraph: {

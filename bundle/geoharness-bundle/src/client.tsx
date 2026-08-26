@@ -327,6 +327,8 @@ function GeoHarnessShell() {
   const [runStatus, setRunStatus] = React.useState<'ready' | 'running' | 'success' | 'failed'>('ready')
   const [runError, setRunError] = React.useState<string | null>(null)
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
+  const [runHistoryCount, setRunHistoryCount] = React.useState(0)
+  const [revisionSummary, setRevisionSummary] = React.useState<string | null>(null)
 
   const selectScenario = (id: string) => {
     const next = SCENARIOS.find(scenario => scenario.id === id)
@@ -341,12 +343,18 @@ function GeoHarnessShell() {
     setRunStatus('ready')
     setRunError(null)
     setSelectedStepId(null)
+    setRunHistoryCount(0)
+    setRevisionSummary(null)
   }
 
-  const submitGoal = (event: React.FormEvent) => {
+  const submitGoal = async (event: React.FormEvent) => {
     event.preventDefault()
     const value = prompt.trim()
-    if (value !== '') setGoal(value)
+    if (value === '') return
+    setGoal(value)
+    if (selected.payload.revisionPrompt !== null && verification !== null && runStatus === 'success') {
+      await reviseTaskGraph(value)
+    }
   }
 
   const uploadGeoJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -388,15 +396,54 @@ function GeoHarnessShell() {
       if (!response.ok || response.value === null || typeof response.value !== 'object') {
         throw new Error(response.error?.message ?? 'GeoHarness RPC returned no execution')
       }
-      const result = response.value as { map_verification?: MapVerification }
+      const result = response.value as { map_verification?: MapVerification, run_history?: unknown[] }
       if (result.map_verification === undefined) throw new Error('Task Graph result has no map verification')
       setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
       setVerification(result.map_verification)
       setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
+      setRunHistoryCount(result.run_history?.length ?? 1)
+      setRevisionSummary(null)
       const firstOutputStep = result.map_verification.step_bindings.find(binding => binding.outputs.length > 0)
       setSelectedStepId(firstOutputStep?.step_id ?? null)
       if (result.map_verification.status !== 'ready') {
         setRunError(result.map_verification.issues.join('; ') || 'Map verification failed')
+      }
+      if (selected.payload.revisionPrompt !== null) setPrompt(selected.payload.revisionPrompt)
+    } catch (error) {
+      setRunStatus('failed')
+      setRunError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const reviseTaskGraph = async (revisionPrompt: string) => {
+    if (clientConnection === undefined || runStatus === 'running') return
+    setRunStatus('running')
+    setRunError(null)
+    try {
+      const response = await clientConnection.rpc.call('/geoharness', 'scenario/revise', {
+        scenario_id: selected.id,
+        workspace_key: `browser:${selected.id}`,
+        revision_prompt: revisionPrompt,
+      })
+      if (!response.ok || response.value === null || typeof response.value !== 'object') {
+        throw new Error(response.error?.message ?? 'GeoHarness revision returned no execution')
+      }
+      const result = response.value as {
+        map_verification?: MapVerification
+        run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
+      }
+      if (result.map_verification === undefined) throw new Error('Revised Task Graph has no map verification')
+      setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
+      setVerification(result.map_verification)
+      setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
+      setRunHistoryCount(result.run_history?.length ?? 0)
+      const latestRun = result.run_history?.at(-1)
+      setRevisionSummary(latestRun === undefined
+        ? null
+        : `${latestRun.executed_steps.length} rerun · ${latestRun.reused_steps.length} reused`)
+      setSelectedStepId('filter_candidate_buildings')
+      if (result.map_verification.status !== 'ready') {
+        setRunError(result.map_verification.issues.join('; ') || 'Revised map verification failed')
       }
     } catch (error) {
       setRunStatus('failed')
@@ -524,6 +571,8 @@ function GeoHarnessShell() {
               <div><span>Phase</span><b>Task Graph</b></div>
               <div><span>Steps</span><b>{verification === null ? `${taskSteps.length} pending` : `${verification.step_bindings.filter(step => step.status === 'success').length}/${taskSteps.length} success`}</b></div>
               <div><span>Outputs</span><b>{plannedOutputs.length}</b></div>
+              <div><span>History</span><b>{runHistoryCount} run{runHistoryCount === 1 ? '' : 's'}</b></div>
+              {revisionSummary !== null && <div><span>Revision</span><b>{revisionSummary}</b></div>}
               <div><span>Map</span><b className="is-teal">{verification?.status ?? 'awaiting run'}</b></div>
               <button className="gh-run-button" type="button" onClick={runTaskGraph} disabled={clientConnection === undefined || runStatus === 'running'}>
                 {runStatus === 'running' ? 'Running GIS workflow…' : 'Run + verify on map'}

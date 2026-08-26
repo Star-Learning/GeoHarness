@@ -6,8 +6,8 @@ const STEP_STATUSES = new Set(['pending', 'running', 'success', 'failed'])
 const TRANSITIONS = {
   pending: new Set(['running', 'failed']),
   running: new Set(['success', 'failed']),
-  success: new Set(),
-  failed: new Set(),
+  success: new Set(['pending']),
+  failed: new Set(['pending']),
 }
 
 export class TaskGraphError extends Error {
@@ -111,6 +111,8 @@ export class TaskGraphExecution {
       error: null,
     }]))
     this.history = []
+    this.runHistory = []
+    this.pendingRevision = null
     this.sequence = 0
     this.active = false
   }
@@ -174,6 +176,8 @@ export class TaskGraphExecution {
   async run(options = {}) {
     if (this.active) throw new TaskGraphError('Task Graph execution is already running', 'TASK_GRAPH_RUNNING')
     this.active = true
+    const scheduledSteps = [...this.steps.values()].filter(step => step.status === 'pending').map(step => step.id)
+    const reusedSteps = [...this.steps.values()].filter(step => step.status === 'success').map(step => step.id)
     try {
       while ([...this.steps.values()].some(step => step.status === 'pending')) {
         let progressed = false
@@ -192,10 +196,68 @@ export class TaskGraphExecution {
         }
         if (!progressed) throw new TaskGraphError('Task Graph made no progress', 'TASK_GRAPH_STALLED')
       }
+      if (scheduledSteps.length > 0) {
+        const status = this.snapshot().status
+        this.runHistory.push({
+          run: this.runHistory.length + 1,
+          kind: this.pendingRevision === null ? 'initial' : 'revision',
+          reason: this.pendingRevision?.reason ?? null,
+          parameter_changes: clone(this.pendingRevision?.parameter_changes ?? []),
+          executed_steps: scheduledSteps,
+          reused_steps: reusedSteps,
+          status,
+        })
+        this.pendingRevision = null
+      }
       return this.snapshot()
     } finally {
       this.active = false
     }
+  }
+
+  reviseFrom(stepId, parameterPatch, reason) {
+    if (this.active) throw new TaskGraphError('Cannot revise a running Task Graph', 'TASK_GRAPH_RUNNING')
+    if ([...this.steps.values()].some(step => step.status === 'pending' || step.status === 'running')) {
+      throw new TaskGraphError('Task Graph must finish before revision', 'TASK_GRAPH_NOT_COMPLETE')
+    }
+    if (!plainObject(parameterPatch)) throw new TaskGraphError('Revision parameters must be an object', 'TASK_GRAPH_REVISION_INVALID')
+    const target = this.steps.get(stepId)
+    if (target === undefined) throw new TaskGraphError(`Unknown revision step: ${stepId}`, 'TASK_GRAPH_REVISION_INVALID')
+    const affected = new Set([stepId])
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const step of this.steps.values()) {
+        if (!affected.has(step.id) && step.dependencies.some(dependency => affected.has(dependency))) {
+          affected.add(step.id)
+          changed = true
+        }
+      }
+    }
+    const before = clone(target.parameters)
+    target.parameters = { ...target.parameters, ...clone(parameterPatch) }
+    const invalidatedOutputs = []
+    for (const step of this.steps.values()) {
+      if (!affected.has(step.id)) continue
+      invalidatedOutputs.push(...step.resolved_outputs.map(output => clone(output)))
+      for (const output of step.resolved_outputs) {
+        if (this.layerAliases.get(output.alias) === output.layer_id) this.layerAliases.delete(output.alias)
+      }
+      this.transition(step, 'pending', {
+        resolved_parameters: null,
+        resolved_outputs: [],
+        result: null,
+        error: null,
+      })
+    }
+    const parameterChanges = [{ step_id: stepId, before, after: clone(target.parameters) }]
+    this.pendingRevision = {
+      reason: typeof reason === 'string' && reason.trim() !== '' ? reason.trim() : null,
+      parameter_changes: parameterChanges,
+      affected_steps: [...affected],
+      invalidated_outputs: invalidatedOutputs,
+    }
+    return clone(this.pendingRevision)
   }
 
   snapshot() {
@@ -216,6 +278,7 @@ export class TaskGraphExecution {
       layers: Object.fromEntries(this.layerAliases),
       initial_layers: [...this.initialLayerAliases],
       history: clone(this.history),
+      run_history: clone(this.runHistory),
     }
   }
 }
@@ -264,6 +327,19 @@ export class TaskGraphRuntime extends Service {
     return { ...snapshot, map_verification: mapVerification }
   }
 
+  async reviseScenario({ scenarioId, workspaceKey = 'direct', stepId, parameterPatch, reason, signal }) {
+    const key = `${workspaceKey}:${scenarioId}`
+    const execution = this.runs.get(key)
+    if (execution === undefined) {
+      throw new TaskGraphError(`No completed Task Graph to revise for ${scenarioId}`, 'TASK_GRAPH_RUN_MISSING')
+    }
+    const revision = execution.reviseFrom(stepId, parameterPatch, reason)
+    const snapshot = await execution.run({ signal })
+    const mapVerification = await this.buildMapVerification(snapshot, workspaceKey, signal)
+    this.verifications.set(key, mapVerification)
+    return { ...snapshot, map_verification: mapVerification, revision }
+  }
+
   latest(workspaceKey, scenarioId) {
     const key = `${workspaceKey}:${scenarioId}`
     const snapshot = this.runs.get(key)?.snapshot()
@@ -283,6 +359,9 @@ export class TaskGraphRuntime extends Service {
       aliasesByLayer.set(layerId, aliases)
     }
     const metadataById = new Map(projection.map(item => [item.metadata.layer_id, item.metadata]))
+    const historicalOutputIds = new Set(snapshot.history
+      .filter(event => event.to === 'success')
+      .flatMap(event => event.outputs.map(output => output.layer_id)))
     const issues = []
     const mapLayers = projection.map(item => {
       const metadata = item.metadata
@@ -293,15 +372,19 @@ export class TaskGraphRuntime extends Service {
       const parentsPresent = metadata.parents.every(parent => metadataById.has(parent))
       if (!parentsPresent) issues.push(`Missing parent Layer for ${metadata.layer_id}`)
       let lineageMatches = true
+      const aliases = aliasesByLayer.get(metadata.layer_id) ?? []
+      const active = metadata.source !== 'derived' || aliases.length > 0
       if (metadata.generated_by !== null) {
         const step = stepById.get(metadata.generated_by)
-        lineageMatches = step?.status === 'success'
-          && step.resolved_outputs.some(output => output.layer_id === metadata.layer_id)
+        lineageMatches = active
+          ? step?.status === 'success' && step.resolved_outputs.some(output => output.layer_id === metadata.layer_id)
+          : historicalOutputIds.has(metadata.layer_id)
         if (!lineageMatches) issues.push(`Step lineage mismatch for ${metadata.layer_id}`)
       }
       return {
         layer_id: metadata.layer_id,
-        aliases: aliasesByLayer.get(metadata.layer_id) ?? [],
+        aliases,
+        active,
         step_id: metadata.generated_by,
         metadata,
         geojson: item.geojson,

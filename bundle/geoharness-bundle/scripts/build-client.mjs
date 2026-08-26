@@ -56,6 +56,9 @@ async function loadEmbeddedScenarios() {
     scenarios.push({
       manifest,
       prompt: (await readFile(resolve(root, manifest.prompt), 'utf8')).trim(),
+      revisionPrompt: manifest.revision_prompt === null
+        ? null
+        : (await readFile(resolve(root, manifest.revision_prompt), 'utf8')).trim(),
       expectedPlan: JSON.parse(await readFile(resolve(root, manifest.expected_plan), 'utf8')),
       expectedResult: JSON.parse(await readFile(resolve(root, manifest.expected_result), 'utf8')),
       taskGraph: JSON.parse(await readFile(resolve(root, manifest.task_graph), 'utf8')),

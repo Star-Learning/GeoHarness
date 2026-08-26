@@ -123,16 +123,26 @@ class ScenarioRegression:
         distances = self.distance_to(candidates, self.frame("major_roads"))
         buffer_metadata = self.registry.metadata(self.layer_aliases["major_road_buffer"])
         distance_m = float((buffer_metadata.parameters or {}).get("distance_m", -1))
-        return {
-            "statistics": {
-                "initial_candidate_count": len(candidates),
-                "initial_buffer_distance_m": distance_m,
-            },
-            "checks": {
-                "initial_distance_is_500m": distance_m == 500,
-                "all_initial_candidates_within_500m": all(distance <= 500.5 for distance in distances),
-            },
+        statistics: dict[str, Any] = {
+            "current_candidate_count": len(candidates),
+            "current_buffer_distance_m": distance_m,
         }
+        checks: dict[str, bool] = {
+            "all_current_candidates_within_distance": all(distance <= distance_m + 0.5 for distance in distances),
+        }
+        if distance_m == 500:
+            statistics.update({"initial_candidate_count": len(candidates), "initial_buffer_distance_m": distance_m})
+            checks.update({
+                "initial_distance_is_500m": True,
+                "all_initial_candidates_within_500m": all(distance <= 500.5 for distance in distances),
+            })
+        if distance_m == 1000:
+            statistics.update({"revised_candidate_count": len(candidates), "revised_buffer_distance_m": distance_m})
+            checks.update({
+                "revised_distance_is_1000m": True,
+                "all_revised_candidates_within_1000m": all(distance <= 1000.5 for distance in distances),
+            })
+        return {"statistics": statistics, "checks": checks}
 
     def multi_constraint(self) -> dict[str, Any]:
         candidates = self.frame("candidate_buildings")

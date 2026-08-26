@@ -36,6 +36,12 @@ Phase 8 已用六个独立 workspace 自动运行全部 Scenario，并通过 cap
 layers、独立空间 oracle 和 expected statistics 四道门禁。Scenario 05 的修订字段是
 Phase 9 的明确阶段边界，不是 Phase 8 阻塞。
 
+### Scenario 05 会话修订
+
+Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run history、旧 Layer lineage
+保留和 active map projection。完整 Harness Web 连续 RPC 验证从 500 m / 4 个候选更新到
+1 km / 8 个候选，只有两项下游 step 重跑；不再是活跃阻塞。
+
 ## 活跃风险与后续门禁
 
 ### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题

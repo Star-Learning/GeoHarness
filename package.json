@@ -23,6 +23,7 @@
     "test:phase6": "node --test tests/phase6-task-graph.test.mjs",
     "test:phase7": "node --test tests/phase7-map-verification.test.mjs",
     "test:phase8": "node --test tests/regression/*.test.mjs",
+    "test:phase9": "node --test tests/phase9-conversational-revision.test.mjs",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:phase1": "pnpm run typecheck && pnpm run test:phase1",
     "verify:phase2": "pnpm run test:phase2",
@@ -31,7 +32,8 @@
     "verify:phase5": "pnpm peers check && pnpm run test:phase5",
     "verify:phase6": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase6",
     "verify:phase7": "pnpm peers check && pnpm run build && pnpm run typecheck && pnpm run test:phase7",
-    "verify:phase8": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase8"
+    "verify:phase8": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase8",
+    "verify:phase9": "pnpm run build && pnpm run typecheck && pnpm run test:phase9"
   },
   "devDependencies": {
     "typescript": "6.0.3"

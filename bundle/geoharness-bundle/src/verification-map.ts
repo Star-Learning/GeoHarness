@@ -5,6 +5,7 @@ export type TaskStepStatus = 'pending' | 'running' | 'success' | 'failed'
 export interface MapVerificationLayer {
   layer_id: string
   aliases: string[]
+  active: boolean
   step_id: string | null
   metadata: {
     layer_id: string
@@ -82,7 +83,7 @@ export function mergeVerificationLayers(current: readonly LayerRecord[], verific
   }
   const inputs = current.filter(layer => layer.source !== 'derived')
   const derived = verification.map_layers
-    .filter(layer => layer.metadata.source === 'derived')
+    .filter(layer => layer.metadata.source === 'derived' && layer.active)
     .map((layer): LayerRecord => {
       if (!validCollection(layer.geojson)) throw new Error(`Invalid map GeoJSON for ${layer.layer_id}`)
       if (layer.geojson.features.length !== layer.metadata.feature_count) {

@@ -19,6 +19,17 @@ function requestPayload(payload) {
   return { scenarioId, workspaceKey }
 }
 
+export function parseDistanceRevision(prompt) {
+  if (typeof prompt !== 'string') return null
+  const normalized = prompt.trim().toLowerCase()
+  const match = normalized.match(/(\d+(?:\.\d+)?)\s*(公里|千米|km|kilometers?|米|m|meters?)/u)
+  if (match === null) return null
+  const value = Number(match[1])
+  const unit = match[2]
+  const distance = ['公里', '千米', 'km', 'kilometer', 'kilometers'].includes(unit) ? value * 1000 : value
+  return Number.isFinite(distance) && distance > 0 && distance <= 100_000 ? distance : null
+}
+
 /** Loopback-only browser bridge for running and retrieving Scenario verification projections. */
 export function registerGeoRpc(ctx) {
   return ctx.connection.rpc.handle('/geoharness', async (endpoint, payload, signal) => {
@@ -30,6 +41,21 @@ export function registerGeoRpc(ctx) {
     }
     if (endpoint === 'scenario/latest') {
       return { ok: true, value: ctx.taskGraph.latest(request.workspaceKey, request.scenarioId) }
+    }
+    if (endpoint === 'scenario/revise') {
+      if (request.scenarioId !== '05-parameter-revision') {
+        return badRequest('Conversational revision is supported only for Scenario 05 in v1.0')
+      }
+      const distance = parseDistanceRevision(payload.revision_prompt)
+      if (distance === null) return badRequest('Revision prompt must contain a valid distance')
+      const value = await ctx.taskGraph.reviseScenario({
+        ...request,
+        stepId: 'buffer_major_roads',
+        parameterPatch: { distance, unit: 'meter' },
+        reason: payload.revision_prompt,
+        signal,
+      })
+      return { ok: true, value }
     }
     return badRequest(`Unknown GeoHarness endpoint: ${endpoint}`)
   }, { authority: 'loopback' })
