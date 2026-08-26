@@ -83,11 +83,15 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.equal(manifest.exports['./client'].default, './client.js')
   assert.deepEqual(manifest.peerDependencies, {
     '@deepseek-ai/cordis': '4.0.1',
+    '@deepseek-ai/dsh-client-connection': '0.1.1-rc.2',
     '@deepseek-ai/dsh-client-runtime': '0.1.1-rc.2',
     '@deepseek-ai/dsh-client-ui-conversation': '0.1.1-rc.2',
     '@deepseek-ai/dsh-client-ui-layout': '0.1.1-rc.2',
     '@deepseek-ai/dsh-system-prompt': '0.1.1-rc.2',
     '@deepseek-ai/dsh-tools': '0.1.1-rc.2',
+  })
+  assert.deepEqual(manifest.peerDependenciesMeta, {
+    '@deepseek-ai/dsh-client-connection': { optional: true },
   })
 
   const patch = await readFile(join(bundleRoot, 'cordis.patch.yml'), 'utf8')
@@ -131,7 +135,7 @@ test('the browser artifact registers its factory and contributes only through de
     if (specifier === 'react/jsx-runtime') return { Fragment: Symbol('fragment'), jsx, jsxs: jsx }
     throw new Error(`unexpected external: ${specifier}`)
   })
-  assert.deepEqual([...plugin.inject], ['slots'])
+  assert.deepEqual([...plugin.inject], ['slots', 'connection'])
 
   const awaited = []
   const registrations = []

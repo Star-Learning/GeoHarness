@@ -21,13 +21,15 @@
     "test:phase4": "python -m pytest backend/geo-service/tests -q",
     "test:phase5": "node --test tests/phase5-harness-tools.test.mjs",
     "test:phase6": "node --test tests/phase6-task-graph.test.mjs",
+    "test:phase7": "node --test tests/phase7-map-verification.test.mjs",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:phase1": "pnpm run typecheck && pnpm run test:phase1",
     "verify:phase2": "pnpm run test:phase2",
     "verify:phase3": "pnpm run typecheck && pnpm run test:phase3",
     "verify:phase4": "pnpm run test:phase4",
     "verify:phase5": "pnpm peers check && pnpm run test:phase5",
-    "verify:phase6": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase6"
+    "verify:phase6": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase6",
+    "verify:phase7": "pnpm peers check && pnpm run build && pnpm run typecheck && pnpm run test:phase7"
   },
   "devDependencies": {
     "typescript": "6.0.3"

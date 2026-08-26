@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { LocalPythonGeoProvider } from './host/provider.js'
+import { registerGeoRpc } from './host/rpc.js'
 import { GeoRuntime } from './host/service.js'
 import { TaskGraphRuntime } from './host/task-graph.js'
 import { registerGeoTools } from './host/tools.js'
@@ -23,6 +24,7 @@ export function apply(ctx, config = {}) {
   }))
   new TaskGraphRuntime(ctx, { scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')) })
   registerGeoTools(ctx)
+  ctx.inject(['connection'], connectionCtx => registerGeoRpc(connectionCtx))
 }
 
-export { GeoRuntime, LocalPythonGeoProvider, TaskGraphRuntime, registerGeoTools }
+export { GeoRuntime, LocalPythonGeoProvider, TaskGraphRuntime, registerGeoRpc, registerGeoTools }

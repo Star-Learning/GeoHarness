@@ -10,6 +10,13 @@ import {
   type GeoJsonGeometry,
   type LayerRecord,
 } from './layer-registry'
+import {
+  layerIdsForStep,
+  mergeVerificationLayers,
+  stepStatus,
+  type MapVerification,
+  type TaskStepStatus,
+} from './verification-map'
 
 declare const __GE0HARNESS_CSS__: string
 declare const __GEOHARNESS_SCENARIOS__: EmbeddedScenario[]
@@ -32,7 +39,18 @@ interface SlotService {
 
 interface ClientContext {
   slots: SlotService
+  connection?: {
+    rpc: {
+      call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{
+        ok: boolean
+        value?: unknown
+        error?: { message?: string }
+      }>
+    }
+  }
 }
+
+let clientConnection: ClientContext['connection']
 
 interface ScenarioPreview {
   id: string
@@ -157,10 +175,12 @@ function featureLabel(feature: GeoJsonFeature, index: number) {
 function GeoMap({
   layers,
   selected,
+  highlightedLayerIds,
   onSelect,
 }: {
   layers: readonly LayerRecord[]
   selected: SelectedFeature | null
+  highlightedLayerIds: ReadonlySet<string>
   onSelect: (value: SelectedFeature | null) => void
 }) {
   const [zoom, setZoom] = React.useState(1)
@@ -232,7 +252,11 @@ function GeoMap({
             }
             const common = {
               key: `${layer.id}-${feature.id ?? featureIndex}`,
-              className: isSelected ? 'gh-map-feature is-selected' : 'gh-map-feature',
+              className: [
+                'gh-map-feature',
+                isSelected ? 'is-selected' : '',
+                highlightedLayerIds.has(layer.id) ? 'is-step-highlighted' : '',
+              ].filter(Boolean).join(' '),
               opacity: layer.opacity,
               stroke: layer.style.color,
               strokeWidth: isSelected ? layer.style.lineWidth + 2.4 : layer.style.lineWidth,
@@ -299,6 +323,10 @@ function GeoHarnessShell() {
   const [layers, setLayers] = React.useState<LayerRecord[]>(() => registerScenarioLayers(initialScenario.payload))
   const [selectedFeature, setSelectedFeature] = React.useState<SelectedFeature | null>(null)
   const [uploadError, setUploadError] = React.useState<string | null>(null)
+  const [verification, setVerification] = React.useState<MapVerification | null>(null)
+  const [runStatus, setRunStatus] = React.useState<'ready' | 'running' | 'success' | 'failed'>('ready')
+  const [runError, setRunError] = React.useState<string | null>(null)
+  const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
 
   const selectScenario = (id: string) => {
     const next = SCENARIOS.find(scenario => scenario.id === id)
@@ -309,6 +337,10 @@ function GeoHarnessShell() {
     setLayers(registerScenarioLayers(next.payload))
     setSelectedFeature(null)
     setUploadError(null)
+    setVerification(null)
+    setRunStatus('ready')
+    setRunError(null)
+    setSelectedStepId(null)
   }
 
   const submitGoal = (event: React.FormEvent) => {
@@ -341,9 +373,46 @@ function GeoHarnessShell() {
   const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
   const taskSteps = selected.payload.taskGraph.steps
   const plannedOutputs = taskSteps.flatMap(step => step.outputs)
+  const highlightedLayerIds = layerIdsForStep(verification, selectedStepId)
+
+  const runTaskGraph = async () => {
+    if (clientConnection === undefined || runStatus === 'running') return
+    setRunStatus('running')
+    setRunError(null)
+    setSelectedStepId(null)
+    try {
+      const response = await clientConnection.rpc.call('/geoharness', 'scenario/run', {
+        scenario_id: selected.id,
+        workspace_key: `browser:${selected.id}`,
+      })
+      if (!response.ok || response.value === null || typeof response.value !== 'object') {
+        throw new Error(response.error?.message ?? 'GeoHarness RPC returned no execution')
+      }
+      const result = response.value as { map_verification?: MapVerification }
+      if (result.map_verification === undefined) throw new Error('Task Graph result has no map verification')
+      setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
+      setVerification(result.map_verification)
+      setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
+      const firstOutputStep = result.map_verification.step_bindings.find(binding => binding.outputs.length > 0)
+      setSelectedStepId(firstOutputStep?.step_id ?? null)
+      if (result.map_verification.status !== 'ready') {
+        setRunError(result.map_verification.issues.join('; ') || 'Map verification failed')
+      }
+    } catch (error) {
+      setRunStatus('failed')
+      setRunError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const stepIcon = (status: TaskStepStatus, index: number) => {
+    if (status === 'success') return '✓'
+    if (status === 'failed') return '!'
+    if (status === 'running') return '…'
+    return String(index + 1)
+  }
 
   return (
-    <main className="gh-shell" data-geoharness-phase="6">
+    <main className="gh-shell" data-geoharness-phase="7">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
@@ -381,7 +450,7 @@ function GeoHarnessShell() {
           </div>
           <div className="gh-layer-section-label">Scenario inputs</div>
           <div className="gh-layer-list">
-            {layers.map(layer => <article className="gh-layer-row" key={layer.id}>
+            {layers.map(layer => <article className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'} key={layer.id}>
               <button
                 type="button"
                 className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
@@ -392,6 +461,7 @@ function GeoHarnessShell() {
               <div className="gh-layer-meta">
                 <strong>{layer.name}</strong>
                 <small>{layer.geometry} · {layer.featureCount} features</small>
+                {layer.generatedBy !== null && <small>step · {layer.generatedBy}</small>}
                 <input
                   type="range"
                   min="0"
@@ -410,12 +480,17 @@ function GeoHarnessShell() {
           </div>
         </aside>
 
-        <GeoMap layers={layers} selected={selectedFeature} onSelect={setSelectedFeature} />
+        <GeoMap
+          layers={layers}
+          selected={selectedFeature}
+          highlightedLayerIds={highlightedLayerIds}
+          onSelect={setSelectedFeature}
+        />
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
             <span><b>Agent</b><small>Goal → Plan → Tools → Layers</small></span>
-            <span className="gh-agent-state">Planned</span>
+            <span className={`gh-agent-state is-${runStatus}`}>{runStatus}</span>
           </div>
           <div className="gh-agent-scroll">
             <section className="gh-agent-block">
@@ -425,27 +500,35 @@ function GeoHarnessShell() {
             <section className="gh-agent-block">
               <span className="gh-eyebrow">PLAN PREVIEW</span>
               <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
-                {taskSteps.map((step, index) => <li
-                  className="is-pending"
+                {taskSteps.map((step, index) => {
+                  const status = stepStatus(verification, step.id)
+                  return <li
+                  className={`is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`}
                   data-step-id={step.id}
-                  data-step-status="pending"
+                  data-step-status={status}
                   key={step.id}
                 >
-                  <i>{index + 1}</i>
+                  <button type="button" className="gh-step-button" onClick={() => setSelectedStepId(step.id)}>
+                  <i>{stepIcon(status, index)}</i>
                   <span>
                     <b>{step.title}</b>
                     <small>{step.tool} · deps {step.dependencies.length === 0 ? '—' : step.dependencies.join(', ')}</small>
                     {step.outputs.length > 0 && <small>→ {step.outputs.join(', ')}</small>}
                   </span>
-                </li>)}
+                  </button>
+                </li>})}
               </ol>
             </section>
             <section className="gh-agent-block gh-current-step">
               <span className="gh-eyebrow">CURRENT STEP</span>
               <div><span>Phase</span><b>Task Graph</b></div>
-              <div><span>Steps</span><b>{taskSteps.length} pending</b></div>
+              <div><span>Steps</span><b>{verification === null ? `${taskSteps.length} pending` : `${verification.step_bindings.filter(step => step.status === 'success').length}/${taskSteps.length} success`}</b></div>
               <div><span>Outputs</span><b>{plannedOutputs.length}</b></div>
-              <div><span>Status</span><b className="is-teal">DAG validated</b></div>
+              <div><span>Map</span><b className="is-teal">{verification?.status ?? 'awaiting run'}</b></div>
+              <button className="gh-run-button" type="button" onClick={runTaskGraph} disabled={clientConnection === undefined || runStatus === 'running'}>
+                {runStatus === 'running' ? 'Running GIS workflow…' : 'Run + verify on map'}
+              </button>
+              {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
           </div>
         </aside>
@@ -470,9 +553,10 @@ function GeoHarnessBadge() {
   return <div className="gh-shell-badge" data-geoharness-plugin="loaded"><BrandMark small /> GeoHarness</div>
 }
 
-export const inject = ['slots'] as const
+export const inject = ['slots', 'connection'] as const
 
 export function apply(ctx: ClientContext) {
+  clientConnection = ctx.connection
   installStyles()
   ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
@@ -489,3 +573,5 @@ export function apply(ctx: ClientContext) {
 
 // Kept as a value reference so TypeScript preserves the jsx-runtime external.
 void _jsx
+
+export { layerIdsForStep, mergeVerificationLayers, stepStatus } from './verification-map'

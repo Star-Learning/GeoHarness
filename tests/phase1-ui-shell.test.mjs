@@ -59,7 +59,7 @@ test('the generated factory registers the shell through additive Harness Slots',
     if (specifier === 'react/jsx-runtime') return { Fragment: fragment, jsx, jsxs: jsx }
     throw new Error(`unexpected external: ${specifier}`)
   })
-  assert.deepEqual([...plugin.inject], ['slots'])
+  assert.deepEqual([...plugin.inject], ['slots', 'connection'])
 
   const awaited = []
   const slots = []

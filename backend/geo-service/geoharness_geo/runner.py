@@ -50,6 +50,14 @@ def dispatch(payload: dict[str, Any]) -> Any:
         return [item.model_dump(mode="json") for item in registry.list_layers()]
     if action == "geojson":
         return registry.geojson(str(payload["layer_id"]))
+    if action == "projection":
+        return [
+            {
+                "metadata": item.model_dump(mode="json"),
+                "geojson": registry.geojson(item.layer_id),
+            }
+            for item in registry.list_layers()
+        ]
     raise ValueError(f"Unknown runner action: {action}")
 
 

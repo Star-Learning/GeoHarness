@@ -65,7 +65,7 @@ export interface LayerRecord {
   scenarioId: string | null
   generatedBy: string | null
   parents: string[]
-  parameters: Record<string, JsonPrimitive> | null
+  parameters: Record<string, unknown> | null
   storagePath: string | null
   createdAt: string
   visible: boolean

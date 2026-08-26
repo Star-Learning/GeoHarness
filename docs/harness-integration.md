@@ -209,6 +209,24 @@ Phase 5 通过两层真实验证：
   DSH Web surface 与 GeoHarness client 标记。验证环境没有外部模型 API Key，故
   不伪造端到端模型生成；ToolRuntime 入口之后的真实执行链已经覆盖。
 
+## Host ↔ Client 地图验证通道（Phase 7）
+
+当前上游的正式双端扩展点是 `@deepseek-ai/dsh-client-connection` 的 generic RPC。
+GeoHarness Host 通过 `ctx.connection.rpc.handle('/geoharness', ...)` 注册 loopback-only
+channel，客户端把 `connection` 加入 Cordis inject 后通过
+`ctx.connection.rpc.call(...)` 调用。没有新增第二个 Web 服务，也没有绕过 Harness
+transport/trust fence。
+
+公开两个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
+projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果。请求只接受六个
+官方 Scenario id 和有界 workspace key。成功执行后 Host 会核对 Registry
+`generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
+全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
+
+Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返回 Task Graph
+`success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 5 个要素；
+浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
+
 ## Phase 0 真实验证
 
 隔离验证使用 GeoHarness 工作区下、被 `.gitignore` 忽略的临时 `DSH_HOME`，

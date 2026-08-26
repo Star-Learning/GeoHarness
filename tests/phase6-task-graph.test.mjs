@@ -54,7 +54,7 @@ test('all six independent Scenario DAGs validate with pending steps, dependencie
   }
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   assert.match(client, /data-task-graph/)
-  assert.match(client, /data-step-status.*pending/)
+  assert.match(client, /data-step-status/)
   for (const entry of entries) assert.match(client, new RegExp(entry.name))
 })
 

@@ -167,3 +167,31 @@ Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `c
 本阶段建立执行与状态真相源，但尚未把成功 step 的派生 Layer/GeoJSON 投影到浏览器
 地图；`Task Step ↔ Layer ↔ Map` 的验证投影属于 Phase 7。参数修改与部分重跑属于
 Phase 9。
+
+## Phase 7 — Map Verification
+
+状态：完成（2026-08-27）
+
+- [x] Task Graph 完成后从 Python Registry 一次性投影真实 metadata + canonical display
+  GeoJSON；不从模型文本猜测 Layer 或地图状态。
+- [x] 对每个 Layer 验证 feature count、parents 和 `generated_by` lineage；对每个成功
+  Task step 验证 declared output alias 可解析到实际 map Layer。
+- [x] 只有 `all_step_outputs_linked`、`feature_counts_match`、`lineage_matches`、
+  `parent_layers_present` 全为 true 时投影才是 `ready`，客户端拒绝失败投影。
+- [x] 基于当前 Harness `ctx.connection.rpc.handle/call` 建立 loopback-only
+  `/geoharness` channel，没有新增平行 Web server；payload 限制为六个官方 Scenario。
+- [x] 浏览器把 verified derived Layers 合并到已有输入层；Task step 状态可点击，输出
+  Layer Registry 行与真实 SVG 要素同步高亮，失败信息显式显示。
+- [x] 3 项 Phase 7 测试通过：真实 Scenario 02 的 5 个地图层全部通过投影检查，
+  candidate Layer 为 5；客户端得到 3 个派生层并可由 `filter_buildings` 精确定位。
+- [x] 在隔离 Harness Web profile 中实际 POST `/geoharness/scenario/run`；官方 RPC
+  envelope 返回 Task Graph success、Map Verification ready、四项检查全 true，并确认
+  `slots + connection` 客户端激活。
+- [x] 新增 Connection peer 后处理 pnpm 非 TTY 重建与 peer cascade；最终采用 Web-only
+  optional peer，`pnpm peers check` 无问题且运行时由官方 Web bundle 提供服务。
+
+## Phase 7 边界
+
+Phase 7 证明单个真实 Scenario 的 `Task Step ↔ Layer ↔ Map` 链路。六个 Scenario 的
+capability、required layers、spatial correctness 和 expected statistics 全量自动验收属于
+Phase 8。

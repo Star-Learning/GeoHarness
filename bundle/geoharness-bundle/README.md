@@ -19,6 +19,12 @@ DAGs through `ctx.geo`, records pending/running/success/failed transitions, reso
 Layer aliases, and preserves ordered transition history. The client shows the same embedded plan,
 dependencies and declared outputs instead of maintaining a second hand-written Demo plan.
 
+The Host registers `/geoharness/scenario/run` and `/geoharness/scenario/latest` through the
+official Connection generic RPC API with loopback authority. A successful run projects Registry
+metadata and canonical display GeoJSON, verifies lineage/parents/feature counts, and lets the
+client add derived layers. Selecting a successful Task step highlights exactly its output Layer
+rows and SVG map features.
+
 The default local provider launches one short-lived, cancellable Python runner per request and
 isolates persistent GeoPackage workspaces by Harness session and Scenario. Override `python`,
 `backendRoot`, `scenarioRoot` or `workspaceRoot` in the plugin row only when the repository layout

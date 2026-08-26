@@ -226,6 +226,7 @@ export class TaskGraphRuntime extends Service {
     super(ctx, 'taskGraph')
     this.scenarioRoot = resolve(options.scenarioRoot)
     this.runs = new Map()
+    this.verifications = new Map()
   }
 
   async loadDefinition(scenarioId) {
@@ -257,11 +258,83 @@ export class TaskGraphRuntime extends Service {
     })
     const key = `${workspaceKey}:${scenarioId}`
     this.runs.set(key, execution)
-    return execution.run({ signal })
+    const snapshot = await execution.run({ signal })
+    const mapVerification = await this.buildMapVerification(snapshot, workspaceKey, signal)
+    this.verifications.set(key, mapVerification)
+    return { ...snapshot, map_verification: mapVerification }
   }
 
   latest(workspaceKey, scenarioId) {
-    return this.runs.get(`${workspaceKey}:${scenarioId}`)?.snapshot() ?? null
+    const key = `${workspaceKey}:${scenarioId}`
+    const snapshot = this.runs.get(key)?.snapshot()
+    return snapshot === undefined ? null : {
+      ...snapshot,
+      map_verification: this.verifications.get(key) ?? null,
+    }
+  }
+
+  async buildMapVerification(snapshot, workspaceKey, signal) {
+    const projection = await this.ctx.geo.execute({ action: 'projection', workspaceKey }, signal)
+    const stepById = new Map(snapshot.steps.map(step => [step.id, step]))
+    const aliasesByLayer = new Map()
+    for (const [alias, layerId] of Object.entries(snapshot.layers)) {
+      const aliases = aliasesByLayer.get(layerId) ?? []
+      aliases.push(alias)
+      aliasesByLayer.set(layerId, aliases)
+    }
+    const metadataById = new Map(projection.map(item => [item.metadata.layer_id, item.metadata]))
+    const issues = []
+    const mapLayers = projection.map(item => {
+      const metadata = item.metadata
+      const featureCountMatches = item.geojson?.type === 'FeatureCollection'
+        && Array.isArray(item.geojson.features)
+        && item.geojson.features.length === metadata.feature_count
+      if (!featureCountMatches) issues.push(`Feature count mismatch for ${metadata.layer_id}`)
+      const parentsPresent = metadata.parents.every(parent => metadataById.has(parent))
+      if (!parentsPresent) issues.push(`Missing parent Layer for ${metadata.layer_id}`)
+      let lineageMatches = true
+      if (metadata.generated_by !== null) {
+        const step = stepById.get(metadata.generated_by)
+        lineageMatches = step?.status === 'success'
+          && step.resolved_outputs.some(output => output.layer_id === metadata.layer_id)
+        if (!lineageMatches) issues.push(`Step lineage mismatch for ${metadata.layer_id}`)
+      }
+      return {
+        layer_id: metadata.layer_id,
+        aliases: aliasesByLayer.get(metadata.layer_id) ?? [],
+        step_id: metadata.generated_by,
+        metadata,
+        geojson: item.geojson,
+        checks: { feature_count_matches: featureCountMatches, parents_present: parentsPresent, lineage_matches: lineageMatches },
+      }
+    })
+    const layerById = new Map(mapLayers.map(layer => [layer.layer_id, layer]))
+    const stepBindings = snapshot.steps.map(step => {
+      const outputs = step.resolved_outputs.map(output => ({
+        alias: output.alias,
+        layer_id: output.layer_id,
+        map_layer_present: layerById.has(output.layer_id),
+      }))
+      if (step.status === 'success' && outputs.some(output => !output.map_layer_present)) {
+        issues.push(`Map Layer missing for successful step ${step.id}`)
+      }
+      return { step_id: step.id, status: step.status, outputs }
+    })
+    const checks = {
+      all_step_outputs_linked: stepBindings.every(binding => binding.status !== 'success'
+        || binding.outputs.every(output => output.map_layer_present)),
+      feature_counts_match: mapLayers.every(layer => layer.checks.feature_count_matches),
+      lineage_matches: mapLayers.every(layer => layer.checks.lineage_matches),
+      parent_layers_present: mapLayers.every(layer => layer.checks.parents_present),
+    }
+    return {
+      status: issues.length === 0 && Object.values(checks).every(Boolean) ? 'ready' : 'failed',
+      scenario_id: snapshot.scenario_id,
+      checks,
+      issues,
+      step_bindings: stepBindings,
+      map_layers: mapLayers,
+    }
   }
 }
 
