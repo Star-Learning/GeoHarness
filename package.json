@@ -8,8 +8,12 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "test": "node --test tests/phase0-integration.test.mjs",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm run build && node --test tests/*.test.mjs",
     "test:phase0": "node --test tests/phase0-integration.test.mjs",
-    "verify:phase0": "node scripts/verify-phase0.mjs"
+    "test:phase1": "pnpm run build && node --test tests/phase1-ui-shell.test.mjs",
+    "verify:phase0": "node scripts/verify-phase0.mjs",
+    "verify:phase1": "pnpm run typecheck && pnpm run test:phase1"
   }
 }

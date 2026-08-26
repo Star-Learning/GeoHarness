@@ -115,16 +115,17 @@ test('the browser artifact registers its factory and contributes only through de
   vm.runInNewContext(code, { document, JSON, window }, { filename: 'client.js' })
 
   assert.equal(handoff.id, packageName)
+  const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
-    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useMemo: factory => factory(),
+    useState: initial => [initial, () => {}],
   }
   const plugin = handoff.factory((specifier) => {
-    assert.equal(specifier, 'react')
-    return React
+    if (specifier === 'react') return React
+    if (specifier === 'react/jsx-runtime') return { Fragment: Symbol('fragment'), jsx, jsxs: jsx }
+    throw new Error(`unexpected external: ${specifier}`)
   })
   assert.deepEqual([...plugin.inject], ['slots'])
-  assert.equal(appendedStyles.length, 1)
-  assert.equal(appendedStyles[0].dataset.plugin, packageName)
 
   const awaited = []
   const registrations = []
@@ -142,15 +143,17 @@ test('the browser artifact registers its factory and contributes only through de
   }
   plugin.apply(ctx)
 
+  assert.equal(appendedStyles.length, 1)
+  assert.equal(appendedStyles[0].dataset.plugin, packageName)
   assert.deepEqual(awaited, ['conversation.view', 'shell.overlay'])
   assert.deepEqual(
     registrations.map(({ options }) => ({ name: options.name, id: options.id })),
     [
       { name: 'conversation.view', id: 'geoharness' },
-      { name: 'shell.overlay', id: 'geoharness-phase0' },
+      { name: 'shell.overlay', id: 'geoharness-brand' },
     ],
   )
-  assert.equal(registrations[0].component().props['data-geoharness-phase'], '0')
+  assert.equal(registrations[0].component().props['data-geoharness-phase'], '1')
   assert.equal(registrations[1].component().props['data-geoharness-plugin'], 'loaded')
 })
 

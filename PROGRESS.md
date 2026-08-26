@@ -21,10 +21,25 @@
   启动、boot manifest 发现和客户端产物 HTTP 访问验证。
 - [x] 确认上游仓库没有已跟踪修改。
 
-## 明确未开始
+## Phase 1 — GeoHarness UI Shell
 
-以下内容属于 Phase 1 及后续阶段，本次没有实现：地图工作区、Layer Registry、
-Geo Service/Provider、Geo Tools、Task Graph、数据上传、Scenario、GIS 运算和
-独立 Web surface。
+状态：完成（2026-08-27）
 
-Phase 0 完成后应停止，下一阶段必须由新的明确指令启动。
+- [x] 建立可复现的 TypeScript/React 客户端构建链，输出 Harness 当前版本要求的
+  lazy-CJS `window.__ModuleLoader__.load(...)` 客户端产物。
+- [x] 实现 GeoHarness branding、Scenario Launcher、Layer Panel、Map Workspace、
+  Agent Workspace 和 Prompt 输入区。
+- [x] 六个官方 Scenario 均可选择；选择会载入对应建议 Prompt，提交 Prompt 会更新
+  本地 Goal 与 Scenario 状态。
+- [x] 使用安全的加法型 Slot：主工作区挂载到 `conversation.view`，品牌状态挂载到
+  `shell.overlay`，没有覆盖 Harness `root`。
+- [x] 建立 Phase 1 自动测试，覆盖产物可复现性、UI 表面、Scenario 元数据、Slot
+  注册、CSS 注入及未提前引入 Phase 3/4 能力。
+- [x] 在隔离 Harness profile 中完成真实 Web 验证：Bundle 安装、会话视图加载、
+  Scenario 05 切换、Prompt 修改和 Goal 状态更新均通过。
+- [x] 通过 TypeScript 类型检查、Phase 0 回归测试和 Phase 1 验证。
+
+## 当前边界
+
+Phase 1 只提供可运行、可交互的 UI Shell。真实 Scenario 数据包、地图引擎、
+Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序实现。

@@ -5,16 +5,22 @@
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、
 组合和服务。
 
-## 后续阶段前需要处理
+## 已解决
 
-### 1. GeoHarness 客户端构建链
+### GeoHarness 客户端构建链
 
-Phase 0 的 `client.js` 是手工保持最小的预构建 lazy-CJS factory。上游的
-`packages/client/tsdown.client.ts` 是仓库内部构建设施，不是已确认的外部公共
-构建 API。开始正式 UI 前，需要在本仓库建立类型化构建、externals 校验、
-source map、watch 和产物测试。这是进入 Phase 1 的工程门槛。
+Phase 1 已在本仓库建立 TypeScript/React 构建链，并为生成的 lazy-CJS factory、
+Harness externals、CSS 注入和产物新鲜度增加测试。GeoHarness 不依赖上游仓库内部的
+`packages/client/tsdown.client.ts`。
 
-### 2. 上游源码 CLI 在当前 Node 24 环境中的运行问题
+### 三栏 UI Shell 的 Slot 适配性
+
+真实 Harness Web 验证确认，Phase 1 三栏工作区可以通过 `conversation.view` 完整
+呈现，`shell.overlay` 可以承载轻量品牌状态；无需注册会遮蔽 AppFrame 的 `root`。
+
+## 活跃风险与后续门禁
+
+### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题
 
 在 Windows、Node.js `v24.19.0` 下，当前提交的源码入口通过 `tsx/esm` 启动
 profile 时失败：`apps/cli/src/profile-boot.ts` 从 `@deepseek-ai/cordis` 请求
@@ -24,13 +30,13 @@ profile 时失败：`apps/cli/src/profile-boot.ts` 从 `@deepseek-ai/cordis` 请
 GeoHarness 不应直接修改 `../deepseek-harness` 规避此问题。若后续开发必须使用
 上游源码 CLI/HMR，应先跟进上游修复或确定稳定的已发布/已构建 CLI 工作流。
 
-### 3. 完整 GIS Workspace 的 Slot 适配性
+### 2. 真实地图能力尚未验证
 
-`conversation.view` 与 `shell.overlay` 已确认是安全加法型扩展点，但尚未验证
-方案中的完整三栏地图工作区是否能只靠当前 Slot 实现。这个判断必须在后续阶段
-以真实地图组件做原型后得出；不能注册到 `root`，因为会遮蔽 Harness AppFrame。
+Phase 1 的 Map Workspace 是产品 Shell，不包含地图引擎。真实图层渲染、交互和
+`Task Step ↔ Layer ↔ Map` 绑定属于 Phase 3 和 Phase 7，必须继续在
+`conversation.view` 中验证布局、资源加载和事件生命周期。
 
-### 4. 上游版本升级门禁
+### 3. 上游版本升级门禁
 
 骨架精确对齐 DeepSeek Harness `0.1.1-rc.2` 与 Cordis `4.0.1`。升级上游时
 必须重新核对 `dsh.bundle`、`dsh.client`、客户端产物协议、Slot 名称和
