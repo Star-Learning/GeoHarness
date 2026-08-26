@@ -114,3 +114,29 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 
 Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `ctx.tools` API
 自主调用这些能力属于 Phase 5。
+
+## Phase 5 — Harness Tool Integration
+
+状态：完成（2026-08-27）
+
+- [x] 实现 `GeoRuntime extends Service`，提供 provider 注册、显式选择、可用性检查和
+  结构化 provider 错误；Host Tool 不直接依赖 Python 细节。
+- [x] 实现 `LocalPythonGeoProvider` 与单请求 JSON runner；子进程可取消、输出有界，
+  workspace 按 Harness session 与 Scenario 隔离。
+- [x] 使用当前官方 `defineTool` API 注册全部 12 个 Geo Tools，包含参数/输出 schema、
+  timeout、model render、presentation metadata 和 system-prompt guidance。
+- [x] `list_layers` 可加载六个独立 Scenario；后续操作只使用 canonical Layer ID，
+  backend 成功与失败都保持统一 `ToolResult`。
+- [x] 官方 `Context + SystemPrompt + ToolRuntime` 测试通过 12 个 schema，并真实执行
+  Scenario 02 的 `list → transform → buffer → filter`，固定结果为 5。
+- [x] schema 拒绝、未知 Layer/backend failure 都在 Harness boundary 保持结构化。
+- [x] `pnpm peers check` 无缺失 peer；精确对齐 Harness `0.1.1-rc.2` 与 Cordis
+  `4.0.1`。
+- [x] 在隔离 profile 启动完整 Harness Web；Host 插件无激活错误，浏览器确认官方
+  Web surface 与 GeoHarness client 标记共同加载。
+
+## Phase 5 边界
+
+当前环境没有外部模型 API Key，因此没有把一次付费/联网模型生成作为离线验收条件。
+模型可见 schema、system prompt、官方 ToolRuntime 到 Python GIS 的完整边界已用真实
+实现测试。Task Graph 的运行状态与依赖调度属于 Phase 6。

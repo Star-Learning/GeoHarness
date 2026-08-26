@@ -61,3 +61,11 @@ Phase 4 已在 Python 3.11、FastAPI 0.135.3、GeoPandas 1.1.4、Shapely 2.1.2�
 PyProj 3.7.2 和 Pyogrio 环境中通过测试，没有当前依赖阻塞。其他环境安装时必须满足
 `backend/geo-service/pyproject.toml` 的版本范围并重跑全部空间测试，尤其不能只用
 mock 替代 GEOS/PROJ 运算。
+
+### 6. 外部模型凭据
+
+Phase 5 隔离 profile 未配置 DeepSeek API Key，因而没有执行会产生外部请求的自然语言
+Agent 对话。该条件不阻塞本地 v1.0 开发：当前官方 `SystemPrompt + ToolRuntime` 已真实
+注册、校验并执行模型可见 Tool 调用链，完整 Harness Web 也已成功激活 Host 插件。
+未来配置凭据后可补充模型规划质量 smoke test，但空间正确性仍必须由确定性 Scenario
+回归测试判定，不能依赖模型措辞。

@@ -5,12 +5,19 @@ This package is the GeoHarness integration layer for the inspected DeepSeek Harn
 - `dsh.bundle` exports `cordis.patch.yml`, which inserts the package as a Cordis plugin row.
 - `dsh.client` exposes the same package's `./client` browser entry to the Harness Web client module registry.
 
-The host entry remains intentionally empty through Phase 3. The browser entry contributes the
+The host entry composes a Geo Service Definition, a cancellable local Python Provider and twelve
+model-facing Geo Tool consumers using the inspected Harness `Service`, `defineTool`,
+`SystemPrompt` and `ToolRuntime` APIs. The browser entry contributes the
 `GeoHarness` conversation view and a lightweight brand overlay through
 `ctx.slots.inject(...)`. Its generated client artifact embeds the six independent Scenario
 packages, registers their vector layers, and renders an interactive SVG map with layer
 visibility, opacity, zoom, pan, fit-bounds and feature inspection controls. Geo computation and
-Harness Tool registration are added in later phases rather than hidden in the browser UI.
+Harness Tool execution remain in the Host/Python layers rather than being hidden in the browser UI.
+
+The default local provider launches one short-lived, cancellable Python runner per request and
+isolates persistent GeoPackage workspaces by Harness session and Scenario. Override `python`,
+`backendRoot`, `scenarioRoot` or `workspaceRoot` in the plugin row only when the repository layout
+or runtime requires it. `GEOHARNESS_PYTHON` is the supported executable override.
 
 For a local checkout, install the package into a Web-capable profile from the GeoHarness repository root:
 
@@ -26,6 +33,13 @@ Use a dedicated profile only when it also includes the shipped Web bundle:
 dsh plugin --profile geoharness add @deepseek-ai/dsh-web-app ./bundle/geoharness-bundle
 dsh --profile geoharness --dump-config
 dsh --profile geoharness --no-open
+```
+
+After installation, a spatial Agent run first calls `list_layers` with an official Scenario id;
+the other tools consume only the returned Layer IDs. A repeatable host-boundary verification is:
+
+```sh
+pnpm run verify:phase5
 ```
 
 The package pins the inspected Harness packages (`0.1.1-rc.2`) and their

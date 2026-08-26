@@ -1,11 +1,26 @@
-/**
- * Host half of the GeoHarness Phase 0 dual-face plugin.
- *
- * The browser half is discovered from this package's `dsh.client` manifest.
- * Host services and model-facing Geo Tools intentionally start in later phases.
- */
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
+import { LocalPythonGeoProvider } from './host/provider.js'
+import { GeoRuntime } from './host/service.js'
+import { registerGeoTools } from './host/tools.js'
 
-export const name = 'geoharness-phase0'
+export const name = 'geoharness'
+export const inject = ['tools', 'systemPrompt']
 
-/** Mount the host half without adding post-Phase-0 behavior. */
-export function apply() {}
+const packagedBackendRoot = fileURLToPath(new URL('../../backend/geo-service/', import.meta.url))
+
+/** Compose the Geo Service Definition, local Python Provider and model-facing Tool consumers. */
+export function apply(ctx, config = {}) {
+  const providerId = config.provider ?? 'local-python'
+  const runtime = new GeoRuntime(ctx, { provider: providerId })
+  runtime.registerProvider(new LocalPythonGeoProvider({
+    id: providerId,
+    python: config.python ?? process.env.GEOHARNESS_PYTHON ?? 'python',
+    backendRoot: resolve(config.backendRoot ?? packagedBackendRoot),
+    scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')),
+    workspaceRoot: resolve(config.workspaceRoot ?? resolve(process.cwd(), '.geoharness/workspaces')),
+  }))
+  registerGeoTools(ctx)
+}
+
+export { GeoRuntime, LocalPythonGeoProvider, registerGeoTools }

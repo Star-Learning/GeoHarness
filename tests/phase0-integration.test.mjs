@@ -86,6 +86,8 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
     '@deepseek-ai/dsh-client-runtime': '0.1.1-rc.2',
     '@deepseek-ai/dsh-client-ui-conversation': '0.1.1-rc.2',
     '@deepseek-ai/dsh-client-ui-layout': '0.1.1-rc.2',
+    '@deepseek-ai/dsh-system-prompt': '0.1.1-rc.2',
+    '@deepseek-ai/dsh-tools': '0.1.1-rc.2',
   })
 
   const patch = await readFile(join(bundleRoot, 'cordis.patch.yml'), 'utf8')
@@ -93,9 +95,12 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.match(patch, /name: '@geoharness\/harness-plugin'/)
 
   const hostPlugin = await import(pathToFileURL(join(bundleRoot, 'index.js')).href)
-  assert.equal(hostPlugin.name, 'geoharness-phase0')
+  assert.equal(hostPlugin.name, 'geoharness')
+  assert.deepEqual(hostPlugin.inject, ['tools', 'systemPrompt'])
   assert.equal(typeof hostPlugin.apply, 'function')
-  assert.equal(hostPlugin.apply(), undefined)
+  assert.equal(typeof hostPlugin.GeoRuntime, 'function')
+  assert.equal(typeof hostPlugin.LocalPythonGeoProvider, 'function')
+  assert.equal(typeof hostPlugin.registerGeoTools, 'function')
 })
 
 test('the browser artifact registers its factory and contributes only through declared Slots', async () => {

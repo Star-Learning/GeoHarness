@@ -1,6 +1,6 @@
 # GeoHarness 与 DeepSeek Harness 的真实集成方式
 
-本文只记录 Phase 0 在当前上游源码中确认过的事实，不把
+本文记录 Phase 0 基线以及 Phase 5 在同一上游版本完成的 Host 集成事实，不把
 `GeoHarness_Agentic_GIS_方案_v1.0.md` 中的设想当作现行 API。
 
 ## 已核对的上游基线
@@ -162,10 +162,10 @@ Phase 0 只使用两个加法型 Slot：
 和 profile patch，但仍复用 Harness Host、Agent、Service、Tool 与会话体系，
 而不是修改上游源码或另做无关站点。Phase 0 不做这个产品决策。
 
-## 后续 Service 与 Tool 的接入原则
+## Service 与 Tool 的实际接入（Phase 5）
 
-Geo 能力不应把 provider 实现直接塞入 model-facing Tool。当前 Harness 的
-`web` 能力给出了可复用的三角色结构：
+GeoHarness 没有把 provider 实现直接塞入 model-facing Tool。当前实现沿用
+`web` 能力展示的三角色结构：
 
 1. **Service Definition**：定义 `ctx.geo` 服务、请求/结果词汇、provider
    registry、选择策略和结构化错误；
@@ -173,7 +173,14 @@ Geo 能力不应把 provider 实现直接塞入 model-facing Tool。当前 Harne
 3. **Consumer**：Geo Tool 只通过 `ctx.geo` 执行，拥有模型可见的名称、描述、
    schema、提示和展示。
 
-工具应以当前 `@deepseek-ai/dsh-tools` API 注册：
+Host 包的 `index.js` 先实例化 `GeoRuntime extends Service`，再注册
+`LocalPythonGeoProvider`，最后注册 Tool consumers。插件声明
+`inject = ['tools', 'systemPrompt']`，因此只有官方 Tool 与 system-prompt 服务就绪后
+才激活。默认 provider 每次请求启动一个可取消的 Python runner；workspace 按
+Harness session id 和 Scenario id 隔离，派生层以 GeoPackage 和 registry metadata
+持久化在 `.geoharness/workspaces` 下。
+
+全部 12 个工具都以当前 `@deepseek-ai/dsh-tools` API 注册：
 
 ```ts
 ctx.tools.register(defineTool({
@@ -181,10 +188,26 @@ ctx.tools.register(defineTool({
 }))
 ```
 
-工具返回的结构化值应作为 canonical result；`output.render` 负责生成给模型
-阅读的有界文本，必要时用 `output.presentationMeta` 保留 UI 展示所需的结构
-信息。超时、审批、沙箱和执行 hook 应继续走 Harness 的 Tool pipeline。
-这些是后续实现约束，不是 Phase 0 已实现功能。
+工具返回的统一 `ToolResult` 是 canonical result；`output.render` 生成给模型阅读的
+有界文本，`output.presentationMeta` 保留 tool、success、outputs 和 summary。参数由
+Harness schema 校验，调用使用 Harness timeout/cancellation pipeline。`list_layers`
+是 Scenario 入口：首次调用时先通过 Service 加载该 Scenario 自有数据，后续工具只
+接受 canonical Layer ID。模型 guidance 明确规定
+`Goal → Plan → Geo Tools → Layers → Map → Verify → Result`。
+
+当前本地 provider 的请求协议不是 Harness API，而是 GeoHarness 内部边界：Host
+以单个 JSON stdin 调用 `python -m geoharness_geo.runner`，runner 只返回单个 JSON
+stdout。支持 `load_scenario`、`tool`、`layers`、`geojson` 四种动作。这个边界允许
+以后增加远端 provider，而不改变模型可见 Tool schema。
+
+Phase 5 通过两层真实验证：
+
+- `Context + SystemPrompt + ToolRuntime` 注册全部 12 个 Tool schema，并执行
+  `list_layers → transform_crs → create_buffer → spatial_filter`；Python provider
+  对 Scenario 02 返回固定空间结果 5。
+- 隔离 profile 启动完整官方 Harness Web，Host 插件无激活错误，浏览器同时发现
+  DSH Web surface 与 GeoHarness client 标记。验证环境没有外部模型 API Key，故
+  不伪造端到端模型生成；ToolRuntime 入口之后的真实执行链已经覆盖。
 
 ## Phase 0 真实验证
 
