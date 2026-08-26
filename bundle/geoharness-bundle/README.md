@@ -36,6 +36,23 @@ Scenario 05 additionally verifies the conversational change from 500 m to 1 km, 
 4-to-8 result update, partial rerun, retained history and active map projection. Run it with
 `pnpm run verify:phase9`.
 
+Each of the six Scenario packages now includes real 1280×720 Harness screenshots, a Demo GIF,
+an independent README and a video script. Scenario 05 records both its 500 m and revised 1 km
+states. The media builder checks that GIFs are reproducible from those screenshots, while the
+Phase 10 suite parses the image files and enforces the one-Scenario/one-data/one-test/one-Demo
+contract. Verify the finished v1.0 assets with:
+
+```sh
+pnpm run verify:phase10
+```
+
+Run the complete deterministic v1.0 regression matrix with:
+
+```sh
+pnpm test
+pnpm peers check
+```
+
 The default local provider launches one short-lived, cancellable Python runner per request and
 isolates persistent GeoPackage workspaces by Harness session and Scenario. Override `python`,
 `backendRoot`, `scenarioRoot` or `workspaceRoot` in the plugin row only when the repository layout

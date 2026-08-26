@@ -1,6 +1,6 @@
 {
   "name": "@geoharness/harness-plugin",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "GeoHarness bundle with GIS workspace, Geo Service provider and model-facing vector tools",
   "type": "module",
   "main": "./index.js",

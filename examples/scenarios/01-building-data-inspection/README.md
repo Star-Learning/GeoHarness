@@ -50,3 +50,21 @@
 ## Demo focus
 
 AI 能不能自己看懂一份 GIS 数据？
+
+## Demo artifacts
+
+![Scenario 01 verified Harness result](screenshots/result.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [Animated Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+素材来自本 Scenario 在 DeepSeek Harness Web `b150a55` 中的真实执行：结果画面选择 `calculate_building_geometry`，12 个输出要素同时在 Layer Registry 与地图高亮。动图由 `scripts/build-demo-media.py` 从上述真实截图生成，不含伪造结果帧。
+
+## Run and verify independently
+
+```sh
+node --test tests/regression/01-building-data-inspection.regression.test.mjs
+```
+
+该测试只读取本目录的数据、Task Graph 与 expected result，并用独立 GeoPandas oracle 验证 12 个要素、几何有效性、缺失值与面积统计。

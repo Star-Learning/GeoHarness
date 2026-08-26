@@ -1,5 +1,10 @@
 # GeoHarness Blockers
 
+## 当前状态
+
+没有阻止 GeoHarness v1.0 完成的活跃问题。Phase 0–10 均已实现、验证并提交；以下内容
+保留已解决问题和不会阻塞 v1.0 的环境/升级门禁，便于后续维护时复核。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、
@@ -42,7 +47,23 @@ Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run
 保留和 active map projection。完整 Harness Web 连续 RPC 验证从 500 m / 4 个候选更新到
 1 km / 8 个候选，只有两项下游 step 重跑；不再是活跃阻塞。
 
-## 活跃风险与后续门禁
+### Phase 10 真实展示素材
+
+六个 Scenario 已在完整 DeepSeek Harness Web 中分别执行并保存真实截图；由这些截图生成
+的 GIF、视频脚本、独立 README 和资产测试均已完成。最终素材测试 7/7 通过，不再有
+Demo/文档收尾阻塞。
+
+### Windows pnpm / pytest 运行目录
+
+Phase 10 收尾期间，沙箱内 pnpm 因 store 与 ACL 不一致进入高 CPU 忙循环。终止遗留进程
+后，使用同一宿主环境的本地 store 执行 `CI=true pnpm install --offline` 恢复全部依赖，
+没有网络下载。后续构建和测试统一在该环境运行，问题未复现。
+
+pytest 默认用户临时目录及旧 `.pytest_cache` 也曾因 Windows ACL 导致 7 项测试在 setup
+阶段失败。`test:python` 现显式使用仓库内、被忽略的 `.tmp/pytest` 与
+`.tmp/pytest-cache`；修复后 Python 7/7、全量 Node 41/41 均通过。
+
+## 非阻塞限制与后续门禁
 
 ### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题
 

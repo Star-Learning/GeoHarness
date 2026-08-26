@@ -53,3 +53,24 @@ Revision: > 改成 1 公里。
 ## Demo focus
 
 不是重新问一次，而是真正修改正在执行的 GIS 工作流。
+
+## Demo artifacts
+
+![Scenario 05 revised 1 km Harness result](screenshots/result-1km.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [500 m result — 4 candidates](screenshots/result-500m.jpg)
+- [1 km revised result — 8 candidates](screenshots/result-1km.jpg)
+- [Animated revision Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 1 公里。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 8 个当前候选；不是两次相互独立的静态查询。
+
+## Run and verify independently
+
+```sh
+node --test tests/phase9-conversational-revision.test.mjs
+node --test tests/regression/05-parameter-revision.regression.test.mjs
+```
+
+第一项测试断言 4→8、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。

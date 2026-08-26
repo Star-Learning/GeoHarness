@@ -52,3 +52,21 @@
 ## Demo focus
 
 AI 能否自己组合多个 GIS 工具？
+
+## Demo artifacts
+
+![Scenario 04 verified Harness result](screenshots/result.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [Animated Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+真实结果画面选择 `filter_accessible_buildings`，3 个候选在 300 m road buffer 内同步高亮；后续 District Join 与 aggregation step 同样保持可定位。
+
+## Run and verify independently
+
+```sh
+node --test tests/regression/04-road-accessibility.regression.test.mjs
+```
+
+独立回归要求候选数为 3、MN-DEMO-01/MN-DEMO-02 分布为 3/0，并用 GeoPandas 复算每个候选到主要道路不超过 300 m。

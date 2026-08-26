@@ -1,6 +1,6 @@
 {
   "name": "geoharness",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.22.0",
@@ -9,21 +9,24 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present run build",
+    "build:media": "python scripts/build-demo-media.py",
     "build:scenarios": "node scripts/build_scenarios/build-fixtures.mjs",
+    "check:media": "python scripts/build-demo-media.py --check",
     "check:scenarios": "node scripts/build_scenarios/build-fixtures.mjs --check",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm run build && pnpm run check:scenarios && node --test tests/*.test.mjs tests/scenarios/*.test.mjs tests/regression/*.test.mjs && pnpm run test:python",
-    "test:python": "python -m pytest backend/geo-service/tests -q",
+    "test:python": "python -m pytest backend/geo-service/tests -q --basetemp=.tmp/pytest -o cache_dir=.tmp/pytest-cache",
     "test:phase0": "node --test tests/phase0-integration.test.mjs",
     "test:phase1": "pnpm run build && node --test tests/phase1-ui-shell.test.mjs",
     "test:phase2": "pnpm run check:scenarios && node --test tests/scenarios/*.test.mjs",
     "test:phase3": "pnpm run build && node --test tests/phase3-layer-map.test.mjs",
-    "test:phase4": "python -m pytest backend/geo-service/tests -q",
+    "test:phase4": "pnpm run test:python",
     "test:phase5": "node --test tests/phase5-harness-tools.test.mjs",
     "test:phase6": "node --test tests/phase6-task-graph.test.mjs",
     "test:phase7": "node --test tests/phase7-map-verification.test.mjs",
     "test:phase8": "node --test tests/regression/*.test.mjs",
     "test:phase9": "node --test tests/phase9-conversational-revision.test.mjs",
+    "test:phase10": "node --test tests/phase10-demo-assets.test.mjs",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:phase1": "pnpm run typecheck && pnpm run test:phase1",
     "verify:phase2": "pnpm run test:phase2",
@@ -33,7 +36,8 @@
     "verify:phase6": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase6",
     "verify:phase7": "pnpm peers check && pnpm run build && pnpm run typecheck && pnpm run test:phase7",
     "verify:phase8": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase8",
-    "verify:phase9": "pnpm run build && pnpm run typecheck && pnpm run test:phase9"
+    "verify:phase9": "pnpm run build && pnpm run typecheck && pnpm run test:phase9",
+    "verify:phase10": "pnpm run build && pnpm run check:scenarios && pnpm run check:media && pnpm run test:phase10"
   },
   "devDependencies": {
     "typescript": "6.0.3"

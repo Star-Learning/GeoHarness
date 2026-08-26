@@ -249,3 +249,35 @@ Phase 8。
 v1.0 只承诺 Scenario 05 的显式距离修订，不将自由文本解析器扩展为通用规划器。其他
 Scenario 的任意 schema 变更或模型生成式重规划属于后续版本。Phase 10 负责六个独立
 Scenario 的真实截图、动图/视频、视频脚本与项目文档收尾。
+
+## Phase 10 — Video / README Polish
+
+状态：完成（2026-08-27）
+
+- [x] 六个 Scenario 各自保留独立数据、Prompt、Task Graph、预期结果、回归测试和
+  README，并新增自己的 `screenshots/`、`media/demo.gif` 与 `media/video-script.md`；
+  没有用一个共享大 Demo 代替独立验收。
+- [x] 所有截图均来自 DeepSeek Harness `0.1.1-rc.2` 的真实 1280×720 Web UI；每组
+  包含初始状态与结果状态，Scenario 05 还分别记录 500 m 和 1 km 两轮结果。
+- [x] 六个真实结果再次核对：Scenario 01 为 12 个建筑；02 为 5 个河流邻近建筑；
+  03 为两个 District 各 6 个；04 为 3 个道路可达建筑；05 为 4 → 8、2 个 step 重跑且
+  3 个复用；06 为 2 个多约束候选。
+- [x] 新增可重复的 Demo GIF 构建/检查脚本；六个 960×540 GIF 均由真实 Harness 截图
+  生成，Scenario 05 为三帧，其余为两帧。
+- [x] 新增 7 项 Phase 10 资产测试，真实解析 JPEG/GIF 结构与尺寸，并检查每个 Scenario
+  的独立回归、README、视频脚本、数据和展示素材；场景生成器同步覆盖 README 内容。
+- [x] 根 README 完成 v1.0 产品说明、架构、安装、六个 Demo、验证命令和明确边界；根包
+  与 Bundle 版本更新为 `1.0.0`。
+- [x] 修复 Windows 下 pytest 默认临时目录/缓存的 ACL 不稳定性，将两者约束在被忽略的
+  仓库 `.tmp` 中，确保 `pnpm test` 可重复运行。
+- [x] 最终验证通过：`verify:phase10` 7/7、全量 Node 测试 41/41、Python 测试 7/7，
+  `pnpm peers check` 无问题。
+
+## GeoHarness v1.0 最终验收
+
+状态：完成（2026-08-27）
+
+Phase 0–10 已按顺序实际实现、测试并分别提交。六个 Scenario 均满足“一个需求 = 一个
+独立文件夹 = 一套数据 = 一个测试 = 一个 Demo”，并在真实 Harness UI 中完成
+`Goal → Plan → Tools → Layers → Map → Verify → Revise → Result` 链路验证。当前没有阻止
+v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和合成数据边界记录在 `BLOCKERS.md`。

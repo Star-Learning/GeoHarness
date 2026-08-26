@@ -51,3 +51,21 @@
 ## Demo focus
 
 只说一句话，AI 自己完成 Buffer + 空间筛选。
+
+## Demo artifacts
+
+![Scenario 02 verified Harness result](screenshots/result.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [Animated Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+真实结果画面选中 `filter_buildings`：500 m river buffer 可见，5 个 `candidate_buildings` 同步高亮。动图从本 Scenario 的运行前/运行后 Harness Web 截图生成。
+
+## Run and verify independently
+
+```sh
+node --test tests/regression/02-river-building-query.regression.test.mjs
+```
+
+回归测试使用本目录两份数据，要求 candidate count 为 5，并独立复算全部候选到河流的距离不超过 500 m。

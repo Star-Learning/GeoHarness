@@ -484,10 +484,94 @@ function scenarioManifest(definition) {
   }
 }
 
+const demoDetails = {
+  '01-building-data-inspection': {
+    image: 'screenshots/result.jpg',
+    alt: 'Scenario 01 verified Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['Animated Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '素材来自本 Scenario 在 DeepSeek Harness Web `b150a55` 中的真实执行：结果画面选择 `calculate_building_geometry`，12 个输出要素同时在 Layer Registry 与地图高亮。动图由 `scripts/build-demo-media.py` 从上述真实截图生成，不含伪造结果帧。',
+    commands: ['node --test tests/regression/01-building-data-inspection.regression.test.mjs'],
+    verification: '该测试只读取本目录的数据、Task Graph 与 expected result，并用独立 GeoPandas oracle 验证 12 个要素、几何有效性、缺失值与面积统计。',
+  },
+  '02-river-building-query': {
+    image: 'screenshots/result.jpg',
+    alt: 'Scenario 02 verified Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['Animated Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '真实结果画面选中 `filter_buildings`：500 m river buffer 可见，5 个 `candidate_buildings` 同步高亮。动图从本 Scenario 的运行前/运行后 Harness Web 截图生成。',
+    commands: ['node --test tests/regression/02-river-building-query.regression.test.mjs'],
+    verification: '回归测试使用本目录两份数据，要求 candidate count 为 5，并独立复算全部候选到河流的距离不超过 500 m。',
+  },
+  '03-building-statistics-by-district': {
+    image: 'screenshots/result.jpg',
+    alt: 'Scenario 03 verified Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['Animated Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '真实结果画面选择 `aggregate_districts`，两个 `district_statistics` 面与该 Task step 同步高亮；输入、Join 中间层与聚合层均保留在 Layer Registry。',
+    commands: ['node --test tests/regression/03-building-statistics-by-district.regression.test.mjs'],
+    verification: '回归测试只使用本目录建筑与 District 数据，独立确认两个分区各 6 个建筑、总计 12 个，并检查分区面积汇总为正。',
+  },
+  '04-road-accessibility': {
+    image: 'screenshots/result.jpg',
+    alt: 'Scenario 04 verified Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['Animated Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '真实结果画面选择 `filter_accessible_buildings`，3 个候选在 300 m road buffer 内同步高亮；后续 District Join 与 aggregation step 同样保持可定位。',
+    commands: ['node --test tests/regression/04-road-accessibility.regression.test.mjs'],
+    verification: '独立回归要求候选数为 3、MN-DEMO-01/MN-DEMO-02 分布为 3/0，并用 GeoPandas 复算每个候选到主要道路不超过 300 m。',
+  },
+  '05-parameter-revision': {
+    image: 'screenshots/result-1km.jpg',
+    alt: 'Scenario 05 revised 1 km Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['500 m result — 4 candidates', 'screenshots/result-500m.jpg'],
+      ['1 km revised result — 8 candidates', 'screenshots/result-1km.jpg'],
+      ['Animated revision Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 1 公里。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 8 个当前候选；不是两次相互独立的静态查询。',
+    commands: [
+      'node --test tests/phase9-conversational-revision.test.mjs',
+      'node --test tests/regression/05-parameter-revision.regression.test.mjs',
+    ],
+    verification: '第一项测试断言 4→8、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。',
+  },
+  '06-multi-constraint-selection': {
+    image: 'screenshots/result.jpg',
+    alt: 'Scenario 06 verified Harness result',
+    artifacts: [
+      ['Initial Harness screenshot', 'screenshots/initial.jpg'],
+      ['Animated Demo', 'media/demo.gif'],
+      ['1–4 minute video script', 'media/video-script.md'],
+    ],
+    provenance: '真实结果画面选择 `exclude_river_buffer`，道路邻近和河流排除两类 Buffer 同时可见，最终 2 个 `candidate_buildings` 与 Task step 同步高亮。',
+    commands: ['node --test tests/regression/06-multi-constraint-selection.regression.test.mjs'],
+    verification: '独立回归验证结果为 2，并分别复算 road distance ≤ 300 m、river distance ≥ 800 m，避免只对 Tool 文本做字符串断言。',
+  },
+}
+
 function readme(definition) {
   const dataRows = definition.data.map(name => `| \`data/${name}.geojson\` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | ${generatedOn} |`).join('\n')
   const behavior = definition.behavior.map(item => `1. ${item}`).join('\n')
   const steps = definition.steps.map(step => `\`${step}\``).join(' → ')
+  const demo = demoDetails[definition.id]
+  if (demo === undefined) throw new Error(`Missing Demo details for ${definition.id}`)
+  const artifacts = demo.artifacts.map(([label, path]) => `- [${label}](${path})`).join('\n')
+  const commands = demo.commands.join('\n')
   return `# ${definition.title}
 
 ## Scenario
@@ -535,6 +619,22 @@ ${definition.success}
 ## Demo focus
 
 ${definition.video}
+
+## Demo artifacts
+
+![${demo.alt}](${demo.image})
+
+${artifacts}
+
+${demo.provenance}
+
+## Run and verify independently
+
+\`\`\`sh
+${commands}
+\`\`\`
+
+${demo.verification}
 `
 }
 

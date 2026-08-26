@@ -53,3 +53,21 @@
 ## Demo focus
 
 从单个 Tool Calling 升级到真正的 Agent Planning。
+
+## Demo artifacts
+
+![Scenario 06 verified Harness result](screenshots/result.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [Animated Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+真实结果画面选择 `exclude_river_buffer`，道路邻近和河流排除两类 Buffer 同时可见，最终 2 个 `candidate_buildings` 与 Task step 同步高亮。
+
+## Run and verify independently
+
+```sh
+node --test tests/regression/06-multi-constraint-selection.regression.test.mjs
+```
+
+独立回归验证结果为 2，并分别复算 road distance ≤ 300 m、river distance ≥ 800 m，避免只对 Tool 文本做字符串断言。

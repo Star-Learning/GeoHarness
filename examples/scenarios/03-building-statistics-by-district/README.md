@@ -50,3 +50,21 @@
 ## Demo focus
 
 一句话让 AI 自动做分区统计。
+
+## Demo artifacts
+
+![Scenario 03 verified Harness result](screenshots/result.jpg)
+
+- [Initial Harness screenshot](screenshots/initial.jpg)
+- [Animated Demo](media/demo.gif)
+- [1–4 minute video script](media/video-script.md)
+
+真实结果画面选择 `aggregate_districts`，两个 `district_statistics` 面与该 Task step 同步高亮；输入、Join 中间层与聚合层均保留在 Layer Registry。
+
+## Run and verify independently
+
+```sh
+node --test tests/regression/03-building-statistics-by-district.regression.test.mjs
+```
+
+回归测试只使用本目录建筑与 District 数据，独立确认两个分区各 6 个建筑、总计 12 个，并检查分区面积汇总为正。
