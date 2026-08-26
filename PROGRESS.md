@@ -90,3 +90,27 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 
 地图当前渲染 Scenario 输入矢量层；Geo Backend 生成的中间/结果层、Tool 调用和
 `Task Step ↔ Layer ↔ Map` 验证分别在 Phase 4、Phase 5 和 Phase 7 实现。
+
+## Phase 4 — Geo Backend + Tools
+
+状态：完成（2026-08-27）
+
+- [x] 建立独立 `backend/geo-service` Python 包、FastAPI 本地服务、CLI、依赖声明和
+  运行说明；默认仅绑定 `127.0.0.1`。
+- [x] 实现磁盘持久化 Layer Registry：canonical GeoPackage、`registry.json`、
+  lineage、参数、bbox、CRS、feature count 和安全 workspace-relative path。
+- [x] 完成 12 个真实矢量工具：`inspect_dataset`、`list_layers`、
+  `transform_crs`、`create_buffer`、`spatial_filter`、`spatial_join`、
+  `clip_layer`、`aggregate_by_region`、`calculate_geometry`、`nearest_features`、
+  `analyze_distribution`、`export_layer`。
+- [x] 所有 Tool 返回统一 `ToolResult`；错误也结构化返回且不注册半成品图层。
+- [x] 实现 `/health`、Layer 导入/列表/元数据/GeoJSON 和 Tool 执行 API；导入路径
+  限制在显式 Scenario roots，CORS 限制为 localhost。
+- [x] 创建 `docs/tool-spec.md`，记录真实工具、Layer 和 HTTP 契约及 CRS 规则。
+- [x] 7 项 Python 测试覆盖全部 12 个工具、持久化、API、安全边界和失败原子性；
+  固定工作流验证 Scenario 02=5、Scenario 03=6/6、Scenario 06=3→2。
+
+## Phase 4 边界
+
+Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `ctx.tools` API
+自主调用这些能力属于 Phase 5。

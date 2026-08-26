@@ -3,3 +3,6 @@ node_modules/
 .tmp/
 coverage/
 *.log
+__pycache__/
+.pytest_cache/
+*.py[cod]

@@ -54,3 +54,10 @@ Phase 2 采用项目自有、CC0-1.0 的确定性 Manhattan-scale 合成 fixture
 离线、快速、可精确回归。它们不是 NYC 官方地籍、道路或水系数据，README 已明确
 披露。该选择不阻塞 v1.0 的工作流实现与空间正确性测试；如未来替换为生产级官方
 数据，必须重新生成固定统计并更新 Scenario 期望，不能静默替换。
+
+### 5. Python Geo runtime 门禁
+
+Phase 4 已在 Python 3.11、FastAPI 0.135.3、GeoPandas 1.1.4、Shapely 2.1.2、
+PyProj 3.7.2 和 Pyogrio 环境中通过测试，没有当前依赖阻塞。其他环境安装时必须满足
+`backend/geo-service/pyproject.toml` 的版本范围并重跑全部空间测试，尤其不能只用
+mock 替代 GEOS/PROJ 运算。

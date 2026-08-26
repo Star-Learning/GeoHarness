@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geoharness-geo-service"
+version = "0.1.0"
+description = "Local vector GIS backend and structured Geo Tools for GeoHarness"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "geopandas>=1.0,<2",
+  "pydantic>=2.10,<3",
+  "pyogrio>=0.10,<1",
+  "pyproj>=3.7,<4",
+  "shapely>=2.1,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+test = ["httpx>=0.28,<1", "pytest>=8,<10"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
