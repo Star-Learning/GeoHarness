@@ -16,8 +16,13 @@
     "test:phase0": "node --test tests/phase0-integration.test.mjs",
     "test:phase1": "pnpm run build && node --test tests/phase1-ui-shell.test.mjs",
     "test:phase2": "pnpm run check:scenarios && node --test tests/scenarios/*.test.mjs",
+    "test:phase3": "pnpm run build && node --test tests/phase3-layer-map.test.mjs",
     "verify:phase0": "node scripts/verify-phase0.mjs",
     "verify:phase1": "pnpm run typecheck && pnpm run test:phase1",
-    "verify:phase2": "pnpm run test:phase2"
+    "verify:phase2": "pnpm run test:phase2",
+    "verify:phase3": "pnpm run typecheck && pnpm run test:phase3"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
   }
 }

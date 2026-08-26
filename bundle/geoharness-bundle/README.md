@@ -1,11 +1,16 @@
 # `@geoharness/harness-plugin`
 
-This package is the minimal Phase 0 DeepSeek Harness integration. It deliberately combines two roles in one installable npm package:
+This package is the GeoHarness integration layer for the inspected DeepSeek Harness release. It deliberately combines two roles in one installable npm package:
 
 - `dsh.bundle` exports `cordis.patch.yml`, which inserts the package as a Cordis plugin row.
 - `dsh.client` exposes the same package's `./client` browser entry to the Harness Web client module registry.
 
-The host entry is intentionally empty. The browser entry contributes a diagnostic `GeoHarness` conversation view and a small Phase 0 marker through `ctx.slots.inject(...)`. It does not implement GIS behavior.
+The host entry remains intentionally empty through Phase 3. The browser entry contributes the
+`GeoHarness` conversation view and a lightweight brand overlay through
+`ctx.slots.inject(...)`. Its generated client artifact embeds the six independent Scenario
+packages, registers their vector layers, and renders an interactive SVG map with layer
+visibility, opacity, zoom, pan, fit-bounds and feature inspection controls. Geo computation and
+Harness Tool registration are added in later phases rather than hidden in the browser UI.
 
 For a local checkout, install the package into a Web-capable profile from the GeoHarness repository root:
 

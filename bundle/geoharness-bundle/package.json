@@ -1,7 +1,7 @@
 {
   "name": "@geoharness/harness-plugin",
   "version": "0.0.0",
-  "description": "GeoHarness Phase 0 integration bundle and minimal DeepSeek Harness client plugin",
+  "description": "GeoHarness DeepSeek Harness bundle with Scenario, Layer Registry and interactive vector map UI",
   "type": "module",
   "main": "./index.js",
   "exports": {

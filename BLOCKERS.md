@@ -18,6 +18,12 @@ Harness externals、CSS 注入和产物新鲜度增加测试。GeoHarness 不依
 真实 Harness Web 验证确认，Phase 1 三栏工作区可以通过 `conversation.view` 完整
 呈现，`shell.overlay` 可以承载轻量品牌状态；无需注册会遮蔽 AppFrame 的 `root`。
 
+### 真实矢量地图的 Slot 适配性
+
+Phase 3 已在真实 Harness Web 中验证：六个 Scenario 数据可嵌入客户端，三栏视图
+可在 `conversation.view` 中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
+检查。720p 容器高度问题已通过视口约束修复，无需独立 Web surface。
+
 ## 活跃风险与后续门禁
 
 ### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题
@@ -30,11 +36,11 @@ profile 时失败：`apps/cli/src/profile-boot.ts` 从 `@deepseek-ai/cordis` 请
 GeoHarness 不应直接修改 `../deepseek-harness` 规避此问题。若后续开发必须使用
 上游源码 CLI/HMR，应先跟进上游修复或确定稳定的已发布/已构建 CLI 工作流。
 
-### 2. 真实地图能力尚未验证
+### 2. Task Step 与地图绑定尚未进入实现阶段
 
-Phase 1 的 Map Workspace 是产品 Shell，不包含地图引擎。真实图层渲染、交互和
-`Task Step ↔ Layer ↔ Map` 绑定属于 Phase 3 和 Phase 7，必须继续在
-`conversation.view` 中验证布局、资源加载和事件生命周期。
+Phase 3 已完成输入层地图能力，但 `Task Step ↔ Layer ↔ Map` 的中间结果绑定属于
+Phase 7。它不阻塞 Phase 4 的 Geo Backend 与工具实现；Phase 7 必须继续验证派生层
+生命周期、高亮和失败状态。
 
 ### 3. 上游版本升级门禁
 

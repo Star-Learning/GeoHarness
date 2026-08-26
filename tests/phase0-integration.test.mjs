@@ -118,7 +118,8 @@ test('the browser artifact registers its factory and contributes only through de
   const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
     useMemo: factory => factory(),
-    useState: initial => [initial, () => {}],
+    useRef: initial => ({ current: initial }),
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
   }
   const plugin = handoff.factory((specifier) => {
     if (specifier === 'react') return React
@@ -153,7 +154,7 @@ test('the browser artifact registers its factory and contributes only through de
       { name: 'shell.overlay', id: 'geoharness-brand' },
     ],
   )
-  assert.equal(registrations[0].component().props['data-geoharness-phase'], '1')
+  assert.ok(Number(registrations[0].component().props['data-geoharness-phase']) >= 1)
   assert.equal(registrations[1].component().props['data-geoharness-plugin'], 'loaded')
 })
 

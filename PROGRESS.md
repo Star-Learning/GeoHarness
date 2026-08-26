@@ -65,3 +65,28 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 
 本阶段只建立可执行需求包和固定测试数据。Scenario 自动加载、地图渲染和真实
 空间工具调用分别在 Phase 3、Phase 4 和 Phase 5 实现。
+
+## Phase 3 — Layer Registry + Map
+
+状态：完成（2026-08-27）
+
+- [x] 创建类型化 Layer Registry，统一记录 Layer ID、名称、几何类型、CRS、
+  feature count、source、scenario、lineage 占位、storage path、创建时间、显隐、
+  透明度、样式和 canonical GeoJSON。
+- [x] 客户端构建从六个 Scenario manifest 读取并嵌入各自数据；Scenario Launcher
+  切换时真实加载、解析和注册对应图层，不依赖 Harness 静态服务器额外暴露仓库文件。
+- [x] 实现 GeoJSON FeatureCollection 上传、校验和注册；无效 JSON/GeoJSON 会显示
+  有界错误而不污染 Registry。
+- [x] 实现真实矢量地图：Polygon、LineString、MultiPolygon、MultiLineString、
+  Point/MultiPoint 投影到 SVG，支持缩放、平移和 Fit Bounds。
+- [x] 实现图层显隐、透明度、排序、可见数/CRS 状态，以及地图要素点击高亮与属性检查。
+- [x] 建立 4 项 Phase 3 测试；全量 17 项测试通过。
+- [x] 在隔离 Harness Web profile 中真实验证 Scenario 02/04 加载、图层注册、显隐、
+  1.4× 缩放、Scenario 切换和 Building 属性检查。
+- [x] 根据 1280×720 真实截图修正 Harness 会话容器高度，最终同时显示 GeoHarness
+  顶栏、地图、图层列表、Agent 面板和 Prompt composer。
+
+## Phase 3 边界
+
+地图当前渲染 Scenario 输入矢量层；Geo Backend 生成的中间/结果层、Tool 调用和
+`Task Step ↔ Layer ↔ Map` 验证分别在 Phase 4、Phase 5 和 Phase 7 实现。

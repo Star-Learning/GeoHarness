@@ -1,7 +1,18 @@
 import { jsx as _jsx } from 'react/jsx-runtime'
 import * as React from 'react'
+import {
+  registerScenarioLayers,
+  registerUploadedLayer,
+  setLayerOpacity,
+  toggleLayerVisibility,
+  type EmbeddedScenario,
+  type GeoJsonFeature,
+  type GeoJsonGeometry,
+  type LayerRecord,
+} from './layer-registry'
 
 declare const __GE0HARNESS_CSS__: string
+declare const __GEOHARNESS_SCENARIOS__: EmbeddedScenario[]
 
 const PACKAGE_NAME = '@geoharness/harness-plugin'
 
@@ -28,46 +39,31 @@ interface ScenarioPreview {
   number: string
   title: string
   prompt: string
+  payload: EmbeddedScenario
 }
 
-const SCENARIOS: readonly ScenarioPreview[] = [
-  {
-    id: '01-building-data-inspection',
-    number: '01',
-    title: 'Understand Building Data',
-    prompt: '帮我看看这个建筑数据有什么特点。',
-  },
-  {
-    id: '02-river-building-query',
-    number: '02',
-    title: 'Buildings Near Rivers',
-    prompt: '找出距离 Hudson River 和 East River 500 米以内的建筑，并告诉我一共有多少栋。',
-  },
-  {
-    id: '03-building-statistics-by-district',
-    number: '03',
-    title: 'Buildings by District',
-    prompt: '按 Community District 统计建筑数量和建筑总面积。',
-  },
-  {
-    id: '04-road-accessibility',
-    number: '04',
-    title: 'Road Accessibility',
-    prompt: '找出距离主要道路 300 米以内的建筑，并按 Community District 统计数量。',
-  },
-  {
-    id: '05-parameter-revision',
-    number: '05',
-    title: 'Revise a Spatial Query',
-    prompt: '找出距离主要道路 500 米以内的建筑。',
-  },
-  {
-    id: '06-multi-constraint-selection',
-    number: '06',
-    title: 'Multi-Constraint Selection',
-    prompt: '找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。',
-  },
-]
+interface SelectedFeature {
+  layer: LayerRecord
+  feature: GeoJsonFeature
+  featureIndex: number
+}
+
+const SCENARIO_LABELS: Record<string, string> = {
+  '01-building-data-inspection': 'Understand Building Data',
+  '02-river-building-query': 'Buildings Near Rivers',
+  '03-building-statistics-by-district': 'Buildings by District',
+  '04-road-accessibility': 'Road Accessibility',
+  '05-parameter-revision': 'Revise a Spatial Query',
+  '06-multi-constraint-selection': 'Multi-Constraint Selection',
+}
+
+const SCENARIOS: readonly ScenarioPreview[] = __GEOHARNESS_SCENARIOS__.map(payload => ({
+  id: payload.manifest.id,
+  number: payload.manifest.id.slice(0, 2),
+  title: SCENARIO_LABELS[payload.manifest.id] ?? payload.manifest.title,
+  prompt: payload.prompt,
+  payload,
+}))
 
 function installStyles() {
   if (typeof document === 'undefined') return
@@ -87,15 +83,222 @@ function BrandMark({ small = false }: { small?: boolean }) {
   )
 }
 
+function coordinateArrays(value: unknown, target: [number, number][]) {
+  if (!Array.isArray(value)) return
+  if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
+    target.push([value[0], value[1]])
+    return
+  }
+  for (const child of value) coordinateArrays(child, target)
+}
+
+function layerBounds(layers: readonly LayerRecord[]) {
+  const coordinates: [number, number][] = []
+  for (const layer of layers) {
+    for (const feature of layer.data.features) coordinateArrays(feature.geometry.coordinates, coordinates)
+  }
+  if (coordinates.length === 0) return [-74.02, 40.69, -73.95, 40.73] as const
+  const xs = coordinates.map(point => point[0])
+  const ys = coordinates.map(point => point[1])
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] as const
+}
+
+function position(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length < 2) return null
+  return typeof value[0] === 'number' && typeof value[1] === 'number' ? [value[0], value[1]] : null
+}
+
+function linePath(value: unknown, project: (point: [number, number]) => [number, number], close = false) {
+  if (!Array.isArray(value)) return ''
+  const points = value.map(position).filter((point): point is [number, number] => point !== null)
+  if (points.length === 0) return ''
+  const commands = points.map((point, index) => {
+    const [x, y] = project(point)
+    return `${index === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`
+  })
+  return `${commands.join(' ')}${close ? ' Z' : ''}`
+}
+
+function geometryPaths(geometry: GeoJsonGeometry, project: (point: [number, number]) => [number, number]) {
+  const coordinates = geometry.coordinates
+  if (geometry.type === 'LineString') return [linePath(coordinates, project)]
+  if (geometry.type === 'MultiLineString' && Array.isArray(coordinates)) {
+    return coordinates.map(item => linePath(item, project))
+  }
+  if (geometry.type === 'Polygon' && Array.isArray(coordinates)) {
+    return [coordinates.map(ring => linePath(ring, project, true)).join(' ')]
+  }
+  if (geometry.type === 'MultiPolygon' && Array.isArray(coordinates)) {
+    return coordinates.map(polygon => Array.isArray(polygon)
+      ? polygon.map(ring => linePath(ring, project, true)).join(' ')
+      : '')
+  }
+  return []
+}
+
+function pointCoordinates(geometry: GeoJsonGeometry): [number, number][] {
+  if (geometry.type === 'Point') {
+    const point = position(geometry.coordinates)
+    return point === null ? [] : [point]
+  }
+  if (geometry.type === 'MultiPoint' && Array.isArray(geometry.coordinates)) {
+    return geometry.coordinates.map(position).filter((point): point is [number, number] => point !== null)
+  }
+  return []
+}
+
+function featureLabel(feature: GeoJsonFeature, index: number) {
+  const properties = feature.properties ?? {}
+  const label = properties.name ?? properties.building_id ?? properties.road_id
+    ?? properties.river_id ?? properties.district_id ?? feature.id
+  return label === undefined ? `Feature ${index + 1}` : String(label)
+}
+
+function GeoMap({
+  layers,
+  selected,
+  onSelect,
+}: {
+  layers: readonly LayerRecord[]
+  selected: SelectedFeature | null
+  onSelect: (value: SelectedFeature | null) => void
+}) {
+  const [zoom, setZoom] = React.useState(1)
+  const [pan, setPan] = React.useState({ x: 0, y: 0 })
+  const drag = React.useRef<{ x: number, y: number, panX: number, panY: number } | null>(null)
+  const bounds = React.useMemo(() => layerBounds(layers), [layers])
+  const project = React.useMemo(() => {
+    const [minX, minY, maxX, maxY] = bounds
+    const width = Math.max(maxX - minX, 0.000001)
+    const height = Math.max(maxY - minY, 0.000001)
+    const scale = Math.min(900 / width, 600 / height)
+    const offsetX = (1000 - width * scale) / 2
+    const offsetY = (700 - height * scale) / 2
+    return ([x, y]: [number, number]): [number, number] => [
+      offsetX + (x - minX) * scale,
+      700 - (offsetY + (y - minY) * scale),
+    ]
+  }, [bounds])
+  const visibleLayers = layers.filter(layer => layer.visible)
+  const centerLongitude = ((bounds[0] + bounds[2]) / 2).toFixed(4)
+  const centerLatitude = ((bounds[1] + bounds[3]) / 2).toFixed(4)
+  const orderedLayers = [...visibleLayers].sort((left, right) => {
+    const order: Record<string, number> = { districts: 0, rivers: 1, roads: 2, buildings: 3 }
+    return (order[left.name] ?? 4) - (order[right.name] ?? 4)
+  })
+
+  const fitBounds = () => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }
+
+  return (
+    <section className="gh-map" aria-label="Map workspace">
+      <div className="gh-map-toolbar" aria-label="Map controls">
+        <button type="button" onClick={() => setZoom(value => Math.min(5, value * 1.35))} aria-label="Zoom in">+</button>
+        <button type="button" onClick={() => setZoom(value => Math.max(0.7, value / 1.35))} aria-label="Zoom out">−</button>
+        <button type="button" onClick={fitBounds} aria-label="Fit bounds">⌖</button>
+      </div>
+      <div className="gh-map-label"><span>MANHATTAN FIXTURE</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
+      <svg
+        className="gh-map-canvas"
+        viewBox="0 0 1000 700"
+        role="img"
+        aria-label="Interactive Scenario map"
+        onPointerDown={event => {
+          drag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }
+          event.currentTarget.setPointerCapture(event.pointerId)
+        }}
+        onPointerMove={event => {
+          if (drag.current === null) return
+          setPan({
+            x: drag.current.panX + event.clientX - drag.current.x,
+            y: drag.current.panY + event.clientY - drag.current.y,
+          })
+        }}
+        onPointerUp={event => {
+          drag.current = null
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        }}
+        onPointerCancel={() => { drag.current = null }}
+        onClick={() => onSelect(null)}
+      >
+        <g transform={`translate(${500 + pan.x} ${350 + pan.y}) scale(${zoom}) translate(-500 -350)`}>
+          {orderedLayers.map(layer => layer.data.features.map((feature, featureIndex) => {
+            const isSelected = selected?.layer.id === layer.id && selected.featureIndex === featureIndex
+            const select = (event: React.MouseEvent) => {
+              event.stopPropagation()
+              onSelect({ layer, feature, featureIndex })
+            }
+            const common = {
+              key: `${layer.id}-${feature.id ?? featureIndex}`,
+              className: isSelected ? 'gh-map-feature is-selected' : 'gh-map-feature',
+              opacity: layer.opacity,
+              stroke: layer.style.color,
+              strokeWidth: isSelected ? layer.style.lineWidth + 2.4 : layer.style.lineWidth,
+              vectorEffect: 'non-scaling-stroke' as const,
+              onClick: select,
+            }
+            const paths = geometryPaths(feature.geometry, project)
+            const points = pointCoordinates(feature.geometry)
+            if (paths.length > 0) {
+              const polygon = feature.geometry.type.includes('Polygon')
+              return <g key={common.key}>
+                <title>{featureLabel(feature, featureIndex)}</title>
+                {paths.map((path, pathIndex) => <path
+                  {...common}
+                  key={`${common.key}-${pathIndex}`}
+                  d={path}
+                  fill={polygon ? layer.style.color : 'none'}
+                  fillOpacity={polygon ? layer.style.fillOpacity : 0}
+                  fillRule="evenodd"
+                />)}
+              </g>
+            }
+            return <g key={common.key}>
+              <title>{featureLabel(feature, featureIndex)}</title>
+              {points.map((point, pointIndex) => {
+                const [x, y] = project(point)
+                return <circle {...common} key={`${common.key}-${pointIndex}`} cx={x} cy={y} r={isSelected ? 7 : 5} fill={layer.style.color} />
+              })}
+            </g>
+          }))}
+        </g>
+      </svg>
+      {layers.length === 0 && <div className="gh-map-empty-card">
+        <span className="gh-eyebrow">MAP WORKSPACE</span>
+        <strong>No registered layers</strong>
+        <p>Choose a Scenario or upload a GeoJSON FeatureCollection.</p>
+      </div>}
+      <div className="gh-map-scale"><span /> {zoom.toFixed(1)}×</div>
+      <div className="gh-map-attribution">Deterministic demo fixture · OGC:CRS84</div>
+      {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
+        <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
+        <span className="gh-eyebrow">FEATURE INSPECTION</span>
+        <strong>{featureLabel(selected.feature, selected.featureIndex)}</strong>
+        <small>{selected.layer.name} · {selected.feature.geometry.type}</small>
+        <dl>
+          {Object.entries(selected.feature.properties ?? {}).slice(0, 8).map(([key, value]) => <React.Fragment key={key}>
+            <dt>{key}</dt><dd>{value === null ? 'null' : String(value)}</dd>
+          </React.Fragment>)}
+        </dl>
+      </aside>}
+    </section>
+  )
+}
+
 function GeoHarnessShell() {
-  const [selectedId, setSelectedId] = React.useState(SCENARIOS[1].id)
+  const initialScenario = SCENARIOS[1] ?? SCENARIOS[0]
+  const [selectedId, setSelectedId] = React.useState(initialScenario.id)
   const selected = React.useMemo(
     () => SCENARIOS.find(scenario => scenario.id === selectedId) ?? SCENARIOS[0],
     [selectedId],
   )
   const [prompt, setPrompt] = React.useState(selected.prompt)
   const [goal, setGoal] = React.useState(selected.prompt)
-  const [stagedFile, setStagedFile] = React.useState<string | null>(null)
+  const [layers, setLayers] = React.useState<LayerRecord[]>(() => registerScenarioLayers(initialScenario.payload))
+  const [selectedFeature, setSelectedFeature] = React.useState<SelectedFeature | null>(null)
+  const [uploadError, setUploadError] = React.useState<string | null>(null)
 
   const selectScenario = (id: string) => {
     const next = SCENARIOS.find(scenario => scenario.id === id)
@@ -103,6 +306,9 @@ function GeoHarnessShell() {
     setSelectedId(id)
     setPrompt(next.prompt)
     setGoal(next.prompt)
+    setLayers(registerScenarioLayers(next.payload))
+    setSelectedFeature(null)
+    setUploadError(null)
   }
 
   const submitGoal = (event: React.FormEvent) => {
@@ -111,8 +317,31 @@ function GeoHarnessShell() {
     if (value !== '') setGoal(value)
   }
 
+  const uploadGeoJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    if (file === undefined) return
+    try {
+      const data: unknown = JSON.parse(await file.text())
+      const layer = registerUploadedLayer(file.name, data)
+      setLayers(current => [...current, layer])
+      setUploadError(null)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Unable to read this GeoJSON file.')
+    } finally {
+      event.currentTarget.value = ''
+    }
+  }
+
+  const toggleLayer = (layer: LayerRecord) => {
+    setLayers(current => toggleLayerVisibility(current, layer.id))
+    if (layer.visible && selectedFeature?.layer.id === layer.id) setSelectedFeature(null)
+  }
+
+  const visibleCount = layers.filter(layer => layer.visible).length
+  const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
+
   return (
-    <main className="gh-shell" data-geoharness-phase="1">
+    <main className="gh-shell" data-geoharness-phase="3">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
@@ -135,60 +364,51 @@ function GeoHarnessShell() {
               </option>
             ))}
           </select>
-          <span className="gh-status"><i /> Shell ready</span>
+          <span className="gh-status"><i /> {layers.length} layers · {featureCount} features</span>
         </div>
       </header>
 
       <section className="gh-workspace">
         <aside className="gh-panel gh-layers" aria-label="Layer panel">
           <div className="gh-panel-heading">
-            <span><b>Layers</b><small>Data workspace</small></span>
-            <label className="gh-icon-button" title="Stage a vector file">
-              <input
-                type="file"
-                accept=".geojson,.json,.zip,.gpkg,.csv"
-                onChange={event => setStagedFile(event.currentTarget.files?.[0]?.name ?? null)}
-              />
+            <span><b>Layers</b><small>Layer Registry</small></span>
+            <label className="gh-icon-button" title="Upload a GeoJSON FeatureCollection">
+              <input type="file" accept=".geojson,.json,application/geo+json,application/json" onChange={uploadGeoJson} />
               +
             </label>
           </div>
           <div className="gh-layer-section-label">Scenario inputs</div>
-          <div className="gh-layer-empty">
-            <span className="gh-layer-empty__glyph">◇</span>
-            <strong>{stagedFile ?? 'No layers loaded'}</strong>
-            <p>{stagedFile === null
-              ? 'Choose a Scenario or stage a vector file.'
-              : 'File staged. Reading and registration arrive in Phase 3.'}</p>
+          <div className="gh-layer-list">
+            {layers.map(layer => <article className="gh-layer-row" key={layer.id}>
+              <button
+                type="button"
+                className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
+                aria-label={`${layer.visible ? 'Hide' : 'Show'} ${layer.name}`}
+                aria-pressed={layer.visible}
+                onClick={() => toggleLayer(layer)}
+              ><span style={{ background: layer.style.color }} /></button>
+              <div className="gh-layer-meta">
+                <strong>{layer.name}</strong>
+                <small>{layer.geometry} · {layer.featureCount} features</small>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={layer.opacity}
+                  aria-label={`${layer.name} opacity`}
+                  onChange={event => setLayers(current => setLayerOpacity(current, layer.id, Number(event.currentTarget.value)))}
+                />
+              </div>
+            </article>)}
           </div>
+          {uploadError !== null && <p className="gh-layer-error" role="alert">{uploadError}</p>}
           <div className="gh-layer-footer">
-            <span>0 visible</span><span>EPSG —</span>
+            <span>{visibleCount} visible</span><span>{layers[0]?.crs ?? 'CRS —'}</span>
           </div>
         </aside>
 
-        <section className="gh-map" aria-label="Map workspace">
-          <div className="gh-map-toolbar" aria-label="Map controls">
-            <button type="button" disabled aria-label="Zoom in">+</button>
-            <button type="button" disabled aria-label="Zoom out">−</button>
-            <button type="button" disabled aria-label="Fit bounds">⌖</button>
-          </div>
-          <div className="gh-map-label"><span>MANHATTAN</span><small>40.7831° N · 73.9712° W</small></div>
-          <svg className="gh-map-preview" viewBox="0 0 720 620" role="img" aria-label="Stylized Manhattan map workspace preview">
-            <path className="gh-river gh-river--west" d="M135,-20 C98,130 143,248 93,397 C66,478 78,559 26,650" />
-            <path className="gh-river gh-river--east" d="M582,-20 C628,107 584,243 635,366 C676,467 634,561 704,650" />
-            <path className="gh-island" d="M335,36 C378,76 398,142 423,217 C453,307 468,400 440,491 C422,548 390,585 350,603 C328,552 288,514 279,448 C266,355 290,274 288,193 C286,128 298,75 335,36 Z" />
-            <g className="gh-streets">
-              <path d="M329 87L383 545" /><path d="M304 141L421 470" /><path d="M294 221L443 389" />
-              <path d="M289 307L448 309" /><path d="M281 390L433 236" /><path d="M296 475L406 150" />
-            </g>
-            <circle className="gh-map-focus" cx="373" cy="314" r="22" />
-          </svg>
-          <div className="gh-map-empty-card">
-            <span className="gh-eyebrow">MAP WORKSPACE</span>
-            <strong>Spatial canvas is ready</strong>
-            <p>Layer rendering, inspection and map interaction are connected in Phase 3.</p>
-          </div>
-          <div className="gh-map-scale"><span /> 2 km</div>
-        </section>
+        <GeoMap layers={layers} selected={selectedFeature} onSelect={setSelectedFeature} />
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
@@ -203,17 +423,17 @@ function GeoHarnessShell() {
             <section className="gh-agent-block">
               <span className="gh-eyebrow">PLAN PREVIEW</span>
               <ol className="gh-plan-list">
-                <li className="is-active"><i>1</i><span><b>Understand goal</b><small>Scenario context selected</small></span></li>
-                <li><i>2</i><span><b>Plan GIS workflow</b><small>Awaiting Harness integration</small></span></li>
-                <li><i>3</i><span><b>Execute Geo Tools</b><small>No tools called</small></span></li>
-                <li><i>4</i><span><b>Verify on map</b><small>No output layers</small></span></li>
+                <li className="is-complete"><i>✓</i><span><b>Load Scenario</b><small>Package manifest resolved</small></span></li>
+                <li className="is-complete"><i>✓</i><span><b>Register layers</b><small>{layers.length} vector layers available</small></span></li>
+                <li className="is-active"><i>3</i><span><b>Verify inputs on map</b><small>Toggle or inspect a feature</small></span></li>
+                <li><i>4</i><span><b>Execute Geo Tools</b><small>Connected in Phase 4</small></span></li>
               </ol>
             </section>
             <section className="gh-agent-block gh-current-step">
               <span className="gh-eyebrow">CURRENT STEP</span>
-              <div><span>Phase</span><b>UI Shell</b></div>
+              <div><span>Phase</span><b>Layers + Map</b></div>
               <div><span>Scenario</span><b>{selected.number}</b></div>
-              <div><span>Status</span><b className="is-teal">Ready</b></div>
+              <div><span>Status</span><b className="is-teal">{visibleCount}/{layers.length} visible</b></div>
             </section>
           </div>
         </aside>
@@ -255,6 +475,5 @@ export function apply(ctx: ClientContext) {
   }, GeoHarnessBadge))
 }
 
-// Kept as a value reference so TypeScript preserves the jsx-runtime external
-// in the generated factory even when a future compiler version rewrites JSX.
+// Kept as a value reference so TypeScript preserves the jsx-runtime external.
 void _jsx

@@ -18,7 +18,7 @@ test('the generated client artifact is reproducible from typed source and CSS', 
   assert.match(actual, /data-geoharness-phase/)
 })
 
-test('Phase 1 source implements every UI shell surface without post-Phase-1 GIS behavior', async () => {
+test('Phase 1 UI shell surfaces remain present as later phases extend the workspace', async () => {
   const source = await readFile(join(bundleRoot, 'src', 'client.tsx'), 'utf8')
   const styles = await readFile(join(bundleRoot, 'src', 'styles.css'), 'utf8')
   for (const label of [
@@ -31,7 +31,7 @@ test('Phase 1 source implements every UI shell surface without post-Phase-1 GIS 
     '05-parameter-revision', '06-multi-constraint-selection',
   ]) assert.match(source, new RegExp(id))
   assert.match(styles, /grid-template-columns: 228px minmax\(340px, 1fr\) 286px/)
-  assert.doesNotMatch(source, /maplibre|leaflet|ctx\.tools|buffer\(|spatialJoin/i)
+  assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
 })
 
 test('the generated factory registers the shell through additive Harness Slots', async () => {
@@ -51,7 +51,8 @@ test('the generated factory registers the shell through additive Harness Slots',
   const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
     useMemo: factory => factory(),
-    useState: initial => [initial, () => {}],
+    useRef: initial => ({ current: initial }),
+    useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
   }
   const plugin = registration.factory(specifier => {
     if (specifier === 'react') return React
@@ -74,7 +75,7 @@ test('the generated factory registers the shell through additive Harness Slots',
   assert.match(appendedStyles[0].textContent, /\.gh-shell/)
 
   const shell = slots[0].component()
-  assert.equal(shell.props['data-geoharness-phase'], '1')
+  assert.ok(Number(shell.props['data-geoharness-phase']) >= 1)
   const badge = slots[1].component()
   assert.equal(badge.props['data-geoharness-plugin'], 'loaded')
 })
