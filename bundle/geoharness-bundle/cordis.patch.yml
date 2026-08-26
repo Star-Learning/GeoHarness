@@ -1,0 +1,6 @@
+# GeoHarness Phase 0 contributes one dual-face plugin row. The package's
+# dsh.client declaration makes the same row discoverable by the Web client
+# module registry; no DeepSeek Harness source patch is required.
+- insert:
+    - id: geoharness-plugin
+      name: '@geoharness/harness-plugin'

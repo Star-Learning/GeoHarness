@@ -1,0 +1,15 @@
+{
+  "name": "geoharness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test tests/phase0-integration.test.mjs",
+    "test:phase0": "node --test tests/phase0-integration.test.mjs",
+    "verify:phase0": "node scripts/verify-phase0.mjs"
+  }
+}
