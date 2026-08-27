@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "transition_frames": 3,
+  "keyframes": [
+    { "source": "initial.jpg", "focus": "full", "role": "initial", "label": "01 INITIAL WORKSPACE", "hold_ms": 1200 },
+    { "source": "initial.jpg", "focus": "input", "role": "input", "label": "02 500 M USER GOAL", "hold_ms": 1000 },
+    { "source": "result-500m.jpg", "focus": "agent_plan", "role": "plan", "label": "03 INITIAL PLAN", "hold_ms": 1400 },
+    { "source": "result-500m.jpg", "focus": "layers", "role": "layers", "label": "04 500 M LAYERS", "hold_ms": 1400 },
+    { "source": "result-500m.jpg", "focus": "map", "role": "map", "label": "05 500 M MAP", "hold_ms": 1600 },
+    { "source": "result-500m.jpg", "focus": "agent_result", "role": "result", "label": "06 329 BUILDINGS", "hold_ms": 1700 },
+    { "source": "result-200m.jpg", "focus": "agent_plan", "role": "revision", "label": "07 REVISE TO 200 M", "hold_ms": 1600 },
+    { "source": "result-200m.jpg", "focus": "layers", "role": "revision_layers", "label": "08 UPDATED LAYERS", "hold_ms": 1400 },
+    { "source": "result-200m.jpg", "focus": "map", "role": "revision_map", "label": "09 200 M MAP", "hold_ms": 1700 },
+    { "source": "result-200m.jpg", "focus": "agent_result", "role": "revision_result", "label": "10 205 BUILDINGS", "hold_ms": 1800 },
+    { "source": "result-200m.jpg", "focus": "full", "role": "complete", "label": "11 REVISION COMPLETE", "hold_ms": 2800 }
+  ]
+}

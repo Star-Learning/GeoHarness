@@ -542,3 +542,20 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 完整门禁通过：Node 53/53、Python 9/9、client build、TypeScript、peer dependencies 与
   `git diff --check`。本轮内置浏览器对既有 `127.0.0.1` 标签页的刷新被 URL 安全策略拦截，未以
   其他自动化方式绕过；服务仍占用 31994，用户手动刷新即可完成最终视觉确认。
+
+## 七个正式 Scenario 多关键帧 GIF
+
+状态：完成（2026-08-27）
+
+- [x] 放弃新增复杂 Prompt 案例，继续以 v1.0 已实现、带独立数据/测试/Demo 的 7 个正式
+  Scenario 作为演示目录；新增 `examples/README.md` 统一索引案例和共享官方数据。
+- [x] 每个 Scenario 新增 `media/gif-storyboard.json`：普通案例包含 7 个语义关键视图，参数修订
+  案例包含 11 个，覆盖输入、Agent Plan、关键 Layers、地图、Agent Result 与完成状态。
+- [x] 重写 `scripts/build-demo-media.py`，从 1280×720 真实 Harness JPEG 生成 960×540 GIF，
+  支持 16:9 局部放大、阶段标签、关键帧停留、三帧平滑过渡、共享色板和逐场景构建/检查。
+- [x] 普通案例 GIF 从 2 帧升级为 25 帧，Scenario 05 从 3 帧升级为 41 帧；500 m Plan/Layer/
+  Map/329 栋结果与 200 m 修订/更新 Layer/Map/205 栋结果分别展示。
+- [x] GIF 只裁切、缩放并标注已有真实 Harness 截图，不伪造尚未实际捕获的实时 Tool 状态；后续
+  获得真实 `step-*.jpg` 时可直接在 storyboard 中按顺序加入。
+- [x] Scenario 生成器、6 个生成 README、官方数据 Scenario README 和 Phase 10 回归均已同步；
+  `verify:phase10` 完整通过，包含 build、Scenario freshness、7 个 GIF 媒体验证和 8/8 测试。

@@ -58,8 +58,10 @@ AI 能不能自己看懂一份 GIS 数据？
 - [Initial Harness screenshot](screenshots/initial.jpg)
 - [Animated Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
+- [GIF keyframe storyboard](media/gif-storyboard.json)
 
 素材来自本 Scenario 在 DeepSeek Harness Web 中对 NYC Open Data 快照的真实执行：结果画面选择 `calculate_building_geometry`，360 个官方建筑输出同时在 Layer Registry 与地图高亮。
+GIF 使用 7 个语义关键视图和 18 个平滑过渡帧，依次突出用户输入、Agent Plan、关键图层、地图和最终结果；所有画面均裁自上述真实 Harness 截图。
 
 ## Run and verify independently
 

@@ -7,18 +7,20 @@ import test from 'node:test'
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const scenariosRoot = join(repositoryRoot, 'examples', 'scenarios')
 const expectedScenarios = [
-  { id: '01-building-data-inspection', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
-  { id: '02-river-building-query', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
-  { id: '03-building-statistics-by-district', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
-  { id: '04-road-accessibility', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
+  { id: '01-building-data-inspection', screenshots: ['initial.jpg', 'result.jpg'] },
+  { id: '02-river-building-query', screenshots: ['initial.jpg', 'result.jpg'] },
+  { id: '03-building-statistics-by-district', screenshots: ['initial.jpg', 'result.jpg'] },
+  { id: '04-road-accessibility', screenshots: ['initial.jpg', 'result.jpg'] },
   {
     id: '05-parameter-revision',
     screenshots: ['initial.jpg', 'result-500m.jpg', 'result-200m.jpg'],
-    frames: 3,
   },
-  { id: '06-multi-constraint-selection', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
-  { id: '07-official-nyc-building-inspection', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
+  { id: '06-multi-constraint-selection', screenshots: ['initial.jpg', 'result.jpg'] },
+  { id: '07-official-nyc-building-inspection', screenshots: ['initial.jpg', 'result.jpg'] },
 ]
+
+const requiredGifRoles = ['initial', 'input', 'plan', 'layers', 'map', 'result', 'complete']
+const allowedGifFocus = ['full', 'input', 'agent_plan', 'layers', 'map', 'agent_result']
 
 const videoHeadings = [
   '视频标题建议', '开场问题', '用户输入', 'Agent Plan',
@@ -110,14 +112,32 @@ for (const scenario of expectedScenarios) {
       assert.deepEqual(jpegDimensions(binary), { width: 1280, height: 720 })
     }
 
+    const storyboard = JSON.parse(await readFile(join(root, 'media', 'gif-storyboard.json'), 'utf8'))
+    assert.equal(storyboard.schema_version, '1.0')
+    assert.ok(Number.isInteger(storyboard.transition_frames))
+    assert.ok(storyboard.transition_frames >= 1 && storyboard.transition_frames <= 6)
+    assert.ok(Array.isArray(storyboard.keyframes) && storyboard.keyframes.length >= 7)
+    const roles = new Set(storyboard.keyframes.map(keyframe => keyframe.role))
+    for (const role of requiredGifRoles) assert.ok(roles.has(role), `${scenario.id} is missing ${role}`)
+    for (const keyframe of storyboard.keyframes) {
+      assert.ok(scenario.screenshots.includes(keyframe.source), `${keyframe.source} is not a real screenshot`)
+      assert.ok(allowedGifFocus.includes(keyframe.focus), `${keyframe.focus} is not a supported focus`)
+      assert.match(keyframe.label, /^\d{2} [A-Z0-9 -]+$/)
+      assert.ok(Number.isInteger(keyframe.hold_ms) && keyframe.hold_ms >= 500)
+    }
+
     const gifPath = join(root, 'media', 'demo.gif')
     const gif = await readFile(gifPath)
     assert.ok(gif.length > 100_000, 'Demo GIF is unexpectedly small')
-    assert.deepEqual(gifMetadata(gif), { width: 960, height: 540, frames: scenario.frames })
+    const frames = storyboard.keyframes.length
+      + (storyboard.keyframes.length - 1) * storyboard.transition_frames
+    assert.ok(frames >= 25, 'Demo GIF must include semantic holds and smooth transitions')
+    assert.deepEqual(gifMetadata(gif), { width: 960, height: 540, frames })
 
     const readme = await readFile(join(root, 'README.md'), 'utf8')
     assert.match(readme, /screenshots\//)
     assert.match(readme, /media\/demo\.gif/)
+    assert.match(readme, /media\/gif-storyboard\.json/)
     assert.match(readme, /media\/video-script\.md/)
     assert.match(readme, new RegExp(`tests/regression/${scenario.id}\\.regression\\.test\\.mjs`))
 

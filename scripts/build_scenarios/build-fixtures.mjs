@@ -460,7 +460,7 @@ const demoDetails = {
       ['Animated revision Demo', 'media/demo.gif'],
       ['1–4 minute video script', 'media/video-script.md'],
     ],
-    provenance: `三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 \`/geoharness/scenario/revise\` 提交“改成 200 米。”。修订画面真实显示 2 轮 history、\`2 rerun · 3 reused\` 和 ${officialStatistics.road_200m_candidate_count} 个当前候选。`,
+    provenance: `真实截图来自同一个完整 Harness Web execution：先运行 500 m，再通过 \`/geoharness/scenario/revise\` 提交“改成 200 米。”。修订画面真实显示 2 轮 history、\`2 rerun · 3 reused\` 和 ${officialStatistics.road_200m_candidate_count} 个当前候选。`,
     commands: [
       'node --test tests/phase9-conversational-revision.test.mjs',
       'node --test tests/regression/05-parameter-revision.regression.test.mjs',
@@ -494,7 +494,13 @@ function readme(definition) {
   const steps = definition.steps.map(step => `\`${step}\``).join(' → ')
   const demo = demoDetails[definition.id]
   if (demo === undefined) throw new Error(`Missing Demo details for ${definition.id}`)
-  const artifacts = demo.artifacts.map(([label, path]) => `- [${label}](${path})`).join('\n')
+  const artifacts = [
+    ...demo.artifacts,
+    ['GIF keyframe storyboard', 'media/gif-storyboard.json'],
+  ].map(([label, path]) => `- [${label}](${path})`).join('\n')
+  const gifNarrative = definition.revisionPrompt
+    ? 'GIF 使用 11 个语义关键视图和 30 个平滑过渡帧，依次展示 500 m 的 Plan、Layer、地图与结果，以及修订为 200 m 后的更新过程；所有画面均裁自上述真实 Harness 截图。'
+    : 'GIF 使用 7 个语义关键视图和 18 个平滑过渡帧，依次突出用户输入、Agent Plan、关键图层、地图和最终结果；所有画面均裁自上述真实 Harness 截图。'
   const commands = demo.commands.join('\n')
   return `# ${definition.title}
 
@@ -551,6 +557,7 @@ ${definition.video}
 ${artifacts}
 
 ${demo.provenance}
+${gifNarrative}
 
 ## Run and verify independently
 

@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "transition_frames": 3,
+  "keyframes": [
+    { "source": "initial.jpg", "focus": "full", "role": "initial", "label": "01 INITIAL WORKSPACE", "hold_ms": 1300 },
+    { "source": "initial.jpg", "focus": "input", "role": "input", "label": "02 DISTRICT GOAL", "hold_ms": 1100 },
+    { "source": "result.jpg", "focus": "agent_plan", "role": "plan", "label": "03 JOIN AND AGGREGATE", "hold_ms": 1700 },
+    { "source": "result.jpg", "focus": "layers", "role": "layers", "label": "04 STATISTICS LAYERS", "hold_ms": 1500 },
+    { "source": "result.jpg", "focus": "map", "role": "map", "label": "05 DISTRICT MAP", "hold_ms": 1800 },
+    { "source": "result.jpg", "focus": "agent_result", "role": "result", "label": "06 DISTRICT COUNTS", "hold_ms": 1900 },
+    { "source": "result.jpg", "focus": "full", "role": "complete", "label": "07 COMPLETE", "hold_ms": 2600 }
+  ]
+}

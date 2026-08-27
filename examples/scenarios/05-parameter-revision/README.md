@@ -63,8 +63,10 @@ Revision: > 改成 200 米。
 - [200 m revised result — 205 candidates](screenshots/result-200m.jpg)
 - [Animated revision Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
+- [GIF keyframe storyboard](media/gif-storyboard.json)
 
-三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 200 米。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 205 个当前候选。
+真实截图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 200 米。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 205 个当前候选。
+GIF 使用 11 个语义关键视图和 30 个平滑过渡帧，依次展示 500 m 的 Plan、Layer、地图与结果，以及修订为 200 m 后的更新过程；所有画面均裁自上述真实 Harness 截图。
 
 ## Run and verify independently
 

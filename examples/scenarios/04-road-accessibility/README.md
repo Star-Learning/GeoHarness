@@ -60,8 +60,10 @@ AI 能否自己组合多个 GIS 工具？
 - [Initial Harness screenshot](screenshots/initial.jpg)
 - [Animated Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
+- [GIF keyframe storyboard](media/gif-storyboard.json)
 
 真实结果画面选择 `filter_accessible_buildings`，249 个候选在 Broadway 300 m road buffer 内同步高亮；后续 District Join 与 aggregation step 同样保持可定位。
+GIF 使用 7 个语义关键视图和 18 个平滑过渡帧，依次突出用户输入、Agent Plan、关键图层、地图和最终结果；所有画面均裁自上述真实 Harness 截图。
 
 ## Run and verify independently
 

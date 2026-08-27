@@ -183,3 +183,11 @@ typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。空会话阶
 点击“新建会话”后没有入口返回同一项目中的旧会话。当前插件不再注册该 Slot，项目选择、会话
 创建和历史切换恢复为 Harness 原生实现；Layers 已迁移到地图内可收起面板，仍按 Session ID
 隔离，不需要在“历史导航”和“GIS 图层控制”之间二选一。
+
+### 10. GIF 中间关键视图与实时步骤录制
+
+多关键帧 GIF 已完成，不是活跃代码阻塞。当前 25/41 帧 GIF 的底图全部来自各 Scenario 已保存的
+真实 Harness execution 截图，并通过局部放大、标签和过渡依次展示输入、Plan、Layers、Map 与
+Result。内置浏览器的本地 URL 安全策略仍阻止自动重放并重新截取 `127.0.0.1` 的逐 Tool 瞬时
+状态，因此本轮没有把裁切视图伪装成新的实时执行截图。构建器已支持 storyboard；未来获得真实
+中间截图后只需把 `step-*.jpg` 加入对应 storyboard，无需重做 GIF 管线。

@@ -58,7 +58,9 @@
 
 ![Official NYC Open Data Demo](media/demo.gif)
 
-视频口播与镜头说明见 [media/video-script.md](media/video-script.md)。截图来自本仓库接入的
+GIF 的 7 个语义关键视图与 18 个平滑过渡帧见
+[media/gif-storyboard.json](media/gif-storyboard.json)，视频口播与镜头说明见
+[media/video-script.md](media/video-script.md)。截图来自本仓库接入的
 DeepSeek Harness `conversation.view`，不是另建的地图页面。
 
 ## Run and verify independently

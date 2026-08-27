@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "transition_frames": 3,
+  "keyframes": [
+    { "source": "initial.jpg", "focus": "full", "role": "initial", "label": "01 INITIAL WORKSPACE", "hold_ms": 1300 },
+    { "source": "initial.jpg", "focus": "input", "role": "input", "label": "02 300 M USER GOAL", "hold_ms": 1100 },
+    { "source": "result.jpg", "focus": "agent_plan", "role": "plan", "label": "03 FIVE GIS STEPS", "hold_ms": 1700 },
+    { "source": "result.jpg", "focus": "layers", "role": "layers", "label": "04 BUFFER AND JOIN LAYERS", "hold_ms": 1600 },
+    { "source": "result.jpg", "focus": "map", "role": "map", "label": "05 ACCESSIBILITY MAP", "hold_ms": 1800 },
+    { "source": "result.jpg", "focus": "agent_result", "role": "result", "label": "06 249 CANDIDATES", "hold_ms": 1900 },
+    { "source": "result.jpg", "focus": "full", "role": "complete", "label": "07 COMPLETE", "hold_ms": 2600 }
+  ]
+}
