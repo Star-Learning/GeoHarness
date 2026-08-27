@@ -62,17 +62,57 @@ The Registry is the Layer truth source. Agent text never invents Layer IDs or ma
 accepts a workspace projection only when feature counts and parent references match the canonical
 backend Registry.
 
-## Requirements
+## Install as a DeepSeek Harness plugin
+
+GeoHarness is installed through the official Harness plugin command. The current release is a
+source-distributed plugin: clone the full GeoHarness repository, then add its
+`bundle/geoharness-bundle` directory to a Harness profile. Do not copy that directory away from the
+repository because it resolves the packaged Python backend and data catalog from this checkout.
+
+Requirements:
 
 - Node.js `^22.19.0` or `>=24.0.0`
 - pnpm `11.22.0`
 - Python `>=3.11`
-- A readable, built DeepSeek Harness checkout at `../deepseek-harness` for the source-integration
-  workflow used by this repository
+- DeepSeek Harness `0.1.1-rc.2`
 
-Install and build GeoHarness:
+### Quick start with the published Harness CLI
 
 ```sh
+git clone https://github.com/Star-Learning/GeoHarness.git
+cd GeoHarness
+
+pnpm install
+python -m pip install -e "./backend/geo-service[test]"
+pnpm run build
+
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./bundle/geoharness-bundle
+npx @deepseek-ai/dsh@0.1.1-rc.2 web
+```
+
+Harness starts its Web UI at `http://127.0.0.1:3080`. The plugin CLI forwards to pnpm, detects the
+package's `dsh.bundle` declaration and automatically adds `@geoharness/harness-plugin` to the Web
+profile. No DeepSeek Harness source file is patched.
+
+Remove it from the profile with:
+
+```sh
+npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @geoharness/harness-plugin
+```
+
+### Fully local development with a Harness checkout
+
+Keep the repositories beside one another and build the inspected Harness tag:
+
+```sh
+git clone --branch dsh-v0.1.1-rc.2 https://github.com/deepseek-ai/deepseek-harness.git
+git clone https://github.com/Star-Learning/GeoHarness.git
+
+cd deepseek-harness
+pnpm install
+pnpm run build
+
+cd ../GeoHarness
 pnpm install
 python -m pip install -e "./backend/geo-service[test]"
 pnpm run build
@@ -88,30 +128,24 @@ node ../deepseek-harness/apps/cli/lib/bin.js plugin --profile geoharness add `
 node ../deepseek-harness/apps/cli/lib/bin.js --profile geoharness --no-open
 ```
 
-If a Web-capable published Harness profile already exists, only add GeoHarness:
+## Use GeoHarness
 
-```sh
-dsh plugin --profile web add ./bundle/geoharness-bundle
-dsh --profile web --no-open
-```
+1. Open the Harness URL and use the native lower-left **设置** page to configure an LLM Provider,
+   Base URL and API Key. Credentials remain write-only in the Harness credential store and are not
+   saved by GeoHarness.
+2. Create or select a native Harness project/session. Earlier sessions remain available in the
+   original sidebar.
+3. Enter a spatial goal in the native composer, for example: `找出距离 Broadway 275 米内的建筑，展示相关图层并报告数量。`
+4. Watch the right-hand Agent Stream and Tool steps progress while verified Layers appear on the
+   map. Open the map Layers drawer to change visibility or opacity.
+5. Pan by dragging, zoom with the mouse wheel or controls, inspect features, and use the Agent's
+   returned export paths when the request creates GeoJSON, GeoPackage or CSV output.
 
-Open Harness and the conversation workspace is already GeoHarness; there is no separate GIS tab,
-drawer or Examples selector. Enter any supported spatial requirement in the native composer. The
-Agent discovers the available data catalog, plans from the submitted text and chooses its tools;
-explicit values such as 200 m or 275 m remain the values supplied to the GIS operation. Real
-Session events append the complete right-hand Agent Stream while Tool steps advance and verified
-workspace Layers appear on the map from the same run.
-Pan with pointer drag and zoom with the mouse wheel or map controls.
-
-Use the native lower-left **设置** button to inspect configured Providers and securely add or
-replace a credential. Stored values remain write-only in the Harness credential store and are never
-written to this repository or echoed back into the page.
-
-A configured Harness model provider is required for this production path. When no routable model
-exists, GeoHarness shows an explicit configuration error and does not silently fall back to a
-Scenario. The Harness server process must also have outbound HTTPS access to the Provider Base URL;
-a configured key cannot prevent a transport-level `Connection error` when that process is blocked
-by a sandbox, proxy or firewall. No API key is stored in this repository.
+There is no separate GIS tab or Examples selector. The Agent discovers the available data catalog,
+plans from the submitted text and chooses its tools; explicit values such as 200 m or 275 m remain
+the values supplied to the GIS operation. A configured, routable model and outbound access to its
+Provider Base URL are required. GeoHarness reports Provider or transport failures and never falls
+back to a fixed Scenario to fabricate success.
 
 ## Seven official-data v1.0 deterministic regressions
 
@@ -127,6 +161,57 @@ are not Examples in the production UI and do not constrain the Native Agent to o
 | 05 Parameter Revision | 500 m: 329 → 200 m: 205; 2 rerun / 3 reused | [README](examples/scenarios/05-parameter-revision/README.md) | [GIF](examples/scenarios/05-parameter-revision/media/demo.gif) |
 | 06 Multi-Constraint Selection | 27 candidates satisfying both distances | [README](examples/scenarios/06-multi-constraint-selection/README.md) | [GIF](examples/scenarios/06-multi-constraint-selection/media/demo.gif) |
 | 07 Official NYC Building Inspection | 133 valid MultiPolygons; 2 missing construction years; 1830–2021 | [README](examples/scenarios/07-official-nyc-building-inspection/README.md) | [GIF](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif) |
+
+### 01 · Building Data Inspection
+
+The Agent inspects 360 official building footprints, checks CRS, geometry types, fields, missing
+values and validity, then calculates metric geometry statistics without treating longitude and
+latitude as metres.
+
+![Scenario 01 · Building Data Inspection](examples/scenarios/01-building-data-inspection/media/demo.gif)
+
+### 02 · River Building Query
+
+Starting from one natural-language request, the workflow transforms the river layer to a metric
+CRS, creates a real 500 m buffer and selects the 132 buildings intersecting that range.
+
+![Scenario 02 · River Building Query](examples/scenarios/02-river-building-query/media/demo.gif)
+
+### 03 · Building Statistics by District
+
+The Agent calculates building area, spatially joins all 360 buildings to three official Community
+Districts, and returns auditable district counts of 162, 40 and 158 with area totals.
+
+![Scenario 03 · Building Statistics by District](examples/scenarios/03-building-statistics-by-district/media/demo.gif)
+
+### 04 · Broadway Accessibility
+
+The workflow identifies the Broadway corridor from the road data, builds a 300 m service area,
+selects 249 nearby buildings and aggregates them by Community District.
+
+![Scenario 04 · Broadway Accessibility](examples/scenarios/04-road-accessibility/media/demo.gif)
+
+### 05 · Conversational Parameter Revision
+
+The first turn evaluates a 500 m Broadway range and finds 329 buildings. A second message changes
+the distance to 200 m; GeoHarness reuses three valid upstream steps, reruns the affected buffer and
+filter, and updates the current result to 205 buildings.
+
+![Scenario 05 · 500 m to 200 m revision](examples/scenarios/05-parameter-revision/media/demo.gif)
+
+### 06 · Multi-Constraint Selection
+
+Two independent constraints are combined: buildings must be within 300 m of Broadway while staying
+at least 800 m from the Hudson or East River. The verified intersection contains 27 buildings.
+
+![Scenario 06 · Multi-Constraint Selection](examples/scenarios/06-multi-constraint-selection/media/demo.gif)
+
+### 07 · Audited Official NYC Snapshot
+
+This focused regression inspects 133 Lower Manhattan buildings from an auditable NYC Open Data
+snapshot, verifies every geometry and summarizes construction-year and roof-height quality.
+
+![Scenario 07 · Official NYC Building Inspection](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif)
 
 Every Scenario follows the same rule:
 
