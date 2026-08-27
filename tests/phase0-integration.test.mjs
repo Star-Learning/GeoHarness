@@ -105,7 +105,7 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.equal(typeof hostPlugin.registerGeoTools, 'function')
 })
 
-test('the browser artifact replaces the public root surface without the Harness sidebar shell', async () => {
+test('the browser artifact preserves native root chrome and replaces only GeoHarness product slots', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let handoff
   const appendedStyles = []
@@ -153,13 +153,15 @@ test('the browser artifact replaces the public root surface without the Harness 
   assert.deepEqual(
     registrations.map(({ options }) => ({ name: options.name, priority: options.priority })),
     [
-      { name: 'root', priority: -100 },
+      { name: 'conversation.session', priority: -100 },
+      { name: 'sidebar.workspaces', priority: -100 },
+      { name: 'sidebar.brand.mark', priority: -100 },
+      { name: 'sidebar.brand.name', priority: -100 },
     ],
   )
-  const shell = registrations[0].component(registrations[0].options.inject())
-  assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
-  assert.equal(shell.props['data-geoharness-phase'], '10')
-  assert.equal(shell.props['data-geoharness-agent'], 'native')
+  assert.ok(registrations.every(({ options }) => options.children === undefined))
+  assert.doesNotMatch(code, /name:\s*["']root["']/)
+  assert.doesNotMatch(code, /sidebar\.settings|conversation\.input\.model/)
 })
 
 test('the repository does not vendor DeepSeek Harness source', async () => {

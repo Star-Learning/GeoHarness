@@ -100,7 +100,9 @@ test('the production client renders live Agent workspace layers without embeddin
   assert.doesNotMatch(source, /setLayerOpacity\(current, layer\.id, Number\(event\.currentTarget\.value\)\)/)
   assert.match(source, /Agent workspace/)
   assert.match(source, /data-step-status/)
-  assert.match(source, /name: 'root'/)
+  assert.match(source, /name: 'conversation\.session'/)
+  assert.match(source, /name: 'sidebar\.workspaces'/)
+  assert.doesNotMatch(source, /name: 'root'/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /name: 'conversation\.view'/)
   assert.doesNotMatch(output, /__GEOHARNESS_SCENARIOS__/)
@@ -110,7 +112,8 @@ test('the production client renders live Agent workspace layers without embeddin
     '05-parameter-revision', '06-multi-constraint-selection',
     '07-official-nyc-building-inspection',
   ]) assert.doesNotMatch(output, new RegExp(id))
-  assert.match(source, /connection\.api\.sessions\.prompt/)
+  assert.match(source, /connection\.api\.sessions\.history/)
+  assert.doesNotMatch(source, /connection\.api\.sessions\.(prompt|models|selectModel)/)
   assert.match(source, /agent\/workspace/)
   assert.doesNotMatch(source, /Examples|goal\/start|scenario\/progress/)
 })

@@ -283,10 +283,11 @@ test('the conversational RPC parses bounded distance revisions and rejects out-o
   assert.equal(wrongScenario.ok, false)
 
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
-  assert.match(client, /sessions\.prompt/)
   assert.match(client, /sessions\.history/)
-  assert.match(client, /sessions\.models/)
+  assert.doesNotMatch(client, /sessions\.(prompt|models|selectModel)/)
   assert.match(client, /agent\/workspace/)
+  assert.match(client, /conversation\.session/)
+  assert.match(client, /sidebar\.workspaces/)
   assert.match(client, /priority: -100/)
   assert.doesNotMatch(client, /goal\/start|scenario\/progress|scenario\/revise\/start/)
   assert.doesNotMatch(client, /revisionPrompt|goal_resolution|rerun.*reused/)

@@ -6,6 +6,8 @@ window.__ModuleLoader__.load({
       './agent-session': (module, exports, require) => {
         "use strict";
         Object.defineProperty(exports, "__esModule", { value: true });
+        exports.latestHumanGoal = latestHumanGoal;
+        exports.humanGoalCount = humanGoalCount;
         exports.projectAgentHistory = projectAgentHistory;
         exports.historyMaxSeq = historyMaxSeq;
         function recordValue(value) {
@@ -36,6 +38,37 @@ window.__ModuleLoader__.load({
                 }
             }
             return lines.join('\n').trim();
+        }
+        /** Return the newest real user-authored request from a native Harness history window. */
+        function latestHumanGoal(entries) {
+            let latest = null;
+            for (const raw of entries) {
+                const event = asEvent(raw);
+                if (event === null || event.type !== 'user/message' || typeof event.seq !== 'number')
+                    continue;
+                const data = recordValue(event.data) ? event.data : {};
+                const source = recordValue(data.source) ? data.source : {};
+                if (source.kind !== 'user')
+                    continue;
+                const text = contentText(data.content);
+                if (text !== '' && (latest === null || event.seq > latest.seq))
+                    latest = { seq: event.seq, text };
+            }
+            return latest;
+        }
+        /** Count real user turns without including Harness/plugin context injections. */
+        function humanGoalCount(entries) {
+            let count = 0;
+            for (const raw of entries) {
+                const event = asEvent(raw);
+                if (event === null || event.type !== 'user/message')
+                    continue;
+                const data = recordValue(event.data) ? event.data : {};
+                const source = recordValue(data.source) ? data.source : {};
+                if (source.kind === 'user' && contentText(data.content) !== '')
+                    count += 1;
+            }
+            return count;
         }
         function parseArguments(value) {
             if (recordValue(value))
@@ -383,7 +416,7 @@ window.__ModuleLoader__.load({
     };
     const module = { exports: {} };
     const exports = module.exports;
-    const __GE0HARNESS_CSS__ = ".gh-shell,\n.gh-shell * { box-sizing: border-box; }\n\n.gh-shell button,\n.gh-shell select,\n.gh-shell textarea { font: inherit; }\n\n.gh-shell {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-panel: var(--dsw-specific-menu); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-surface: var(--dsw-alias-bg-layer-1, var(--gh-bg)); --gh-raised: var(--dsw-alias-bg-layer-2, var(--gh-panel));\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-line-strong: var(--dsw-alias-border-l3); --gh-ink: var(--dsw-alias-label-primary);\n  --gh-muted: var(--dsw-alias-label-tertiary); --gh-accent: var(--dsw-alias-state-business-primary);\n  --gh-success: var(--dsw-alias-state-success-primary); --gh-error: var(--dsw-alias-state-error-primary);\n  width: 100%; min-width: 0; min-height: 0; height: 100dvh; display: grid; grid-template-rows: 64px minmax(0, 1fr) auto;\n  overflow: hidden; background: var(--gh-bg); color: var(--gh-ink);\n  font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; font-size: 14px;\n}\n\n.gh-topbar {\n  position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px;\n  border-bottom: 1px solid color-mix(in srgb, var(--gh-line) 78%, transparent); background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 45%, transparent);\n}\n.gh-brand, .gh-launcher, .gh-status { display: flex; align-items: center; }\n.gh-brand { gap: 11px; }\n.gh-brand > span:last-child { display: grid; }\n.gh-brand strong { font-size: 16px; font-weight: 650; line-height: 21px; letter-spacing: -.1px; }\n.gh-brand small { color: var(--gh-muted); font-size: 12px; line-height: 17px; }\n.gh-brand-mark {\n  width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 20%, var(--gh-line)); border-radius: 9px;\n  background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-raised)); color: var(--gh-accent); box-shadow: var(--dsw-shadow-lv1); font-size: 18px; line-height: 1;\n}\n.gh-brand-mark--small { width: 18px; height: 18px; border-radius: 4px; font-size: 13px; }\n.gh-launcher { gap: 8px; }\n.gh-launcher > label { color: var(--gh-muted); font-size: 12px; }\n.gh-launcher select {\n  min-width: 250px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--gh-line);\n  border-radius: 6px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px;\n}\n.gh-launcher select:focus { border-color: var(--gh-accent); }\n.gh-status { gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid var(--gh-line); border-radius: 999px; background: var(--gh-raised); color: var(--gh-muted); box-shadow: var(--dsw-shadow-lv1); font-size: 12px; }\n.gh-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--gh-success); }\n\n.gh-workspace { min-height: 0; display: grid; grid-template-columns: 236px minmax(340px, 1fr) 304px; gap: 12px; padding: 12px 14px 0; }\n.gh-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv1); }\n.gh-panel-heading { min-height: 62px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-panel-heading > span:first-child { display: grid; gap: 1px; }\n.gh-panel-heading b { font-size: 14px; font-weight: 600; }\n.gh-panel-heading small { color: var(--gh-muted); font-size: 11px; }\n.gh-panel-count { min-width: 24px; height: 24px; display: grid !important; place-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-surface); color: var(--gh-muted); font: 600 11px/1 var(--dsw-font-mono), monospace; }\n.gh-icon-button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; color: var(--gh-accent); cursor: pointer; }\n.gh-icon-button:hover { background: var(--gh-fill-hover); }\n.gh-icon-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }\n.gh-layer-section-label { padding: 14px 13px 7px; color: var(--gh-muted); font-size: 10px; font-weight: 600; letter-spacing: .45px; text-transform: uppercase; }\n.gh-layer-list { min-height: 0; max-height: 36%; overflow: auto; padding: 3px 8px 10px; display: grid; align-content: start; gap: 5px; }\n.gh-output-list { max-height: none; flex: 1 1 auto; }\n.gh-layer-row { min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; }\n.gh-layer-row:hover { background: var(--gh-fill-hover); }\n.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); }\n.gh-layer-toggle { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-toggle span { width: 10px; height: 10px; border-radius: 2px; opacity: .25; }\n.gh-layer-toggle.is-visible span { opacity: 1; }\n.gh-layer-meta { min-width: 0; display: grid; gap: 2px; }\n.gh-layer-meta strong { overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; white-space: nowrap; }\n.gh-output-check { margin-left: 5px; color: var(--gh-success); font-size: 10px; font-style: normal; }\n.gh-layer-meta small { overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-layer-meta input[type=\"range\"] { width: 100%; height: 10px; margin: 4px 0 0; accent-color: var(--gh-accent); cursor: pointer; }\n.gh-layer-error, .gh-run-error { margin: 7px 10px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); font-size: 11px; line-height: 1.4; }\n.gh-layer-footer { padding: 9px 12px; display: flex; justify-content: space-between; border-top: 1px solid var(--gh-line); color: var(--gh-muted); font-size: 10px; }\n.gh-settings-dock { flex: none; margin: 0 8px 8px; padding: 9px 8px 3px; border: 1px solid var(--gh-line); border-radius: 11px; background: var(--gh-raised); box-shadow: inset 0 1px 0 color-mix(in srgb, white 16%, transparent); }\n.gh-settings-copy { display: grid; gap: 2px; padding: 0 8px 3px; }\n.gh-settings-copy small { color: var(--gh-muted); font-size: 10px; }\n.gh-settings-trigger { width: 100%; min-height: 43px; display: grid; grid-template-columns: 28px minmax(0, 1fr) 14px; gap: 8px; align-items: center; padding: 6px 8px; border: 0; border-radius: 9px; background: transparent; color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-settings-trigger:hover { background: var(--gh-fill-hover); }\n.gh-settings-trigger > span:nth-child(2) { min-width: 0; display: grid; gap: 1px; }\n.gh-settings-trigger b { font-size: 12px; font-weight: 550; }\n.gh-settings-trigger small { overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-settings-trigger > span:last-child { color: var(--gh-muted); font-size: 18px; }\n.gh-settings-icon { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-surface); color: var(--gh-muted); font-size: 14px; }\n.gh-output-row { min-width: 0; padding: 7px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; align-items: center; color: var(--gh-muted); border-radius: 7px; }\n.gh-output-row > i { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; font-size: 10px; font-style: normal; }\n.gh-output-row > span { min-width: 0; display: grid; gap: 2px; }\n.gh-output-row strong, .gh-output-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-output-row strong { color: var(--gh-ink); font-size: 11px; font-weight: 500; }\n.gh-output-row small, .gh-output-empty { color: var(--gh-muted); font-size: 10px; }\n.gh-output-row.is-running > i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-output-row.is-success > i { border-color: var(--gh-success); color: var(--gh-success); }\n.gh-output-row.is-failed > i { border-color: var(--gh-error); color: var(--gh-error); }\n.gh-output-empty { margin: 5px 7px; line-height: 1.5; }\n\n.gh-map {\n  position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 16px; background-color: var(--gh-fill); box-shadow: var(--dsw-shadow-lv1);\n  background-image: linear-gradient(color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px);\n  background-size: 44px 44px;\n}\n.gh-map-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; cursor: grab; touch-action: none; overscroll-behavior: contain; }\n.gh-map-canvas:active { cursor: grabbing; }\n.gh-map-feature { cursor: pointer; transition: filter .12s ease, opacity .12s ease; }\n.gh-map-feature:hover { filter: brightness(.88) saturate(1.15); }\n.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: drop-shadow(0 0 5px var(--gh-accent)); }\n.gh-map-toolbar { position: absolute; z-index: 2; top: 14px; left: 14px; display: grid; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; box-shadow: var(--dsw-shadow-lv2); }\n.gh-map-toolbar button { width: 30px; height: 29px; border: 0; border-bottom: 1px solid var(--gh-line); background: var(--gh-bg); color: var(--gh-ink); cursor: pointer; }\n.gh-map-toolbar button:last-child { border-bottom: 0; }\n.gh-map-toolbar button:hover { background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-map-label { position: absolute; z-index: 2; top: 12px; right: 14px; display: grid; justify-items: end; color: var(--gh-muted); }\n.gh-map-label span { font: 600 10px/1.4 var(--dsw-font-mono), monospace; letter-spacing: 1px; }\n.gh-map-label small, .gh-map-scale, .gh-map-attribution { color: var(--gh-muted); font-size: 10px; }\n.gh-map-empty-card { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(330px, calc(100% - 56px)); padding: 23px; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); transform: translate(-50%, -50%); }\n.gh-map-empty-card strong { display: block; margin-top: 4px; font-size: 16px; }\n.gh-map-empty-card p { margin: 6px 0 0; color: var(--gh-muted); font-size: 12px; line-height: 1.5; }\n.gh-eyebrow { color: var(--gh-accent); font-size: 10px; font-weight: 600; letter-spacing: .5px; }\n.gh-map-scale { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: flex; align-items: end; gap: 6px; font-family: var(--dsw-font-mono), monospace; }\n.gh-map-scale span { width: 52px; height: 6px; border: solid var(--gh-muted); border-width: 0 1px 1px; }\n.gh-map-attribution { position: absolute; z-index: 2; right: 12px; bottom: 9px; }\n.gh-feature-inspector { position: absolute; z-index: 3; right: 12px; bottom: 25px; width: min(240px, calc(100% - 70px)); max-height: 250px; overflow: auto; padding: 12px; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-panel); box-shadow: var(--dsw-shadow-lv2); }\n.gh-feature-inspector > button { position: absolute; top: 5px; right: 6px; width: 24px; height: 24px; border: 0; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-feature-inspector > strong { display: block; margin-top: 4px; padding-right: 18px; font-size: 14px; }\n.gh-feature-inspector > small { display: block; margin-top: 2px; color: var(--gh-muted); font-size: 10px; }\n.gh-feature-inspector dl { margin: 9px 0 0; display: grid; grid-template-columns: minmax(65px, .8fr) minmax(0, 1.2fr); gap: 5px 7px; font-size: 10px; }\n.gh-feature-inspector dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; }\n.gh-feature-inspector dd { margin: 0; overflow-wrap: anywhere; font-family: var(--dsw-font-mono), monospace; }\n\n.gh-agent-state { padding: 3px 7px; border-radius: 10px; background: var(--gh-fill); color: var(--gh-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; }\n.gh-agent-state.is-running { color: var(--gh-accent); }\n.gh-agent-state.is-success { color: var(--gh-success); }\n.gh-agent-state.is-failed { color: var(--gh-error); }\n.gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }\n.gh-agent-block { padding: 12px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 35%, transparent); }\n.gh-agent-block:first-child { padding-top: 12px; }\n.gh-agent-block p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }\n.gh-plan-list { margin: 10px 0 0; padding: 0; display: grid; gap: 9px; list-style: none; }\n.gh-plan-list li { position: relative; color: var(--gh-muted); border-radius: 6px; }\n.gh-step-button { width: 100%; padding: 3px; display: flex; gap: 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-step-button:hover, .gh-plan-list li.is-selected .gh-step-button { background: var(--gh-fill-hover); }\n.gh-plan-list i { width: 21px; height: 21px; display: grid; place-items: center; flex: none; border: 1px solid var(--gh-line); border-radius: 50%; background: var(--gh-bg); font-size: 10px; font-style: normal; }\n.gh-plan-list span { display: grid; gap: 1px; }\n.gh-plan-list b { color: var(--gh-ink); font-size: 12px; font-weight: 500; }\n.gh-plan-list small { font-size: 10px; }\n.gh-plan-list .is-running i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-plan-list .is-success i { border-color: var(--gh-success); color: var(--gh-success); font-weight: 600; }\n.gh-plan-list .is-failed i { border-color: var(--gh-error); color: var(--gh-error); font-weight: 600; }\n.gh-current-step { display: grid; gap: 8px; background: var(--gh-raised); }\n.gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }\n.gh-current-step > div span { color: var(--gh-muted); }\n.gh-current-step .is-teal { color: var(--gh-success); }\n.gh-agent-result { display: grid; gap: 8px; }\n.gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }\n.gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }\n.gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-agent-result dd { margin: 0; color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-result-trace { display: grid; gap: 5px; }\n.gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }\n.gh-result-trace i { color: var(--gh-success); font-style: normal; }\n.gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }\n\n.gh-composer { margin: 12px 14px 14px; min-height: 106px; display: grid; padding: 9px 10px 8px; border: 1px solid var(--gh-line-strong); border-radius: 16px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); }\n.gh-composer-input { min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 3px 4px 0; }\n.gh-composer-input .gh-brand-mark { margin-top: 1px; }\n.gh-composer textarea { min-width: 0; min-height: 48px; flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--gh-ink); font-size: 14px; line-height: 1.5; }\n.gh-composer textarea::placeholder { color: var(--gh-muted); }\n.gh-composer-toolbar { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 2px 0 32px; }\n.gh-composer-status { min-width: 0; overflow: hidden; color: var(--gh-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-composer-status.is-error { color: var(--gh-error); }\n.gh-composer-trailing { min-width: 0; display: flex; align-items: center; gap: 10px; }\n.gh-model-select { max-width: 260px; height: 30px; padding: 0 22px 0 9px; border: 0; border-radius: 8px; outline: none; appearance: none; background-color: transparent; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 5px center; color: var(--gh-muted); cursor: pointer; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-model-select:hover:not(:disabled) { background-color: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-model-select:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 24%, transparent); }\n.gh-model-select:disabled { cursor: default; opacity: .55; }\n.gh-composer button { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: var(--dsw-alias-button-info-fill); color: #fff; cursor: pointer; box-shadow: 0 1px 1px color-mix(in srgb, black 10%, transparent); font-size: 13px; font-weight: 600; }\n.gh-composer button:hover:not(:disabled) { background: var(--dsw-alias-button-info-hover); }\n.gh-composer button:disabled { cursor: default; opacity: .4; }\n\n.gh-settings-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; }\n.gh-settings-mask { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); cursor: default; }\n.gh-settings-dialog { position: relative; z-index: 1; width: min(680px, calc(100vw - 48px)); max-height: min(760px, calc(100vh - 48px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 20px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv3); }\n.gh-settings-dialog > header { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 24px 24px 18px; border-bottom: 1px solid var(--gh-line); }\n.gh-settings-dialog h2 { margin: 4px 0 0; font-size: 20px; line-height: 1.3; letter-spacing: -.25px; }\n.gh-settings-dialog header p { max-width: 520px; margin: 7px 0 0; color: var(--gh-muted); font-size: 13px; line-height: 1.5; }\n.gh-settings-close { width: 30px; height: 30px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--gh-muted); cursor: pointer; font-size: 20px; line-height: 1; }\n.gh-settings-close:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-settings-body { min-height: 180px; overflow: auto; padding: 18px 24px 24px; display: grid; align-content: start; gap: 11px; background: color-mix(in srgb, var(--gh-fill) 34%, var(--gh-raised)); }\n.gh-provider-card { padding: 14px; border: 1px solid var(--gh-line); border-radius: 12px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 30%, transparent); }\n.gh-provider-heading { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: center; }\n.gh-provider-heading > span { width: 8px; height: 8px; border-radius: 50%; background: var(--gh-muted); }\n.gh-provider-heading > span.is-configured { background: var(--gh-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 11%, transparent); }\n.gh-provider-heading > div { min-width: 0; display: grid; gap: 2px; }\n.gh-provider-heading b { font-size: 13px; font-weight: 600; }\n.gh-provider-heading small { overflow: hidden; color: var(--gh-muted); font: 10px/1.4 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-provider-heading em { padding: 3px 7px; border-radius: 999px; background: var(--gh-fill); color: var(--gh-muted); font-size: 10px; font-style: normal; }\n.gh-provider-editor { margin-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }\n.gh-provider-editor input { min-width: 0; height: 38px; padding: 0 11px; border: 1px solid var(--gh-line-strong); border-radius: 9px; outline: 0; background: var(--gh-raised); color: var(--gh-ink); font: 12px/1 var(--dsw-font-mono), monospace; }\n.gh-provider-editor input:focus { border-color: var(--gh-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-accent) 10%, transparent); }\n.gh-provider-editor input::placeholder { color: var(--gh-muted); font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; }\n.gh-provider-editor button, .gh-settings-dialog > footer button { height: 38px; padding: 0 13px; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-surface); color: var(--gh-ink); cursor: pointer; font-size: 12px; font-weight: 550; }\n.gh-provider-editor button:hover:not(:disabled), .gh-settings-dialog > footer button:hover { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-provider-editor button:disabled { cursor: default; opacity: .45; }\n.gh-settings-placeholder { margin: 48px 0; color: var(--gh-muted); font-size: 12px; text-align: center; }\n.gh-settings-error { margin: 0; padding: 10px 12px; border-radius: 9px; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); font-size: 11px; line-height: 1.45; }\n.gh-settings-dialog > footer { flex: none; min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 24px; border-top: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-settings-dialog > footer span { color: var(--gh-muted); font-size: 11px; }\n.gh-settings-dialog > footer button { height: 32px; background: transparent; }\n\n@media (max-width: 1000px) {\n  .gh-workspace { grid-template-columns: 216px minmax(300px, 1fr); }\n  .gh-agent { display: none; }\n  .gh-launcher .gh-status { display: none; }\n}\n@media (max-width: 720px) {\n  .gh-shell { grid-template-rows: auto minmax(0, 1fr) auto; }\n  .gh-topbar { padding: 9px 10px; align-items: stretch; flex-direction: column; gap: 7px; }\n  .gh-launcher select { min-width: 0; flex: 1; }\n  .gh-workspace { grid-template-columns: 1fr; }\n  .gh-layers { display: none; }\n  .gh-composer { margin: 8px; }\n  .gh-composer-toolbar { padding-left: 4px; }\n  .gh-composer-status { display: none; }\n  .gh-model-select { max-width: min(62vw, 240px); }\n  .gh-settings-overlay { padding: 12px; }\n  .gh-settings-dialog { max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: 16px; }\n  .gh-provider-editor { grid-template-columns: 1fr; }\n}\n";
+    const __GE0HARNESS_CSS__ = ".gh-shell,\n.gh-shell * { box-sizing: border-box; }\n\n.gh-shell button,\n.gh-shell select,\n.gh-shell textarea { font: inherit; }\n\n.gh-shell {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-panel: var(--dsw-specific-menu); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-surface: var(--dsw-alias-bg-layer-1, var(--gh-bg)); --gh-raised: var(--dsw-alias-bg-layer-2, var(--gh-panel));\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-line-strong: var(--dsw-alias-border-l3); --gh-ink: var(--dsw-alias-label-primary);\n  --gh-muted: var(--dsw-alias-label-tertiary); --gh-accent: var(--dsw-alias-state-business-primary);\n  --gh-success: var(--dsw-alias-state-success-primary); --gh-error: var(--dsw-alias-state-error-primary);\n  width: 100%; min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 56px minmax(0, 1fr);\n  overflow: hidden; background: var(--gh-bg); color: var(--gh-ink);\n  font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; font-size: 14px;\n}\n\n.gh-topbar {\n  position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px;\n  border-bottom: 1px solid color-mix(in srgb, var(--gh-line) 78%, transparent); background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 45%, transparent);\n}\n.gh-brand, .gh-launcher, .gh-status { display: flex; align-items: center; }\n.gh-brand { gap: 11px; }\n.gh-brand > span:last-child { display: grid; }\n.gh-brand strong { font-size: 16px; font-weight: 650; line-height: 21px; letter-spacing: -.1px; }\n.gh-brand small { color: var(--gh-muted); font-size: 12px; line-height: 17px; }\n.gh-brand-mark {\n  width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 20%, var(--gh-line)); border-radius: 9px;\n  background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-raised)); color: var(--gh-accent); box-shadow: var(--dsw-shadow-lv1); font-size: 18px; line-height: 1;\n}\n.gh-brand-mark--small { width: 18px; height: 18px; border-radius: 4px; font-size: 13px; }\n.gh-launcher { gap: 8px; }\n.gh-launcher > label { color: var(--gh-muted); font-size: 12px; }\n.gh-launcher select {\n  min-width: 250px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--gh-line);\n  border-radius: 6px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px;\n}\n.gh-launcher select:focus { border-color: var(--gh-accent); }\n.gh-status { gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid var(--gh-line); border-radius: 999px; background: var(--gh-raised); color: var(--gh-muted); box-shadow: var(--dsw-shadow-lv1); font-size: 12px; }\n.gh-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--gh-success); }\n\n.gh-workspace { --gh-agent-column-width: 390px; min-height: 0; display: grid; grid-template-columns: minmax(400px, 1fr) var(--gh-agent-column-width); gap: 12px; padding: 12px 14px 14px; }\n.gh-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv1); }\n.gh-panel-heading { min-height: 62px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-panel-heading > span:first-child { display: grid; gap: 1px; }\n.gh-panel-heading b { font-size: 14px; font-weight: 600; }\n.gh-panel-heading small { color: var(--gh-muted); font-size: 11px; }\n.gh-panel-count { min-width: 24px; height: 24px; display: grid !important; place-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-surface); color: var(--gh-muted); font: 600 11px/1 var(--dsw-font-mono), monospace; }\n.gh-icon-button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; color: var(--gh-accent); cursor: pointer; }\n.gh-icon-button:hover { background: var(--gh-fill-hover); }\n.gh-icon-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }\n.gh-layer-section-label { padding: 14px 13px 7px; color: var(--gh-muted); font-size: 10px; font-weight: 600; letter-spacing: .45px; text-transform: uppercase; }\n.gh-layer-list { min-height: 0; max-height: 36%; overflow: auto; padding: 3px 8px 10px; display: grid; align-content: start; gap: 5px; }\n.gh-output-list { max-height: none; flex: 1 1 auto; }\n.gh-layer-row { min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; }\n.gh-layer-row:hover { background: var(--gh-fill-hover); }\n.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); }\n.gh-layer-toggle { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-toggle span { width: 10px; height: 10px; border-radius: 2px; opacity: .25; }\n.gh-layer-toggle.is-visible span { opacity: 1; }\n.gh-layer-meta { min-width: 0; display: grid; gap: 2px; }\n.gh-layer-meta strong { overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; white-space: nowrap; }\n.gh-output-check { margin-left: 5px; color: var(--gh-success); font-size: 10px; font-style: normal; }\n.gh-layer-meta small { overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-layer-meta input[type=\"range\"] { width: 100%; height: 10px; margin: 4px 0 0; accent-color: var(--gh-accent); cursor: pointer; }\n.gh-layer-error, .gh-run-error { margin: 7px 10px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); font-size: 11px; line-height: 1.4; }\n.gh-layer-footer { padding: 9px 12px; display: flex; justify-content: space-between; border-top: 1px solid var(--gh-line); color: var(--gh-muted); font-size: 10px; }\n.gh-sidebar-layers {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-surface: var(--dsw-specific-sidebar-fill); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-ink: var(--dsw-alias-label-primary); --gh-muted: var(--dsw-alias-label-tertiary);\n  --gh-accent: var(--dsw-alias-state-business-primary); --gh-success: var(--dsw-alias-state-success-primary);\n  min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary);\n}\n.gh-sidebar-layer-heading { min-height: 48px; padding: 8px 12px 8px 8px; display: flex; align-items: center; justify-content: space-between; }\n.gh-sidebar-layer-heading > span:first-child { display: grid; gap: 1px; }\n.gh-sidebar-layer-heading b { font-size: 14px; font-weight: 600; }\n.gh-sidebar-layer-heading small { color: var(--dsw-alias-label-tertiary); font-size: 11px; }\n.gh-layer-rail { width: 36px; display: grid; place-items: center; gap: 1px; padding-top: 8px; color: var(--dsw-alias-label-primary); }\n.gh-layer-rail > span { font-size: 19px; }\n.gh-layer-rail > small { color: var(--dsw-alias-label-tertiary); font-size: 9px; }\n.gh-sidebar-brand-mark { display: inline-grid; place-items: center; border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, var(--dsw-alias-border-l2)); border-radius: 7px; background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--dsw-alias-bg-base)); color: var(--dsw-alias-state-business-primary); font-size: 15px; line-height: 1; }\n.gh-sidebar-brand-name { color: var(--dsw-alias-label-primary); font-size: 17px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }\n.gh-output-row { min-width: 0; padding: 7px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; align-items: center; color: var(--gh-muted); border-radius: 7px; }\n.gh-output-row > i { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; font-size: 10px; font-style: normal; }\n.gh-output-row > span { min-width: 0; display: grid; gap: 2px; }\n.gh-output-row strong, .gh-output-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-output-row strong { color: var(--gh-ink); font-size: 11px; font-weight: 500; }\n.gh-output-row small, .gh-output-empty { color: var(--gh-muted); font-size: 10px; }\n.gh-output-row.is-running > i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-output-row.is-success > i { border-color: var(--gh-success); color: var(--gh-success); }\n.gh-output-row.is-failed > i { border-color: var(--gh-error); color: var(--gh-error); }\n.gh-output-empty { margin: 5px 7px; line-height: 1.5; }\n\n.gh-map {\n  position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 16px; background-color: var(--gh-fill); box-shadow: var(--dsw-shadow-lv1);\n  background-image: linear-gradient(color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px);\n  background-size: 44px 44px;\n}\n.gh-map-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; cursor: grab; touch-action: none; overscroll-behavior: contain; }\n.gh-map-canvas:active { cursor: grabbing; }\n.gh-map-feature { cursor: pointer; transition: filter .12s ease, opacity .12s ease; }\n.gh-map-feature:hover { filter: brightness(.88) saturate(1.15); }\n.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: drop-shadow(0 0 5px var(--gh-accent)); }\n.gh-map-toolbar { position: absolute; z-index: 2; top: 14px; left: 14px; display: grid; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; box-shadow: var(--dsw-shadow-lv2); }\n.gh-map-toolbar button { width: 30px; height: 29px; border: 0; border-bottom: 1px solid var(--gh-line); background: var(--gh-bg); color: var(--gh-ink); cursor: pointer; }\n.gh-map-toolbar button:last-child { border-bottom: 0; }\n.gh-map-toolbar button:hover { background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-map-label { position: absolute; z-index: 2; top: 12px; right: 14px; display: grid; justify-items: end; color: var(--gh-muted); }\n.gh-map-label span { font: 600 10px/1.4 var(--dsw-font-mono), monospace; letter-spacing: 1px; }\n.gh-map-label small, .gh-map-scale, .gh-map-attribution { color: var(--gh-muted); font-size: 10px; }\n.gh-map-empty-card { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(330px, calc(100% - 56px)); padding: 23px; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); transform: translate(-50%, -50%); }\n.gh-map-empty-card strong { display: block; margin-top: 4px; font-size: 16px; }\n.gh-map-empty-card p { margin: 6px 0 0; color: var(--gh-muted); font-size: 12px; line-height: 1.5; }\n.gh-eyebrow { color: var(--gh-accent); font-size: 10px; font-weight: 600; letter-spacing: .5px; }\n.gh-map-scale { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: flex; align-items: end; gap: 6px; font-family: var(--dsw-font-mono), monospace; }\n.gh-map-scale span { width: 52px; height: 6px; border: solid var(--gh-muted); border-width: 0 1px 1px; }\n.gh-map-attribution { position: absolute; z-index: 2; right: 12px; bottom: 9px; }\n.gh-feature-inspector { position: absolute; z-index: 3; right: 12px; bottom: 25px; width: min(240px, calc(100% - 70px)); max-height: 250px; overflow: auto; padding: 12px; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-panel); box-shadow: var(--dsw-shadow-lv2); }\n.gh-feature-inspector > button { position: absolute; top: 5px; right: 6px; width: 24px; height: 24px; border: 0; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-feature-inspector > strong { display: block; margin-top: 4px; padding-right: 18px; font-size: 14px; }\n.gh-feature-inspector > small { display: block; margin-top: 2px; color: var(--gh-muted); font-size: 10px; }\n.gh-feature-inspector dl { margin: 9px 0 0; display: grid; grid-template-columns: minmax(65px, .8fr) minmax(0, 1.2fr); gap: 5px 7px; font-size: 10px; }\n.gh-feature-inspector dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; }\n.gh-feature-inspector dd { margin: 0; overflow-wrap: anywhere; font-family: var(--dsw-font-mono), monospace; }\n\n.gh-agent-state { padding: 3px 7px; border-radius: 10px; background: var(--gh-fill); color: var(--gh-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; }\n.gh-agent-state.is-running { color: var(--gh-accent); }\n.gh-agent-state.is-success { color: var(--gh-success); }\n.gh-agent-state.is-failed { color: var(--gh-error); }\n.gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px 11px 162px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }\n.gh-agent-block { padding: 12px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 35%, transparent); }\n.gh-agent-block:first-child { padding-top: 12px; }\n.gh-agent-block p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }\n.gh-plan-list { margin: 10px 0 0; padding: 0; display: grid; gap: 9px; list-style: none; }\n.gh-plan-list li { position: relative; color: var(--gh-muted); border-radius: 6px; }\n.gh-step-button { width: 100%; padding: 3px; display: flex; gap: 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-step-button:hover, .gh-plan-list li.is-selected .gh-step-button { background: var(--gh-fill-hover); }\n.gh-plan-list i { width: 21px; height: 21px; display: grid; place-items: center; flex: none; border: 1px solid var(--gh-line); border-radius: 50%; background: var(--gh-bg); font-size: 10px; font-style: normal; }\n.gh-plan-list span { display: grid; gap: 1px; }\n.gh-plan-list b { color: var(--gh-ink); font-size: 12px; font-weight: 500; }\n.gh-plan-list small { font-size: 10px; }\n.gh-plan-list .is-running i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-plan-list .is-success i { border-color: var(--gh-success); color: var(--gh-success); font-weight: 600; }\n.gh-plan-list .is-failed i { border-color: var(--gh-error); color: var(--gh-error); font-weight: 600; }\n.gh-current-step { display: grid; gap: 8px; background: var(--gh-raised); }\n.gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }\n.gh-current-step > div span { color: var(--gh-muted); }\n.gh-current-step .is-teal { color: var(--gh-success); }\n.gh-agent-result { display: grid; gap: 8px; }\n.gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }\n.gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }\n.gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-agent-result dd { margin: 0; color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-result-trace { display: grid; gap: 5px; }\n.gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }\n.gh-result-trace i { color: var(--gh-success); font-style: normal; }\n.gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }\n\n\n/* The native Harness ConversationRoot still owns the composer and its model\n   selector. GeoHarness only positions that existing seat inside Agent workspace. */\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) {\n  --gh-agent-column-width: 390px;\n  position: relative;\n  overflow: hidden;\n  scrollbar-gutter: auto;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-slot=\"conversation.session\"] {\n  min-height: 0;\n  height: 100%;\n  flex: 1 1 0;\n  overflow: hidden;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] {\n  position: absolute;\n  right: 24px;\n  bottom: 23px;\n  left: auto;\n  z-index: 8;\n  width: calc(var(--gh-agent-column-width) - 20px);\n  --dsh-composer-card-max-width: 100%;\n  --dsh-composer-side-clearance: 0px;\n  background: transparent;\n}\n\n@media (max-width: 1000px) {\n  .gh-workspace { --gh-agent-column-width: 340px; grid-template-columns: minmax(340px, 1fr) var(--gh-agent-column-width); }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 340px; }\n  .gh-launcher .gh-status { display: none; }\n}\n@media (max-width: 720px) {\n  .gh-shell { grid-template-rows: auto minmax(0, 1fr); }\n  .gh-topbar { padding: 9px 10px; align-items: stretch; flex-direction: column; gap: 7px; }\n  .gh-launcher select { min-width: 0; flex: 1; }\n  .gh-workspace { --gh-agent-column-width: 330px; grid-template-columns: minmax(300px, 1fr) var(--gh-agent-column-width); padding-inline: 8px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 330px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] { right: 18px; width: calc(var(--gh-agent-column-width) - 18px); }\n}\n";
     "use strict";
     var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
         if (k2 === undefined) k2 = k;
@@ -419,10 +452,8 @@ window.__ModuleLoader__.load({
         };
     })();
     Object.defineProperty(exports, "__esModule", { value: true });
-    exports.projectAgentHistory = exports.historyMaxSeq = exports.stepStatus = exports.mergeVerificationLayers = exports.layerIdsForStep = exports.inject = void 0;
+    exports.projectAgentHistory = exports.latestHumanGoal = exports.humanGoalCount = exports.historyMaxSeq = exports.stepStatus = exports.mergeVerificationLayers = exports.layerIdsForStep = exports.inject = void 0;
     exports.apply = apply;
-    exports.credentialRef = credentialRef;
-    exports.settingAtPath = settingAtPath;
     const react_1 = require("react");
     const jsx_runtime_1 = require("react/jsx-runtime");
     const jsx_runtime_2 = require("react/jsx-runtime");
@@ -430,10 +461,6 @@ window.__ModuleLoader__.load({
     const layer_registry_1 = require("./layer-registry");
     const agent_session_1 = require("./agent-session");
     const PACKAGE_NAME = '@geoharness/harness-plugin';
-    const AGENT_SESSION_ID = 'geoharness-main';
-    function waitForNextProgress() {
-        return new Promise(resolve => { setTimeout(resolve, 280); });
-    }
     function installStyles() {
         if (typeof document === 'undefined')
             return;
@@ -444,8 +471,8 @@ window.__ModuleLoader__.load({
         style.textContent = __GE0HARNESS_CSS__;
         document.head.appendChild(style);
     }
-    function BrandMark({ small = false }) {
-        return ((0, jsx_runtime_1.jsx)("span", { className: small ? 'gh-brand-mark gh-brand-mark--small' : 'gh-brand-mark', "aria-hidden": "true", children: "\u2316" }));
+    function BrandMark() {
+        return (0, jsx_runtime_1.jsx)("span", { className: "gh-brand-mark", "aria-hidden": "true", children: "\u2316" });
     }
     function coordinateArrays(value, target) {
         if (!Array.isArray(value))
@@ -519,7 +546,7 @@ window.__ModuleLoader__.load({
             ?? properties.river_id ?? properties.district_id ?? feature.id;
         return label === undefined ? `Feature ${index + 1}` : String(label);
     }
-    function GeoMap({ layers, selected, highlightedLayerIds, officialData, onSelect, }) {
+    function GeoMap({ layers, selected, highlightedLayerIds, onSelect, }) {
         const [zoom, setZoom] = React.useState(1);
         const [pan, setPan] = React.useState({ x: 0, y: 0 });
         const drag = React.useRef(null);
@@ -543,11 +570,7 @@ window.__ModuleLoader__.load({
             const order = { districts: 0, rivers: 1, roads: 2, buildings: 3 };
             return (order[left.name] ?? 4) - (order[right.name] ?? 4);
         });
-        const fitBounds = () => {
-            setZoom(1);
-            setPan({ x: 0, y: 0 });
-        };
-        return ((0, jsx_runtime_1.jsxs)("section", { className: "gh-map", "aria-label": "Map workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-map-toolbar", "aria-label": "Map controls", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.min(5, value * 1.35)), "aria-label": "Zoom in", children: "+" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.max(0.7, value / 1.35)), "aria-label": "Zoom out", children: "\u2212" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: fitBounds, "aria-label": "Fit bounds", children: "\u2316" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-label", children: [(0, jsx_runtime_1.jsx)("span", { children: officialData ? 'NYC OPEN DATA' : 'AGENT WORKSPACE' }), (0, jsx_runtime_1.jsxs)("small", { children: [centerLatitude, "\u00B0 N \u00B7 ", Math.abs(Number(centerLongitude)).toFixed(4), "\u00B0 W"] })] }), (0, jsx_runtime_1.jsx)("svg", { className: "gh-map-canvas", viewBox: "0 0 1000 700", role: "img", "aria-label": "Interactive Agent workspace map", onPointerDown: event => {
+        return ((0, jsx_runtime_1.jsxs)("section", { className: "gh-map", "aria-label": "Map workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-map-toolbar", "aria-label": "Map controls", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.min(5, value * 1.35)), "aria-label": "Zoom in", children: "+" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.max(0.7, value / 1.35)), "aria-label": "Zoom out", children: "\u2212" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); }, "aria-label": "Fit bounds", children: "\u2316" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-label", children: [(0, jsx_runtime_1.jsx)("span", { children: layers.length > 0 ? 'NYC OPEN DATA' : 'AGENT WORKSPACE' }), (0, jsx_runtime_1.jsxs)("small", { children: [centerLatitude, "\u00B0 N \u00B7 ", Math.abs(Number(centerLongitude)).toFixed(4), "\u00B0 W"] })] }), (0, jsx_runtime_1.jsx)("svg", { className: "gh-map-canvas", viewBox: "0 0 1000 700", role: "img", "aria-label": "Interactive Agent workspace map", onPointerDown: event => {
                         drag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
                         event.currentTarget.setPointerCapture(event.pointerId);
                     }, onPointerMove: event => {
@@ -593,7 +616,7 @@ window.__ModuleLoader__.load({
                                         const [x, y] = project(point);
                                         return (0, react_1.createElement)("circle", { ...common, key: `${common.key}-${pointIndex}`, cx: x, cy: y, r: isSelected ? 7 : 5, fill: layer.style.color });
                                     })] }, common.key);
-                        })) }) }), layers.length === 0 && (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-empty-card", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "MAP WORKSPACE" }), (0, jsx_runtime_1.jsx)("strong", { children: "No registered layers" }), (0, jsx_runtime_1.jsx)("p", { children: "\u5728\u4E0B\u65B9\u63CF\u8FF0\u7A7A\u95F4\u76EE\u6807\u540E\uFF0CAgent \u4F1A\u53D1\u73B0\u771F\u5B9E\u6570\u636E\u3001\u9009\u62E9 Geo Tools\uFF0C\u5E76\u628A\u4EA7\u751F\u7684\u56FE\u5C42\u9010\u6B65\u52A0\u8F7D\u5230\u8FD9\u91CC\u3002" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-scale", children: [(0, jsx_runtime_1.jsx)("span", {}), " ", zoom.toFixed(1), "\u00D7"] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-attribution", children: [officialData ? 'Official NYC Open Data' : 'Agent workspace awaiting data', " \u00B7 OGC:CRS84"] }), selected !== null && (0, jsx_runtime_1.jsxs)("aside", { className: "gh-feature-inspector", "aria-label": "Feature inspection", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => onSelect(null), "aria-label": "Close feature inspection", children: "\u00D7" }), (0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "FEATURE INSPECTION" }), (0, jsx_runtime_1.jsx)("strong", { children: featureLabel(selected.feature, selected.featureIndex) }), (0, jsx_runtime_1.jsxs)("small", { children: [selected.layer.name, " \u00B7 ", selected.feature.geometry.type] }), (0, jsx_runtime_1.jsx)("dl", { children: Object.entries(selected.feature.properties ?? {}).slice(0, 8).map(([key, value]) => (0, jsx_runtime_1.jsxs)(React.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { children: key }), (0, jsx_runtime_1.jsx)("dd", { children: value === null ? 'null' : String(value) })] }, key)) })] })] }));
+                        })) }) }), layers.length === 0 && (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-empty-card", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "MAP WORKSPACE" }), (0, jsx_runtime_1.jsx)("strong", { children: "No registered layers" }), (0, jsx_runtime_1.jsx)("p", { children: "\u5728\u53F3\u4FA7\u539F\u751F Harness \u5BF9\u8BDD\u6846\u63CF\u8FF0\u7A7A\u95F4\u76EE\u6807\u540E\uFF0CAgent \u4F1A\u53D1\u73B0\u771F\u5B9E\u6570\u636E\u3001\u9009\u62E9 Geo Tools\uFF0C\u5E76\u628A\u4EA7\u751F\u7684\u56FE\u5C42\u9010\u6B65\u52A0\u8F7D\u5230\u8FD9\u91CC\u3002" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-scale", children: [(0, jsx_runtime_1.jsx)("span", {}), " ", zoom.toFixed(1), "\u00D7"] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-attribution", children: [layers.length > 0 ? 'Official NYC Open Data' : 'Agent workspace awaiting data', " \u00B7 OGC:CRS84"] }), selected !== null && (0, jsx_runtime_1.jsxs)("aside", { className: "gh-feature-inspector", "aria-label": "Feature inspection", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => onSelect(null), "aria-label": "Close feature inspection", children: "\u00D7" }), (0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "FEATURE INSPECTION" }), (0, jsx_runtime_1.jsx)("strong", { children: featureLabel(selected.feature, selected.featureIndex) }), (0, jsx_runtime_1.jsxs)("small", { children: [selected.layer.name, " \u00B7 ", selected.feature.geometry.type] }), (0, jsx_runtime_1.jsx)("dl", { children: Object.entries(selected.feature.properties ?? {}).slice(0, 8).map(([key, value]) => (0, jsx_runtime_1.jsxs)(React.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { children: key }), (0, jsx_runtime_1.jsx)("dd", { children: value === null ? 'null' : String(value) })] }, key)) })] })] }));
     }
     function resultValue(response, operation) {
         if (!response.result.ok)
@@ -606,27 +629,82 @@ window.__ModuleLoader__.load({
             return 'Agent-selected parameters';
         return pairs.map(([key, value]) => `${key}=${typeof value === 'string' || typeof value === 'number' ? value : '…'}`).join(' · ');
     }
-    function settingAtPath(value, path) {
-        let current = value;
-        for (const segment of path) {
-            if (current === null || typeof current !== 'object' || Array.isArray(current))
-                return undefined;
-            current = current[segment];
-        }
-        return current;
+    const layerListeners = new Set();
+    const layersBySession = new Map();
+    let layerSnapshot = {
+        sessionId: null,
+        layers: [],
+        highlightedLayerIds: new Set(),
+    };
+    function publishLayerSnapshot(next) {
+        layerSnapshot = next;
+        for (const listener of layerListeners)
+            listener();
     }
-    function credentialRef(provider, profile) {
-        if (profile !== null && typeof profile === 'object' && !Array.isArray(profile)) {
-            const configured = profile.apiKeyEnv;
-            if (typeof configured === 'string' && configured.trim() !== '')
-                return configured;
-        }
-        return `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`;
+    const layerWorkspace = {
+        subscribe(listener) {
+            layerListeners.add(listener);
+            return () => { layerListeners.delete(listener); };
+        },
+        getSnapshot() { return layerSnapshot; },
+        activate(sessionId) {
+            if (layerSnapshot.sessionId === sessionId)
+                return;
+            publishLayerSnapshot({
+                sessionId,
+                layers: layersBySession.get(sessionId) ?? [],
+                highlightedLayerIds: new Set(),
+            });
+        },
+        project(sessionId, projection) {
+            const layers = (0, layer_registry_1.registerWorkspaceProjection)(layersBySession.get(sessionId) ?? [], projection);
+            layersBySession.set(sessionId, layers);
+            if (layerSnapshot.sessionId === sessionId)
+                publishLayerSnapshot({ ...layerSnapshot, layers });
+        },
+        update(sessionId, update) {
+            const layers = update(layersBySession.get(sessionId) ?? []);
+            layersBySession.set(sessionId, layers);
+            if (layerSnapshot.sessionId === sessionId)
+                publishLayerSnapshot({ ...layerSnapshot, layers });
+        },
+        highlight(sessionId, highlightedLayerIds) {
+            if (layerSnapshot.sessionId !== sessionId)
+                return;
+            const current = [...layerSnapshot.highlightedLayerIds].sort().join('\n');
+            const next = [...highlightedLayerIds].sort().join('\n');
+            if (current === next)
+                return;
+            publishLayerSnapshot({ ...layerSnapshot, highlightedLayerIds: new Set(highlightedLayerIds) });
+        },
+    };
+    function useLayerWorkspace() {
+        return React.useSyncExternalStore(layerWorkspace.subscribe, layerWorkspace.getSnapshot);
     }
-    function GeoHarnessShell({ agent }) {
-        const [prompt, setPrompt] = React.useState('');
-        const [goal, setGoal] = React.useState('等待你从下方输入一个空间分析目标。');
-        const [layers, setLayers] = React.useState([]);
+    function renderLayerRow(sessionId, layer, highlightedLayerIds, outputStatus) {
+        return ((0, jsx_runtime_1.jsxs)("article", { className: highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row', children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle', "aria-label": `${layer.visible ? 'Hide' : 'Show'} ${layer.name}`, "aria-pressed": layer.visible, onClick: () => { layerWorkspace.update(sessionId, current => (0, layer_registry_1.toggleLayerVisibility)(current, layer.id)); }, children: (0, jsx_runtime_1.jsx)("span", { style: { background: layer.style.color } }) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-meta", children: [(0, jsx_runtime_1.jsxs)("strong", { children: [layer.name, outputStatus === 'success' && (0, jsx_runtime_1.jsx)("em", { className: "gh-output-check", children: "\u2713" })] }), (0, jsx_runtime_1.jsxs)("small", { children: [layer.geometry, " \u00B7 ", layer.featureCount, " features"] }), layer.generatedBy !== null && (0, jsx_runtime_1.jsxs)("small", { children: ["step \u00B7 ", layer.generatedBy] }), (0, jsx_runtime_1.jsx)("input", { type: "range", min: "0", max: "1", step: "0.1", value: layer.opacity, "aria-label": `${layer.name} opacity`, onChange: event => {
+                                const opacity = Number(event.currentTarget.value);
+                                layerWorkspace.update(sessionId, current => (0, layer_registry_1.setLayerOpacity)(current, layer.id, opacity));
+                            } })] })] }, layer.id));
+    }
+    function GeoHarnessLayerPanel({ wide }) {
+        const workspace = useLayerWorkspace();
+        const inputLayers = workspace.layers.filter(layer => layer.source !== 'derived');
+        const derivedLayers = workspace.layers.filter(layer => layer.source === 'derived');
+        const visibleCount = workspace.layers.filter(layer => layer.visible).length;
+        if (!wide) {
+            return (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-rail", "aria-label": "GeoHarness layers", children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u25B1" }), (0, jsx_runtime_1.jsx)("small", { children: workspace.layers.length })] });
+        }
+        return ((0, jsx_runtime_1.jsxs)("section", { className: "gh-sidebar-layers", "aria-label": "Layer panel", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-sidebar-layer-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Layers" }), (0, jsx_runtime_1.jsx)("small", { children: "Verified Agent workspace" })] }), (0, jsx_runtime_1.jsx)("span", { className: "gh-panel-count", children: workspace.layers.length })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Agent-loaded data" }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-list", children: inputLayers.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds)) }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Agent-created outputs" }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list", "aria-label": "Task output layers", children: [derivedLayers.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "Agent \u5C1A\u672A\u521B\u5EFA\u6D3E\u751F\u56FE\u5C42\uFF1B\u7EAF\u7EDF\u8BA1\u7ED3\u679C\u4F1A\u663E\u793A\u5728\u53F3\u4FA7\u3002" }), derivedLayers.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-footer", children: [(0, jsx_runtime_1.jsxs)("span", { children: [visibleCount, " visible"] }), (0, jsx_runtime_1.jsx)("span", { children: workspace.layers[0]?.crs ?? 'CRS —' })] })] }));
+    }
+    function GeoHarnessBrandMark({ size }) {
+        return (0, jsx_runtime_1.jsx)("span", { className: "gh-sidebar-brand-mark", style: { width: size, height: size }, "aria-hidden": "true", children: "\u2316" });
+    }
+    function GeoHarnessBrandName() {
+        return (0, jsx_runtime_1.jsx)("span", { className: "gh-sidebar-brand-name", children: "GeoHarness" });
+    }
+    function GeoHarnessShell({ agent, sessionId }) {
+        const [goal, setGoal] = React.useState('等待你从右侧原生对话框输入一个空间分析目标。');
         const [selectedFeature, setSelectedFeature] = React.useState(null);
         const [runStatus, setRunStatus] = React.useState('ready');
         const [runError, setRunError] = React.useState(null);
@@ -634,20 +712,14 @@ window.__ModuleLoader__.load({
         const [runHistoryCount, setRunHistoryCount] = React.useState(0);
         const [taskSteps, setTaskSteps] = React.useState([]);
         const [agentAnswer, setAgentAnswer] = React.useState('');
-        const [agentModel, setAgentModel] = React.useState('正在读取 Harness 模型…');
-        const [modelDirectory, setModelDirectory] = React.useState(null);
-        const [modelLoading, setModelLoading] = React.useState(false);
-        const [modelSelecting, setModelSelecting] = React.useState(false);
-        const [modelError, setModelError] = React.useState(null);
         const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent');
-        const [settingsOpen, setSettingsOpen] = React.useState(false);
-        const [settingsLoading, setSettingsLoading] = React.useState(false);
-        const [settingsError, setSettingsError] = React.useState(null);
-        const [credentialProviders, setCredentialProviders] = React.useState([]);
-        const [credentialDrafts, setCredentialDrafts] = React.useState({});
-        const [savingCredential, setSavingCredential] = React.useState(null);
-        const runSequence = React.useRef(0);
+        const activeGoalSeq = React.useRef(null);
+        const lastAutoStepId = React.useRef(null);
+        const lastRunStatus = React.useRef('ready');
+        const lastWorkspaceSeq = React.useRef(null);
         const agentScroll = React.useRef(null);
+        const layerState = useLayerWorkspace();
+        const layers = layerState.sessionId === sessionId ? layerState.layers : [];
         React.useEffect(() => {
             const panel = agentScroll.current;
             if (panel === null)
@@ -655,180 +727,88 @@ window.__ModuleLoader__.load({
             panel.scrollTop = runStatus === 'success' || runStatus === 'failed' ? panel.scrollHeight : 0;
         }, [runStatus]);
         React.useEffect(() => {
-            if (!settingsOpen)
-                return;
-            const closeOnEscape = (event) => {
-                if (event.key === 'Escape')
-                    setSettingsOpen(false);
-            };
-            document.addEventListener('keydown', closeOnEscape);
-            return () => document.removeEventListener('keydown', closeOnEscape);
-        }, [settingsOpen]);
-        const refreshModels = async () => {
-            setModelLoading(true);
-            setModelError(null);
-            try {
-                await agent.createSession();
-                const directory = await agent.models();
-                setModelDirectory(directory);
-                setAgentModel(`${directory.current.provider} / ${directory.current.model}`);
-            }
-            catch (error) {
-                setModelError(error instanceof Error ? error.message : String(error));
-            }
-            finally {
-                setModelLoading(false);
-            }
-        };
-        React.useEffect(() => {
-            void refreshModels();
-        }, []);
-        const refreshCredentialDirectory = async () => {
-            setSettingsLoading(true);
-            setSettingsError(null);
-            try {
-                const directory = await agent.credentialDirectory();
-                setCredentialProviders(directory.providers);
-                if (!directory.writable)
-                    setSettingsError('当前 Harness settings provider 是只读的。');
-            }
-            catch (error) {
-                setSettingsError(error instanceof Error ? error.message : String(error));
-            }
-            finally {
-                setSettingsLoading(false);
-            }
-        };
-        const openSettings = () => {
-            setSettingsOpen(true);
-            void refreshCredentialDirectory();
-        };
-        const saveCredential = async (provider) => {
-            const value = credentialDrafts[provider.ref]?.trim() ?? '';
-            if (value === '')
-                return;
-            setSavingCredential(provider.ref);
-            setSettingsError(null);
-            try {
-                await agent.setCredential(provider.ref, value);
-                setCredentialDrafts(current => ({ ...current, [provider.ref]: '' }));
-                await refreshCredentialDirectory();
-                await refreshModels();
-            }
-            catch (error) {
-                setSettingsError(error instanceof Error ? error.message : String(error));
-            }
-            finally {
-                setSavingCredential(null);
-            }
-        };
-        const submitGoal = async (event) => {
-            event.preventDefault();
-            const value = prompt.trim();
-            if (value === '')
-                return;
-            await executePrompt(value);
-        };
-        const changeModel = async (event) => {
-            const encoded = event.currentTarget.value;
-            let selection;
-            try {
-                const parsed = JSON.parse(encoded);
-                if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') {
-                    throw new Error('invalid model selection');
-                }
-                selection = { provider: parsed[0], model: parsed[1] };
-            }
-            catch {
-                setModelError('无法识别所选 Harness 模型。');
-                return;
-            }
-            setModelSelecting(true);
-            setModelError(null);
-            try {
-                await agent.createSession();
-                const selected = await agent.selectModel(selection);
-                setAgentModel(`${selected.provider} / ${selected.model}`);
-                const directory = await agent.models();
-                setModelDirectory(directory);
-                setAgentModel(`${directory.current.provider} / ${directory.current.model}`);
-            }
-            catch (error) {
-                setModelError(error instanceof Error ? error.message : String(error));
-            }
-            finally {
-                setModelSelecting(false);
-            }
-        };
-        const toggleLayer = (layer) => {
-            setLayers(current => (0, layer_registry_1.toggleLayerVisibility)(current, layer.id));
-            if (layer.visible && selectedFeature?.layer.id === layer.id)
-                setSelectedFeature(null);
-        };
-        const refreshWorkspace = async (sequence) => {
-            const workspace = await agent.workspace();
-            if (workspace.status !== 'ready')
-                throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed');
-            if (runSequence.current !== sequence)
-                return;
-            setLayers(current => (0, layer_registry_1.registerWorkspaceProjection)(current, workspace.layers));
-            setWorkspaceStatus(`${workspace.layers.length} verified layers`);
-        };
-        async function executePrompt(value) {
-            if (runStatus === 'running')
-                return;
-            const sequence = ++runSequence.current;
-            setGoal(value);
-            setRunStatus('running');
-            setRunError(null);
-            setSelectedStepId(null);
-            setTaskSteps([]);
-            setAgentAnswer('');
-            setWorkspaceStatus('Agent planning');
-            try {
-                await agent.createSession();
-                const modelDirectory = await agent.models();
-                setAgentModel(`${modelDirectory.current.provider} / ${modelDirectory.current.model}`);
-                if (!modelDirectory.routable) {
-                    throw new Error('当前 Harness 没有可路由的模型。请先配置 DeepSeek API Key 或其他 Harness LLM Provider；GeoHarness 不会回退到预设 Scenario。');
-                }
-                const before = await agent.history();
-                const baselineSeq = (0, agent_session_1.historyMaxSeq)(before.events);
-                await agent.prompt(value);
-                while (runSequence.current === sequence) {
+            layerWorkspace.activate(sessionId);
+            let disposed = false;
+            let timer;
+            const refresh = async () => {
+                try {
                     const history = await agent.history();
-                    const projection = (0, agent_session_1.projectAgentHistory)(history.events, baselineSeq);
-                    if (runSequence.current !== sequence)
+                    if (disposed)
                         return;
-                    setTaskSteps(projection.steps);
-                    setAgentAnswer(projection.answer);
-                    const active = projection.steps.find(step => step.status === 'running');
-                    if (active !== undefined)
-                        setSelectedStepId(active.id);
-                    await refreshWorkspace(sequence);
-                    if (projection.finished) {
-                        setRunHistoryCount(current => current + 1);
-                        setRunStatus(projection.succeeded ? 'success' : 'failed');
-                        setRunError(projection.error);
-                        const latestOutput = [...projection.steps].reverse().find(step => step.outputs.length > 0);
-                        if (latestOutput !== undefined)
-                            setSelectedStepId(latestOutput.id);
-                        return;
+                    const humanGoal = (0, agent_session_1.latestHumanGoal)(history.events);
+                    let workspaceSeq = -1;
+                    setRunHistoryCount((0, agent_session_1.humanGoalCount)(history.events));
+                    if (humanGoal === null) {
+                        setRunStatus('ready');
+                        setRunError(null);
+                        setTaskSteps([]);
+                        setAgentAnswer('');
+                        lastRunStatus.current = 'ready';
                     }
-                    await waitForNextProgress();
+                    else {
+                        const changedGoal = activeGoalSeq.current !== humanGoal.seq;
+                        if (changedGoal) {
+                            activeGoalSeq.current = humanGoal.seq;
+                            lastAutoStepId.current = null;
+                            setSelectedStepId(null);
+                        }
+                        setGoal(humanGoal.text);
+                        const projection = (0, agent_session_1.projectAgentHistory)(history.events, humanGoal.seq);
+                        workspaceSeq = projection.maxSeq;
+                        const status = projection.finished ? (projection.succeeded ? 'success' : 'failed') : 'running';
+                        setTaskSteps(projection.steps);
+                        setAgentAnswer(projection.answer);
+                        setRunStatus(status);
+                        setRunError(projection.error);
+                        const activeStep = projection.steps.find(step => step.status === 'running');
+                        if (activeStep !== undefined && lastAutoStepId.current !== activeStep.id) {
+                            lastAutoStepId.current = activeStep.id;
+                            setSelectedStepId(activeStep.id);
+                        }
+                        else if (projection.finished && (changedGoal || lastRunStatus.current === 'running')) {
+                            const outputStep = [...projection.steps].reverse().find(step => step.outputs.length > 0);
+                            if (outputStep !== undefined)
+                                setSelectedStepId(outputStep.id);
+                        }
+                        lastRunStatus.current = status;
+                    }
+                    if (lastWorkspaceSeq.current !== workspaceSeq) {
+                        try {
+                            const workspace = await agent.workspace();
+                            if (disposed)
+                                return;
+                            if (workspace.status !== 'ready')
+                                throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed');
+                            layerWorkspace.project(sessionId, workspace.layers);
+                            lastWorkspaceSeq.current = workspaceSeq;
+                            setWorkspaceStatus(`${workspace.layers.length} verified layers`);
+                        }
+                        catch (error) {
+                            if (!disposed)
+                                setWorkspaceStatus(error instanceof Error ? error.message : String(error));
+                        }
+                    }
                 }
-            }
-            catch (error) {
-                if (runSequence.current !== sequence)
-                    return;
-                setRunStatus('failed');
-                setRunError(error instanceof Error ? error.message : String(error));
-                setWorkspaceStatus('Agent unavailable');
-            }
-        }
-        const visibleCount = layers.filter(layer => layer.visible).length;
+                catch (error) {
+                    if (!disposed) {
+                        setRunStatus('failed');
+                        setRunError(error instanceof Error ? error.message : String(error));
+                        setWorkspaceStatus('Agent unavailable');
+                    }
+                }
+                finally {
+                    if (!disposed)
+                        timer = setTimeout(refresh, 400);
+                }
+            };
+            void refresh();
+            return () => {
+                disposed = true;
+                if (timer !== undefined)
+                    clearTimeout(timer);
+            };
+        }, [agent, sessionId]);
         const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0);
-        const inputLayers = layers.filter(layer => layer.source !== 'derived');
         const derivedLayers = layers.filter(layer => layer.source === 'derived');
         const selectedStep = taskSteps.find(step => step.id === selectedStepId);
         const selectedOutputs = new Set(selectedStep?.outputs ?? []);
@@ -838,22 +818,11 @@ window.__ModuleLoader__.load({
             || layer.generatedBy === selectedStepId
             || (semanticStepId !== null && layer.generatedBy === semanticStepId))
             .map(layer => layer.id));
+        const highlightedLayerKey = [...highlightedLayerIds].sort().join('\n');
+        React.useEffect(() => {
+            layerWorkspace.highlight(sessionId, highlightedLayerIds);
+        }, [sessionId, highlightedLayerKey]);
         const successfulSteps = taskSteps.filter(step => step.status === 'success');
-        const currentModelValue = modelDirectory === null
-            ? ''
-            : JSON.stringify([modelDirectory.current.provider, modelDirectory.current.model]);
-        const currentModelInCatalog = modelDirectory?.groups.some(group => group.id === modelDirectory.current.provider
-            && group.models.some(model => model.id === modelDirectory.current.model)) ?? false;
-        const modelStatus = modelError !== null
-            ? modelError
-            : modelLoading
-                ? '正在刷新 Harness 模型…'
-                : modelSelecting
-                    ? '正在切换模型…'
-                    : modelDirectory?.routable === false
-                        ? '当前模型不可路由，请配置 API Key 或切换模型'
-                        : 'Native Harness Agent · 自动规划 GIS 工具与图层';
-        const submitLabel = runStatus === 'running' ? 'GIS 任务正在执行' : '执行 GIS 任务';
         const stepIcon = (status, index) => {
             if (status === 'success')
                 return '✓';
@@ -863,29 +832,9 @@ window.__ModuleLoader__.load({
                 return '…';
             return String(index + 1);
         };
-        const renderLayerRow = (layer, outputStatus) => ((0, jsx_runtime_1.jsxs)("article", { className: highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row', children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle', "aria-label": `${layer.visible ? 'Hide' : 'Show'} ${layer.name}`, "aria-pressed": layer.visible, onClick: () => toggleLayer(layer), children: (0, jsx_runtime_1.jsx)("span", { style: { background: layer.style.color } }) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-meta", children: [(0, jsx_runtime_1.jsxs)("strong", { children: [layer.name, outputStatus === 'success' && (0, jsx_runtime_1.jsx)("em", { className: "gh-output-check", children: "\u2713" })] }), (0, jsx_runtime_1.jsxs)("small", { children: [layer.geometry, " \u00B7 ", layer.featureCount, " features"] }), layer.generatedBy !== null && (0, jsx_runtime_1.jsxs)("small", { children: ["step \u00B7 ", layer.generatedBy] }), (0, jsx_runtime_1.jsx)("input", { type: "range", min: "0", max: "1", step: "0.1", value: layer.opacity, "aria-label": `${layer.name} opacity`, onChange: event => {
-                                // React clears currentTarget after the input callback. Capture the
-                                // primitive before the queued functional update runs, especially
-                                // during a real pointer drag that emits many input events.
-                                const opacity = Number(event.currentTarget.value);
-                                setLayers(current => (0, layer_registry_1.setLayerOpacity)(current, layer.id, opacity));
-                            } })] })] }, layer.id));
-        return ((0, jsx_runtime_1.jsxs)("main", { className: "gh-shell", "data-geoharness-plugin": "loaded", "data-geoharness-phase": "10", "data-geoharness-agent": "native", children: [(0, jsx_runtime_1.jsxs)("header", { className: "gh-topbar", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-brand", children: [(0, jsx_runtime_1.jsx)(BrandMark, {}), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("strong", { children: "GeoHarness" }), (0, jsx_runtime_1.jsx)("small", { children: "Agentic GIS \u00B7 official data" })] })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-launcher", children: (0, jsx_runtime_1.jsxs)("span", { className: "gh-status", children: [(0, jsx_runtime_1.jsx)("i", {}), " Native Harness Agent \u00B7 ", layers.length, " layers \u00B7 ", featureCount, " features"] }) })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-workspace", children: [(0, jsx_runtime_1.jsxs)("aside", { className: "gh-panel gh-layers", "aria-label": "Layer panel", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-panel-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Layers" }), (0, jsx_runtime_1.jsx)("small", { children: "Verified workspace registry" })] }), (0, jsx_runtime_1.jsx)("span", { className: "gh-panel-count", children: layers.length })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Agent-loaded data" }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-list", children: inputLayers.map(layer => renderLayerRow(layer)) }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Agent-created outputs" }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list", "aria-label": "Task output layers", children: [derivedLayers.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "Agent \u5C1A\u672A\u521B\u5EFA\u6D3E\u751F\u56FE\u5C42\uFF1B\u7EAF\u7EDF\u8BA1\u7ED3\u679C\u4F1A\u663E\u793A\u5728\u53F3\u4FA7\u3002" }), derivedLayers.map(layer => renderLayerRow(layer, 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-footer", children: [(0, jsx_runtime_1.jsxs)("span", { children: [visibleCount, " visible"] }), (0, jsx_runtime_1.jsx)("span", { children: layers[0]?.crs ?? 'CRS —' })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-settings-dock", "aria-label": "Harness settings", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-settings-copy", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "HARNESS SETTINGS" }), (0, jsx_runtime_1.jsx)("small", { children: "API keys \u00B7 model providers" })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-settings-trigger", "aria-haspopup": "dialog", onClick: openSettings, children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-settings-icon", "aria-hidden": "true", children: "\u2699" }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "\u6A21\u578B\u4E0E API Key" }), (0, jsx_runtime_1.jsxs)("small", { children: [credentialProviders.filter(provider => provider.configured).length, " \u4E2A Provider \u5DF2\u914D\u7F6E"] })] }), (0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u203A" })] })] })] }), (0, jsx_runtime_1.jsx)(GeoMap, { layers: layers, selected: selectedFeature, highlightedLayerIds: highlightedLayerIds, officialData: layers.length > 0, onSelect: setSelectedFeature }), (0, jsx_runtime_1.jsxs)("aside", { className: "gh-panel gh-agent", "aria-label": "Agent workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-panel-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Agent workspace" }), (0, jsx_runtime_1.jsx)("small", { children: "Goal \u2192 Plan \u2192 Tools \u2192 Layers" })] }), (0, jsx_runtime_1.jsx)("span", { className: `gh-agent-state is-${runStatus}`, children: runStatus })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-agent-scroll", ref: agentScroll, children: [(0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "GOAL" }), (0, jsx_runtime_1.jsx)("p", { children: goal })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "LIVE AGENT TOOL TRACE" }), taskSteps.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "\u8FD9\u91CC\u4E0D\u52A0\u8F7D\u9884\u8BBE Plan\uFF1BHarness Agent \u5B9E\u9645\u53D1\u8D77 Tool Call \u540E\uFF0C\u6B65\u9AA4\u624D\u4F1A\u9010\u9879\u51FA\u73B0\u3002" }), (0, jsx_runtime_1.jsx)("ol", { className: "gh-plan-list", "data-task-graph": "agent-generated", children: taskSteps.map((step, index) => {
-                                                        const status = step.status;
-                                                        return (0, jsx_runtime_1.jsx)("li", { className: `is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`, "data-step-id": step.id, "data-step-status": status, children: (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-step-button", onClick: () => setSelectedStepId(step.id), children: [(0, jsx_runtime_1.jsx)("i", { children: stepIcon(status, index) }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: step.title }), (0, jsx_runtime_1.jsx)("small", { children: argumentSummary(step.arguments) }), step.summary !== null && (0, jsx_runtime_1.jsx)("small", { children: step.summary }), step.outputs.length > 0 && (0, jsx_runtime_1.jsxs)("small", { children: ["\u2192 ", step.outputs.join(', ')] })] })] }) }, step.id);
-                                                    }) })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-current-step", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "CURRENT STEP" }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Driver" }), (0, jsx_runtime_1.jsx)("b", { children: "Native Harness Agent" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Model" }), (0, jsx_runtime_1.jsx)("b", { children: agentModel })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Tools" }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length, " success"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Outputs" }), (0, jsx_runtime_1.jsxs)("b", { children: [derivedLayers.length, " layers"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Turns" }), (0, jsx_runtime_1.jsx)("b", { children: runHistoryCount })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Map" }), (0, jsx_runtime_1.jsx)("b", { className: "is-teal", children: workspaceStatus })] }), runError !== null && (0, jsx_runtime_1.jsx)("p", { className: "gh-run-error", role: "alert", children: runError })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-agent-result", "aria-label": "Agent result", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "AGENT RESULT" }), agentAnswer === ''
+        return ((0, jsx_runtime_1.jsxs)("main", { className: "gh-shell", "data-geoharness-plugin": "loaded", "data-geoharness-phase": "10", "data-geoharness-agent": "native", "data-conversation-composer-overlay": "", children: [(0, jsx_runtime_1.jsxs)("header", { className: "gh-topbar", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-brand", children: [(0, jsx_runtime_1.jsx)(BrandMark, {}), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("strong", { children: "GeoHarness" }), (0, jsx_runtime_1.jsx)("small", { children: "Agentic GIS \u00B7 official data" })] })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-launcher", children: (0, jsx_runtime_1.jsxs)("span", { className: "gh-status", children: [(0, jsx_runtime_1.jsx)("i", {}), " Native Harness Agent \u00B7 ", layers.length, " layers \u00B7 ", featureCount, " features"] }) })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-workspace", children: [(0, jsx_runtime_1.jsx)(GeoMap, { layers: layers, selected: selectedFeature, highlightedLayerIds: highlightedLayerIds, onSelect: setSelectedFeature }), (0, jsx_runtime_1.jsxs)("aside", { className: "gh-panel gh-agent", "aria-label": "Agent workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-panel-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Agent workspace" }), (0, jsx_runtime_1.jsx)("small", { children: "Goal \u2192 Plan \u2192 Tools \u2192 Layers" })] }), (0, jsx_runtime_1.jsx)("span", { className: `gh-agent-state is-${runStatus}`, children: runStatus })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-agent-scroll", ref: agentScroll, children: [(0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "GOAL" }), (0, jsx_runtime_1.jsx)("p", { children: goal })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "LIVE AGENT TOOL TRACE" }), taskSteps.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "\u8FD9\u91CC\u4E0D\u52A0\u8F7D\u9884\u8BBE Plan\uFF1BHarness Agent \u5B9E\u9645\u53D1\u8D77 Tool Call \u540E\uFF0C\u6B65\u9AA4\u624D\u4F1A\u9010\u9879\u51FA\u73B0\u3002" }), (0, jsx_runtime_1.jsx)("ol", { className: "gh-plan-list", "data-task-graph": "agent-generated", children: taskSteps.map((step, index) => (0, jsx_runtime_1.jsx)("li", { className: `is-${step.status}${selectedStepId === step.id ? ' is-selected' : ''}`, "data-step-id": step.id, "data-step-status": step.status, children: (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-step-button", onClick: () => setSelectedStepId(step.id), children: [(0, jsx_runtime_1.jsx)("i", { children: stepIcon(step.status, index) }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: step.title }), (0, jsx_runtime_1.jsx)("small", { children: argumentSummary(step.arguments) }), step.summary !== null && (0, jsx_runtime_1.jsx)("small", { children: step.summary }), step.outputs.length > 0 && (0, jsx_runtime_1.jsxs)("small", { children: ["\u2192 ", step.outputs.join(', ')] })] })] }) }, step.id)) })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-current-step", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "CURRENT STEP" }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Driver" }), (0, jsx_runtime_1.jsx)("b", { children: "Native Harness Agent" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Model" }), (0, jsx_runtime_1.jsx)("b", { children: "\u539F\u751F\u8F93\u5165\u680F\u53EF\u5207\u6362" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Tools" }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length, " success"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Outputs" }), (0, jsx_runtime_1.jsxs)("b", { children: [derivedLayers.length, " layers"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Turns" }), (0, jsx_runtime_1.jsx)("b", { children: runHistoryCount })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Session" }), (0, jsx_runtime_1.jsx)("b", { children: sessionId.slice(0, 8) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Map" }), (0, jsx_runtime_1.jsx)("b", { className: "is-teal", children: workspaceStatus })] }), runError !== null && (0, jsx_runtime_1.jsx)("p", { className: "gh-run-error", role: "alert", children: runError })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-agent-result", "aria-label": "Agent result", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "AGENT RESULT" }), agentAnswer === ''
                                                     ? (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "Agent \u7684\u81EA\u7136\u8BED\u8A00\u7ED3\u8BBA\u4F1A\u5728 Tool \u7ED3\u679C\u9A8C\u8BC1\u5B8C\u6210\u540E\u663E\u793A\u5728\u8FD9\u91CC\u3002" })
-                                                    : (0, jsx_runtime_1.jsx)("strong", { className: "gh-result-headline", children: agentAnswer }), (0, jsx_runtime_1.jsx)("div", { className: "gh-result-trace", children: successfulSteps.slice(-3).map(step => (0, jsx_runtime_1.jsxs)("small", { children: [(0, jsx_runtime_1.jsx)("i", { children: "\u2713" }), step.summary ?? step.title] }, step.id)) })] })] })] })] }), (0, jsx_runtime_1.jsxs)("form", { className: "gh-composer", "data-composer-card": true, onSubmit: submitGoal, children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-composer-input", children: [(0, jsx_runtime_1.jsx)(BrandMark, { small: true }), (0, jsx_runtime_1.jsx)("textarea", { value: prompt, onChange: event => setPrompt(event.currentTarget.value), onKeyDown: event => {
-                                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                                            event.preventDefault();
-                                            event.currentTarget.form?.requestSubmit();
-                                        }
-                                    }, rows: 2, "aria-label": "Describe your spatial goal", placeholder: "\u63CF\u8FF0\u4F60\u60F3\u89E3\u51B3\u7684\u7A7A\u95F4\u95EE\u9898\u2026\u2026" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-composer-toolbar", children: [(0, jsx_runtime_1.jsx)("span", { className: modelError !== null || modelDirectory?.routable === false ? 'gh-composer-status is-error' : 'gh-composer-status', title: modelStatus, children: modelStatus }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-composer-trailing", children: [(0, jsx_runtime_1.jsxs)("select", { className: "gh-model-select", "aria-label": "\u5207\u6362 Harness \u6A21\u578B", title: "\u5207\u6362\u5F53\u524D GeoHarness \u4F1A\u8BDD\u4F7F\u7528\u7684\u6A21\u578B", value: currentModelValue, disabled: runStatus === 'running' || modelLoading || modelSelecting || modelDirectory === null, onChange: event => { void changeModel(event); }, children: [modelDirectory === null && (0, jsx_runtime_1.jsx)("option", { value: "", children: "\u6B63\u5728\u8BFB\u53D6\u6A21\u578B\u2026" }), modelDirectory !== null && !currentModelInCatalog && (0, jsx_runtime_1.jsx)("optgroup", { label: "\u5F53\u524D\u8DEF\u7531", children: (0, jsx_runtime_1.jsxs)("option", { value: currentModelValue, children: [modelDirectory.current.provider, " / ", modelDirectory.current.model] }) }), modelDirectory?.groups.map(group => (0, jsx_runtime_1.jsx)("optgroup", { label: `${group.name} · ${group.id}`, children: group.models.map(model => (0, jsx_runtime_1.jsxs)("option", { value: JSON.stringify([group.id, model.id]), children: [model.name, model.name === model.id ? '' : ` · ${model.id}`] }, `${group.id}/${model.id}`)) }, group.id))] }), (0, jsx_runtime_1.jsx)("button", { type: "submit", "aria-label": submitLabel, title: submitLabel, disabled: prompt.trim() === '' || runStatus === 'running' || modelSelecting || modelDirectory?.routable === false, children: runStatus === 'running'
-                                                ? (0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u2026" })
-                                                : (0, jsx_runtime_1.jsx)("svg", { viewBox: "0 0 16 16", width: "16", height: "16", "aria-hidden": "true", children: (0, jsx_runtime_1.jsx)("path", { d: "M8.3 1c.4.1.7.2 1 .5l5.4 5.3-1.4 1.4L9 4v11H7V4L2.7 8.2 1.3 6.8l5.4-5.3c.4-.3.9-.5 1.6-.5Z", fill: "currentColor" }) }) })] })] })] }), settingsOpen && (0, jsx_runtime_1.jsxs)("div", { className: "gh-settings-overlay", role: "presentation", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-settings-mask", "aria-label": "Close model settings", onClick: () => setSettingsOpen(false) }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-settings-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "gh-settings-title", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "HARNESS CREDENTIALS" }), (0, jsx_runtime_1.jsx)("h2", { id: "gh-settings-title", children: "\u6A21\u578B\u4E0E API Key" }), (0, jsx_runtime_1.jsx)("p", { children: "\u5BC6\u94A5\u5199\u5165 Harness credential store\uFF0C\u4E0D\u4F1A\u4FDD\u5B58\u5230 GeoHarness \u4ED3\u5E93\u6216\u6D4F\u89C8\u5668\u9875\u9762\u3002" })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-settings-close", autoFocus: true, "aria-label": "\u5173\u95ED\u8BBE\u7F6E", onClick: () => setSettingsOpen(false), children: "\u00D7" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-settings-body", children: [settingsLoading && credentialProviders.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-settings-placeholder", children: "\u6B63\u5728\u8BFB\u53D6 Harness Provider\u2026" }), !settingsLoading && credentialProviders.length === 0 && settingsError === null && (0, jsx_runtime_1.jsx)("p", { className: "gh-settings-placeholder", children: "\u5F53\u524D profile \u6CA1\u6709\u53EF\u914D\u7F6E\u7684\u6A21\u578B Provider\u3002" }), credentialProviders.map(provider => (0, jsx_runtime_1.jsxs)("article", { className: "gh-provider-card", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-provider-heading", children: [(0, jsx_runtime_1.jsx)("span", { className: provider.configured ? 'is-configured' : '' }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("b", { children: provider.displayName }), (0, jsx_runtime_1.jsxs)("small", { children: [provider.provider, " \u00B7 ", provider.ref] })] }), (0, jsx_runtime_1.jsx)("em", { children: provider.configured ? '已配置' : '需要密钥' })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-provider-editor", children: [(0, jsx_runtime_1.jsx)("input", { type: "password", value: credentialDrafts[provider.ref] ?? '', disabled: !provider.writable || savingCredential === provider.ref, "aria-label": `${provider.displayName} API Key`, placeholder: provider.configured ? '已安全保存；输入新值可替换' : '粘贴 API Key', onChange: event => {
-                                                                const value = event.currentTarget.value;
-                                                                setCredentialDrafts(current => ({ ...current, [provider.ref]: value }));
-                                                            } }), (0, jsx_runtime_1.jsx)("button", { type: "button", disabled: !provider.writable || savingCredential !== null || (credentialDrafts[provider.ref]?.trim() ?? '') === '', onClick: () => { void saveCredential(provider); }, children: savingCredential === provider.ref ? '保存中…' : provider.configured ? '替换密钥' : '保存密钥' })] })] }, `${provider.provider}-${provider.ref}`)), settingsError !== null && (0, jsx_runtime_1.jsx)("p", { className: "gh-settings-error", role: "alert", children: settingsError })] }), (0, jsx_runtime_1.jsxs)("footer", { children: [(0, jsx_runtime_1.jsx)("span", { children: "\u66F4\u6539\u7ACB\u5373\u5E94\u7528\u5230\u5F53\u524D Harness profile" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => { void refreshCredentialDirectory(); }, children: "\u5237\u65B0\u72B6\u6001" })] })] })] })] }));
+                                                    : (0, jsx_runtime_1.jsx)("strong", { className: "gh-result-headline", children: agentAnswer }), (0, jsx_runtime_1.jsx)("div", { className: "gh-result-trace", children: successfulSteps.slice(-3).map(step => (0, jsx_runtime_1.jsxs)("small", { children: [(0, jsx_runtime_1.jsx)("i", { children: "\u2713" }), step.summary ?? step.title] }, step.id)) })] })] })] })] })] }));
     }
     exports.inject = ['slots', 'connection'];
     function apply(ctx) {
@@ -894,69 +843,27 @@ window.__ModuleLoader__.load({
             throw new Error('GeoHarness requires the Harness connection service');
         installStyles();
         ctx.slots.register({
-            name: 'root',
+            name: 'conversation.session',
             priority: -100,
-            inject: () => ({
+            inject: (sessionId) => ({
                 agent: {
-                    createSession: async () => resultValue(await connection.api.sessions.create({ sessionId: AGENT_SESSION_ID }), '创建 GeoHarness Agent 会话失败'),
-                    history: async () => resultValue(await connection.api.sessions.history({ sessionId: AGENT_SESSION_ID, maxMessages: 50 }), '读取 Agent 执行事件失败'),
-                    models: async () => resultValue(await connection.api.sessions.models({ sessionId: AGENT_SESSION_ID }), '读取 Harness 模型配置失败'),
-                    selectModel: async (selection) => resultValue(await connection.api.sessions.selectModel({ sessionId: AGENT_SESSION_ID, ...selection }), '切换 Harness 模型失败').selected,
-                    prompt: async (text) => resultValue(await connection.api.sessions.prompt({
-                        sessionId: AGENT_SESSION_ID,
-                        mode: 'queue',
-                        content: [{ type: 'text', text }],
-                        clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    }), '提交 GIS 目标失败'),
+                    history: async () => resultValue(await connection.api.sessions.history({ sessionId, maxMessages: 100 }), '读取 Agent 执行事件失败'),
                     workspace: async () => {
                         const response = await connection.rpc.call('/geoharness', 'agent/workspace', {
-                            workspace_key: AGENT_SESSION_ID,
+                            workspace_key: sessionId,
                         });
                         if (!response.ok || response.value === null || typeof response.value !== 'object') {
                             throw new Error(response.error?.message ?? 'Agent workspace projection is unavailable');
                         }
                         return response.value;
                     },
-                    credentialDirectory: async () => {
-                        const [settings, providers] = await Promise.all([
-                            connection.api.settings.describe({}),
-                            connection.api.llm.providers({}),
-                        ]);
-                        const settingsValue = resultValue(settings, '读取 Harness settings 失败');
-                        const providerValue = resultValue(providers, '读取 Harness LLM Provider 失败');
-                        const namespaces = new Map(settingsValue.namespaces.map(namespace => [namespace.ns, namespace]));
-                        const rows = providerValue.providers
-                            .filter(provider => provider.active && provider.settingsNs !== '')
-                            .map(provider => {
-                            const namespace = namespaces.get(provider.settingsNs);
-                            const profile = namespace === undefined ? undefined : settingAtPath(namespace.value, provider.settingsPath);
-                            return {
-                                provider: provider.provider,
-                                displayName: provider.displayName,
-                                ref: credentialRef(provider.provider, profile),
-                            };
-                        });
-                        const unique = [...new Map(rows.map(row => [row.ref, row])).values()];
-                        const credentials = unique.length === 0
-                            ? { credentials: {} }
-                            : resultValue(await connection.api.credentials.describe({ refs: unique.map(row => row.ref) }), '读取 Harness credentials 失败');
-                        return {
-                            writable: settingsValue.writable,
-                            providers: unique.map(row => ({
-                                ...row,
-                                configured: credentials.credentials[row.ref]?.configured ?? false,
-                                writable: settingsValue.writable && (credentials.credentials[row.ref]?.writable ?? true),
-                            })),
-                        };
-                    },
-                    setCredential: async (ref, value) => {
-                        resultValue(await connection.api.credentials.set({ ref, value }), `保存 ${ref} 失败`);
-                    },
                 },
             }),
         }, GeoHarnessShell);
+        ctx.slots.register({ name: 'sidebar.workspaces', priority: -100 }, GeoHarnessLayerPanel);
+        ctx.slots.register({ name: 'sidebar.brand.mark', priority: -100 }, GeoHarnessBrandMark);
+        ctx.slots.register({ name: 'sidebar.brand.name', priority: -100 }, GeoHarnessBrandName);
     }
-    // Kept as a value reference so TypeScript preserves the jsx-runtime external.
     void jsx_runtime_2.jsx;
     var verification_map_1 = require("./verification-map");
     Object.defineProperty(exports, "layerIdsForStep", { enumerable: true, get: function () { return verification_map_1.layerIdsForStep; } });
@@ -964,6 +871,8 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, "stepStatus", { enumerable: true, get: function () { return verification_map_1.stepStatus; } });
     var agent_session_2 = require("./agent-session");
     Object.defineProperty(exports, "historyMaxSeq", { enumerable: true, get: function () { return agent_session_2.historyMaxSeq; } });
+    Object.defineProperty(exports, "humanGoalCount", { enumerable: true, get: function () { return agent_session_2.humanGoalCount; } });
+    Object.defineProperty(exports, "latestHumanGoal", { enumerable: true, get: function () { return agent_session_2.latestHumanGoal; } });
     Object.defineProperty(exports, "projectAgentHistory", { enumerable: true, get: function () { return agent_session_2.projectAgentHistory; } });
 
     return module.exports;

@@ -150,12 +150,13 @@ mock 替代 GEOS/PROJ 运算。
 51/51 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
 正确性仍以确定性 Scenario/oracle 为准，不能依赖模型措辞。
 
-### 6. 左下角模型设置入口
+### 6. 左下角原生 Harness 设置入口
 
-已解决，不是活跃阻塞。`root` 接管后不恢复会话/项目侧栏；GeoHarness 左栏底部通过 Harness
-Connection API 提供 Provider/API Key 管理。真实浏览器确认 profile 中 ustc credential 为
-configured，DeepSeek credential 缺失且可写。密钥不回显、不进入仓库；当前外部模型
-`Connection error` 仍按上一项作为 Provider/网络问题单独保留。
+已解决，不是活跃阻塞。GeoHarness 不再接管 `root`，也不再通过 Connection API 自制设置页。
+当前页面保留 `AppFrame → SidebarRoot → sidebar.settings → SettingsRoot` 的原生装配，真实浏览器
+确认左下角“设置”可打开上游完整的通用设置、模型、插件和 Agent 预设页面。GeoHarness 没有
+重新声明 `sidebar.settings`，因此不存在重复 Slot 或跨所有权渲染；密钥仍完全由 Harness
+credential store 管理。当前外部模型问题继续按上一项单独保留。
 
 ### 7. Agent 测试 Prompt 与页面字体
 
@@ -163,9 +164,12 @@ configured，DeepSeek credential 缺失且可写。密钥不回显、不进入�
 不会向 Agent 注入内部 Scenario/Layer 标识。全局字号提高后，1170×912 浏览器验收确认页面
 尺寸与 viewport 一致、凭据弹窗在视口内，未出现三栏溢出、地图白屏或输入区截断。
 
-### 8. 输入框模型切换
+### 8. 右侧原生输入框与模型切换
 
-已解决，不是活跃阻塞。底部模型目录来自当前 Harness `session.models`，切换直接调用
-`session.selectModel` 并由 Host 回读确认。真实浏览器已在 DeepSeek 官方与 ustc 模型之间往返
-切换，右侧 Current Step 同步更新；最终恢复 `ustc / deepseek-v4-flash-ascend1`。是否能完成
-外部推理仍取决于上一项外部 Provider/网络条件，不能由“选择成功”推断模型调用成功。
+已解决，不是活跃阻塞。右侧 Agent workspace 底部显示的是上游
+`ConversationRoot → conversation.composer.bar/InputBar → conversation.input.model/ModelSelect`，
+不是 GeoHarness 仿制组件。GeoHarness 只通过上游稳定的 `data-composer-*` DOM 标记调整 seat
+位置。真实浏览器确认输入框、访问模式、模型按钮、发送按钮都位于右栏，模型菜单可打开；
+GeoHarness 源码不再调用 `sessions.prompt/models/selectModel`。是否能完成外部推理仍取决于上一项
+外部 Provider/网络条件，不能由“菜单可用”推断模型调用成功。最终回归已通过 client build、
+typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。

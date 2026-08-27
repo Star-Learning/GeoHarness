@@ -137,6 +137,9 @@ test('the browser projection adds derived layers and selects map layers by Task 
 test('native Harness Session events become live Agent tool steps and a final answer', async () => {
   const plugin = await clientPlugin()
   const entries = [
+    { event: { type: 'user/message', seq: 10, data: {
+      source: { kind: 'user' }, content: [{ type: 'text', text: '请创建 275 米缓冲区。' }],
+    } } },
     { event: { type: 'turn/start', seq: 11, data: { turn: 2 } } },
     { event: { type: 'tool/call', seq: 12, data: {
       turn: 2, step: 1, callId: 'call-1', name: 'create_buffer',
@@ -157,6 +160,13 @@ test('native Harness Session events become live Agent tool steps and a final ans
     { event: { type: 'turn/end', seq: 15, data: { turn: 2, reason: { kind: 'completed' } } } },
   ]
   const projection = plugin.projectAgentHistory(entries, 10)
+  assert.deepEqual(JSON.parse(JSON.stringify(plugin.latestHumanGoal(entries))), { seq: 10, text: '请创建 275 米缓冲区。' })
+  assert.equal(plugin.humanGoalCount([
+    ...entries,
+    { event: { type: 'user/message', seq: 16, data: {
+      source: { kind: 'plugin', plugin: 'test' }, content: [{ type: 'text', text: 'not a human goal' }],
+    } } },
+  ]), 1)
   assert.equal(projection.finished, true)
   assert.equal(projection.succeeded, true)
   assert.equal(projection.answer, '275 米缓冲区已完成并通过图层验证。')

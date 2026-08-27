@@ -53,32 +53,45 @@ profile bundle stack
 客户端只注入 `@deepseek-ai/dsh-client-connection`；React 由 Harness 的固定 Web module
 seed 提供。
 
-## 为什么正式 UI 接管 `root`
+## 正式 UI 保留 AppFrame，并只替换内层产品区
 
 上游 `packages/client/ui-layout/src/client/index.ts` 把 `AppFrame` 注册到公开的 `root`
-single Slot，并由 AppFrame 声明 `sidebar`、`conversation`、`details`、`shell.overlay` 子 Slot。
-之前接管 `conversation` 只能替换中间内容，左侧会话/项目侧栏仍然存在。
+single Slot；`AppFrame` 再渲染 `sidebar` 和 `conversation`。本项目现在不再接管 `root`，而是保留
+原生装配链：
 
-用户确认 GIS 一切通过底部对话完成后，GeoHarness 改为：
-
-```ts
-ctx.slots.register({ name: 'root', priority: -100 }, GeoHarnessShell)
+```text
+AppFrame(root)
+  → SidebarRoot(sidebar)
+      → GeoHarnessLayerPanel(sidebar.workspaces)
+      → SettingsRoot(sidebar.settings)             # 原生
+  → ConversationRoot(conversation)
+      → GeoHarnessShell(conversation.session)
+      → InputBar(conversation.composer.bar)         # 原生
+          → ModelSelect(conversation.input.model)   # 原生
 ```
 
-当前 single Slot 按优先级选取 live entry，GeoHarness 的 `-100` 早于上游默认 `0`，因此打开
-页面直接显示 GeoHarness，AppFrame 及其侧栏不再渲染。GeoHarness 不再注册
-`conversation`、`conversation.view`、标题栏 action 或 `shell.overlay`。这不是修改 Harness
-界面源码，而是使用当前 Slot 组合协议替换根表面。
+GeoHarness 的四个注册均只占用已由上游父 Entry 声明的 Slot：
 
-代价也很明确：AppFrame 提供的会话/项目导航不再可见。GeoHarness 仍直接使用 Connection
-Session API，并以固定 Agent session id 管理当前 GIS 工作台会话；如果未来需要多会话导航，
-应在 GeoHarness 产品需求内设计，而不是重新露出不服务 GIS 流程的完整上游侧栏。
+```ts
+ctx.slots.register({ name: 'conversation.session', priority: -100 }, GeoHarnessShell)
+ctx.slots.register({ name: 'sidebar.workspaces', priority: -100 }, GeoHarnessLayerPanel)
+ctx.slots.register({ name: 'sidebar.brand.mark', priority: -100 }, GeoHarnessBrandMark)
+ctx.slots.register({ name: 'sidebar.brand.name', priority: -100 }, GeoHarnessBrandName)
+```
 
-原侧栏底部的设置能力通过 Connection API 保留在 GeoHarness 左栏底部。GeoHarness 不复制
-上游 Settings React 源码，也不重新声明已经由 Sidebar 插件占有的 `sidebar.settings` Slot；
-它调用当前公开的 `settings.describe`、`llm.providers`、`credentials.describe` 和
-`credentials.set` 构建紧凑入口。页面只读取 `configured/writable` 状态，既有密钥始终 write-only；
-新值直接写入 Harness credential store，不进入 GeoHarness state 之外的持久层、日志或仓库。
+这些 Entry 不声明任何 `children`。这是必要约束：`sidebar.settings` 已由原生 `SidebarRoot`
+声明，`conversation.input.model` 已由原生 `InputBar` 声明；GeoHarness 若在自己的 Entry 重复声明，
+当前 `ui-slots` 会以 `slot "…" is already declared` 拒绝启动。Slot 也有所有权检查，不能从
+GeoHarness Entry 跨父级调用 `renderSlot` 绕过。
+
+所以左下角的“设置”按钮、全屏设置面板、模型/Provider/插件页面和 API Key credential 写入
+全部仍是 `ui-settings-general/SettingsRoot` 的原生实现。GeoHarness 不复制该 React 源码，
+不调用 `settings.describe`/`credentials.set` 自制弹窗，也不接触或回显密钥。
+
+右侧输入区同样是 `ui-conversation/InputBar` 与 `ui-model-selection/ModelSelect` 的原生实例。
+GeoHarness 只用上游公开的稳定 DOM 标记 `[data-conversation-scroll]`、`[data-composer-seat]`、
+`[data-composer-card]` 把既有 composer seat 定位到 Agent workspace 底部；没有依赖 CSS Modules
+哈希类名，也没有复制输入框 JSX。
 
 视觉层继续使用 DSW background/label/border/business/shadow tokens。三栏以低对比度 surface、
 12px 间距、圆角边框和一至三级阴影区分顶栏、工作区、Agent 卡片、composer 与 modal，地图仍
@@ -86,26 +99,16 @@ Session API，并以固定 Agent session id 管理当前 GIS 工作台会话；�
 
 ## 正式执行链：Native Harness Agent，不是 Scenario 路由
 
-底部输入提交后，客户端真实调用：
+用户在右侧原生 InputBar 提交后，输入、模型选择、排队/steer、停止和错误处理继续由上游
+`ui-conversation` 完成。GeoHarness 客户端只读取当前真实 Session：
 
 ```text
-sessions.create({ sessionId })
-sessions.models({ sessionId })
-sessions.selectModel({ sessionId, provider, model })
 sessions.history({ sessionId })
-sessions.prompt({ sessionId, mode: "queue", content })
+/geoharness agent/workspace { workspace_key: sessionId }
 ```
 
-`sessions.models` 用来检查当前 profile 是否存在可路由模型。没有模型时 UI 返回明确配置
-错误；不会调用旧 `goal/start`，也不会回退到固定 Scenario。
-
-底部输入区遵循当前上游 `ui-conversation` 的 composer 布局：多行输入位于上方，工具栏位于
-下方，右侧是模型选择和圆形发送键。模型选项直接来自 `sessions.models.groups`，按 Provider
-分组；用户切换后调用 `sessions.selectModel` 修改 `geoharness-main` Session 的真实选择，再次
-读取目录确认 Host 已接受。模型目录加载或选择失败会在输入区明确显示，不能用客户端本地
-状态伪造成功。API Key 仍由左下角 Harness credential store 入口管理。
-
-提交前记录 history 最大序号，提交后轮询 `sessions.history`。`agent-session.ts` 只投影本轮
+`agent-session.ts` 从 `user/message` 中只选择 `source.kind === "user"` 的最近请求，忽略 Harness
+与插件注入的上下文，并以该事件 seq 作为本轮基线。随后轮询 `sessions.history`，只投影本轮
 新事件：
 
 - `tool/call` → 右侧新增 running step，并显示真实 tool 参数；
@@ -177,7 +180,7 @@ dsh --profile web --no-open
 
 ## 已验证与外部边界
 
-已通过 TypeScript、client build、50 项 Node 测试和 9 项 Python/GeoPandas 测试。真实 provider
+已通过 TypeScript、client build、51 项 Node 测试和 9 项 Python/GeoPandas 测试。真实 provider
 已从 `nyc-core-official` 发现并加载官方数据，500 m 河流缓冲测试返回 132/360；Native
 Session 事件投影和 Agent workspace RPC 也均有回归。
 
@@ -187,5 +190,7 @@ Tool Call 之前以 `Connection error` 结束。因此不能声称“外部模�
 工具”的 E2E 已通过。该外部条件不允许用 Scenario fallback 掩盖；UI 会明确提示检查
 Provider、网络和 API Key，并需要在模型连接可用后补做 planning smoke test。
 
-上游升级时必须重新核对 Bundle patch、lazy-CJS 协议、root Slot 优先级、Connection Session
-API、generic RPC、Service 与 Tool contract，不能只修改版本号。
+上游升级时必须重新核对 Bundle patch、lazy-CJS 协议、`conversation.session`、
+`sidebar.workspaces`、`sidebar.settings`、`conversation.composer.bar` 与
+`conversation.input.model` 的声明/所有权、Connection Session API、generic RPC、Service 与
+Tool contract，不能只修改版本号。

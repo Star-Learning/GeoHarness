@@ -18,44 +18,40 @@ test('the generated client artifact is reproducible from typed source and CSS', 
   assert.match(actual, /data-geoharness-phase/)
 })
 
-test('Phase 1 UI shell surfaces remain present as later phases extend the workspace', async () => {
+test('GeoHarness keeps native Harness chrome and contributes only owned inner slots', async () => {
   const source = await readFile(join(bundleRoot, 'src', 'client.tsx'), 'utf8')
   const styles = await readFile(join(bundleRoot, 'src', 'styles.css'), 'utf8')
   for (const label of [
     'GeoHarness', 'Map workspace', 'Layer panel', 'Agent workspace',
-    'Describe your spatial goal', 'Native Harness Agent', 'LIVE AGENT TOOL TRACE',
-    'HARNESS SETTINGS', 'API keys · model providers',
-    '切换 Harness 模型',
+    'Native Harness Agent', 'LIVE AGENT TOOL TRACE', 'AGENT RESULT',
   ]) assert.match(source, new RegExp(label, 'i'))
-  assert.match(styles, /grid-template-columns: 236px minmax\(340px, 1fr\) 304px/)
-  assert.match(styles, /--dsw-alias-bg-base/)
-  assert.match(styles, /--dsw-alias-state-business-primary/)
-  assert.match(styles, /border-radius: 14px/)
-  assert.match(styles, /box-shadow: var\(--dsw-shadow-lv2\)/)
-  assert.doesNotMatch(source, /name: 'conversation(?:\.|')/)
-  assert.match(source, /name: 'root'/)
-  assert.match(source, /priority: -100/)
-  assert.match(source, /connection\.api\.settings\.describe/)
-  assert.match(source, /connection\.api\.llm\.providers/)
-  assert.match(source, /connection\.api\.credentials\.(describe|set)/)
-  assert.match(source, /type="password"/)
-  assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
-  assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
-  assert.match(source, /connection\.api\.sessions\.prompt/)
-  assert.match(source, /connection\.api\.sessions\.models/)
-  assert.match(source, /connection\.api\.sessions\.selectModel/)
-  assert.match(source, /<optgroup label=/)
-  assert.match(source, /data-composer-card/)
-  assert.match(styles, /\.gh-model-select/)
-  assert.match(source, /agent\/workspace/)
-  assert.match(source, /AGENT RESULT/)
+
+  assert.match(source, /name: 'conversation\.session'/)
+  assert.match(source, /name: 'sidebar\.workspaces'/)
+  assert.match(source, /name: 'sidebar\.brand\.mark'/)
+  assert.match(source, /name: 'sidebar\.brand\.name'/)
+  assert.doesNotMatch(source, /name:\s*'root'|name:\s*'conversation'/)
+  assert.doesNotMatch(source, /sidebar\.settings|conversation\.input\.model/)
+  assert.doesNotMatch(source, /children:\s*\{/)
+  assert.doesNotMatch(source, /connection\.api\.(settings|llm|credentials)/)
+  assert.doesNotMatch(source, /type="password"|gh-settings-dialog|gh-model-select|<form className="gh-composer/)
+  assert.doesNotMatch(source, /connection\.api\.sessions\.(create|prompt|models)/)
+  assert.match(source, /connection\.api\.sessions\.history/)
+  assert.match(source, /workspace_key: sessionId/)
+  assert.match(source, /latestHumanGoal/)
   assert.match(source, /projectAgentHistory/)
   assert.doesNotMatch(source, /SCENARIOS|goal\/start|scenario\/progress|Example|expectedResult/)
-  assert.equal((source.match(/执行 GIS 任务/g) ?? []).length, 1)
-  assert.doesNotMatch(source, /Run current input|gh-run-button/)
+
+  assert.match(styles, /grid-template-columns: minmax\(400px, 1fr\) var\(--gh-agent-column-width\)/)
+  assert.match(styles, /\[data-conversation-scroll\]:has\(\[data-geoharness-plugin="loaded"\]\)/)
+  assert.match(styles, /> \[data-composer-seat\]/)
+  assert.match(styles, /native Harness ConversationRoot still owns the composer/i)
+  assert.doesNotMatch(styles, /\.gh-composer\s*\{/)
+  assert.match(styles, /--dsw-alias-bg-base/)
+  assert.match(styles, /--dsw-alias-state-business-primary/)
 })
 
-test('the generated factory replaces the Harness root Slot with the GeoHarness shell', async () => {
+test('the generated factory replaces inner views while leaving native settings and composer registrations untouched', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let registration
   const appendedStyles = []
@@ -71,10 +67,11 @@ test('the generated factory replaces the Harness root Slot with the GeoHarness s
   const fragment = Symbol('fragment')
   const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
-    useEffect: effect => { effect() },
+    useEffect: () => {},
     useMemo: factory => factory(),
     useRef: initial => ({ current: initial }),
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
   }
   const plugin = registration.factory(specifier => {
     if (specifier === 'react') return React
@@ -82,46 +79,44 @@ test('the generated factory replaces the Harness root Slot with the GeoHarness s
     throw new Error(`unexpected external: ${specifier}`)
   })
   assert.deepEqual([...plugin.inject], ['slots', 'connection'])
-  assert.equal(plugin.credentialRef('deepseek-official', { apiKeyEnv: 'DEEPSEEK_API_KEY' }), 'DEEPSEEK_API_KEY')
-  assert.equal(plugin.credentialRef('ustc', undefined), 'USTC_API_KEY')
-  assert.deepEqual(JSON.parse(JSON.stringify(plugin.settingAtPath({
-    providers: { ustc: { apiKeyEnv: 'USTC_API_KEY' } },
-  }, ['providers', 'ustc']))), { apiKeyEnv: 'USTC_API_KEY' })
-
   const slots = []
-  let selectedModelPayload
+  const historyPayloads = []
+  const rpcPayloads = []
   plugin.apply({
     slots: {
       register: (options, component) => { slots.push({ options, component }); return () => {} },
     },
     connection: {
       api: { sessions: {
-        selectModel: async payload => {
-          selectedModelPayload = payload
-          return { result: { ok: true, value: { selected: { provider: payload.provider, model: payload.model } } } }
+        history: async payload => {
+          historyPayloads.push(payload)
+          return { result: { ok: true, value: { events: [] } } }
         },
       } },
-      rpc: {},
+      rpc: {
+        call: async (_channel, _endpoint, payload) => {
+          rpcPayloads.push(payload)
+          return { ok: true, value: { status: 'ready', issues: [], layers: [] } }
+        },
+      },
     },
   })
   assert.deepEqual(
     slots.map(slot => ({ name: slot.options.name, priority: slot.options.priority })),
-    [{ name: 'root', priority: -100 }],
+    [
+      { name: 'conversation.session', priority: -100 },
+      { name: 'sidebar.workspaces', priority: -100 },
+      { name: 'sidebar.brand.mark', priority: -100 },
+      { name: 'sidebar.brand.name', priority: -100 },
+    ],
   )
+  assert.ok(slots.every(slot => slot.options.children === undefined))
   assert.equal(appendedStyles.length, 1)
-  assert.match(appendedStyles[0].textContent, /\.gh-shell/)
+  assert.match(appendedStyles[0].textContent, /data-composer-seat/)
 
-  const injected = slots[0].options.inject()
-  assert.deepEqual(
-    await injected.agent.selectModel({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }),
-    { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-  )
-  assert.deepEqual(JSON.parse(JSON.stringify(selectedModelPayload)), {
-    sessionId: 'geoharness-main', provider: 'deepseek-official', model: 'deepseek-v4-flash',
-  })
-
-  const shell = slots[0].component(injected)
-  assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
-  assert.equal(shell.props['data-geoharness-agent'], 'native')
-  assert.equal(shell.type, 'main')
+  const injected = slots[0].options.inject('real-harness-session')
+  assert.deepEqual(await injected.agent.history(), { events: [] })
+  assert.deepEqual(await injected.agent.workspace(), { status: 'ready', issues: [], layers: [] })
+  assert.deepEqual(JSON.parse(JSON.stringify(historyPayloads)), [{ sessionId: 'real-harness-session', maxMessages: 100 }])
+  assert.deepEqual(JSON.parse(JSON.stringify(rpcPayloads)), [{ workspace_key: 'real-harness-session' }])
 })

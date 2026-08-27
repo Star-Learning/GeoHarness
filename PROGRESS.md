@@ -480,3 +480,25 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   `deepseek-official / deepseek-v4-flash` 后右侧 Current Step 同步更新，再恢复原模型；
   1170×912 下 document 与 viewport 完全一致，108 px composer 无溢出。
 - [x] 最终门禁通过：build、typecheck、peer、Node 51/51、Python 9/9 和 `git diff --check`。
+
+## Harness 原生设置与右侧原生对话框
+
+状态：完成（2026-08-27）
+
+- [x] 撤销 GeoHarness 对 `root` 的整页接管，恢复当前 DeepSeek Harness 的原生
+  `AppFrame`、`SidebarRoot`、`ConversationRoot`、`SettingsRoot`、`InputBar` 和
+  `ModelSelect` 装配链；没有复制或修改 `../deepseek-harness` 源码。
+- [x] GeoHarness 仅以 `priority: -100` 注册 `conversation.session`、
+  `sidebar.workspaces`、`sidebar.brand.mark` 和 `sidebar.brand.name`，且不重复声明上游已拥有的
+  `sidebar.settings`、`conversation.composer.bar` 或 `conversation.input.model`。
+- [x] 左下角“设置”现在直接打开上游原生设置 Dialog，真实浏览器确认包含通用设置、模型、
+  插件和 Agent 预设；API Key 继续由 Harness credential store 管理。
+- [x] 原生 `InputBar` 与 `ModelSelect` 被放置在右侧 Agent workspace 底部，输入、访问模式、
+  模型选择、上下文状态、发送和停止继续使用 Harness 自身行为；GeoHarness 不再调用
+  `sessions.prompt/models/selectModel` 自制一套对话链。
+- [x] 浏览器几何验收确认 Agent panel 为 390×562，composer card 为 370×94，且完整位于
+  Agent panel 内；原生模型菜单可展开，页面无 console error。
+- [x] Native Session history 继续驱动右侧 Goal、Tool Trace 和 Agent Result，真实 Session ID
+  同时隔离 Layer Store 与 workspace RPC，不恢复固定 Scenario UI fallback。
+- [x] 最终门禁通过：client build、typecheck、peer、Node 51/51、Python 9/9 和
+  `git diff --check`。

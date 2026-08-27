@@ -20,6 +20,11 @@ export interface AgentRunProjection {
   maxSeq: number
 }
 
+export interface HumanGoal {
+  seq: number
+  text: string
+}
+
 interface EventEnvelope {
   type?: unknown
   seq?: unknown
@@ -52,6 +57,34 @@ function contentText(value: unknown): string {
     }
   }
   return lines.join('\n').trim()
+}
+
+/** Return the newest real user-authored request from a native Harness history window. */
+export function latestHumanGoal(entries: readonly unknown[]): HumanGoal | null {
+  let latest: HumanGoal | null = null
+  for (const raw of entries) {
+    const event = asEvent(raw)
+    if (event === null || event.type !== 'user/message' || typeof event.seq !== 'number') continue
+    const data = recordValue(event.data) ? event.data : {}
+    const source = recordValue(data.source) ? data.source : {}
+    if (source.kind !== 'user') continue
+    const text = contentText(data.content)
+    if (text !== '' && (latest === null || event.seq > latest.seq)) latest = { seq: event.seq, text }
+  }
+  return latest
+}
+
+/** Count real user turns without including Harness/plugin context injections. */
+export function humanGoalCount(entries: readonly unknown[]): number {
+  let count = 0
+  for (const raw of entries) {
+    const event = asEvent(raw)
+    if (event === null || event.type !== 'user/message') continue
+    const data = recordValue(event.data) ? event.data : {}
+    const source = recordValue(data.source) ? data.source : {}
+    if (source.kind === 'user' && contentText(data.content) !== '') count += 1
+  }
+  return count
 }
 
 function parseArguments(value: unknown): Record<string, unknown> {
