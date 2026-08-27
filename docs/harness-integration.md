@@ -113,14 +113,18 @@ sessions.history({ sessionId })
 与插件注入的上下文，并以该事件 seq 作为本轮基线。随后轮询 `sessions.history`，只投影本轮
 新事件：
 
+- `assistant/chunk` → 按 turn、step、retry attempt 与 block index 合并 `text-delta` /
+  `reasoning-delta`，完整保留模型流式输出；
+- `llm/retry` → 在同一 Agent Stream 中记录 Provider、失败码与重试次数；
 - `tool/call` → 右侧新增 running step，并显示真实 tool 参数；
 - `tool/result` → step success/failed，展示 summary 与输出 Layer ID；
-- `assistant/message` → Agent Result；
+- `assistant/message` → 用 Harness 最终消息收敛当前 stream block，而不是只保留最后一句；
 - `turn/end` → 整轮完成或错误状态。
 
-因此“步骤逐渐打勾”来自 Harness Session 事件，不是浏览器定时器模拟，也不是读取
-`expected-result.json`。用户后续修改距离等要求仍发送到同一个 Agent session，由模型结合
-历史与当前 Layer ID 自主决定下一次工具调用。
+Agent Stream、Tool Trace、Layer projection 都由同一个 Session history 轮询周期驱动，因此
+模型文本、步骤逐渐打勾和地图图层会按真实事件同步推进；这不是浏览器定时器模拟，也不是
+读取 `expected-result.json`。用户后续修改距离等要求仍发送到同一个 Agent session，由模型
+结合历史与当前 Layer ID 自主决定下一次工具调用。
 
 ## 数据发现与 13 个 Geo Tools
 
@@ -186,11 +190,15 @@ dsh --profile web --no-open
 已从 `nyc-core-official` 发现并加载官方数据，500 m 河流缓冲测试返回 132/360；Native
 Session 事件投影和 Agent workspace RPC 也均有回归。
 
-当前进程环境没有 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`。预览 profile 虽然从
-`sessions.models` 列出 `ustc / deepseek-v4-flash-ascend1`，两次实际 Prompt 却都在任何
-Tool Call 之前以 `Connection error` 结束。因此不能声称“外部模型实际完成自主规划并调用
-工具”的 E2E 已通过。该外部条件不允许用 Scenario fallback 掩盖；UI 会明确提示检查
-Provider、网络和 API Key，并需要在模型连接可用后补做 planning smoke test。
+当前预览实际使用 `.tmp/dsh-home-preview`，其 `ustc / deepseek-v4-flash-ascend1` route 引用
+`USTC_API_KEY`，Harness 原生设置也确认该 credential 已配置。失败 Session 的真实事件是连续
+六次 `TRANSPORT / Connection error`（包含五次 Harness retry），而不是
+`MISSING_CREDENTIAL`、HTTP 401 或认证失败。进一步用同一运行环境的 Node `fetch` 复现到 socket
+`EACCES`；允许出站网络后，无凭据访问同一 Base URL 可正常到达并返回预期 HTTP 401，证明
+DNS/TLS/HTTP 路径可达。因此该次错误的根因是旧 Harness 服务进程没有 Provider 出站网络权限，
+不是“用户没有配置 API Key”。预览已用同一 profile、DSH_HOME 和 credential store 在允许联网
+的进程中重启。下一次真实 Prompt 仍需由 Provider 验证凭据本身是否被接受；GeoHarness 不会以
+Scenario fallback 掩盖任何模型失败。
 
 上游升级时必须重新核对 Bundle patch、lazy-CJS 协议、`conversation.session`、
 `sidebar.workspaces`、`sidebar.settings`、`conversation.composer.bar` 与

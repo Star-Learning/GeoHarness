@@ -13,6 +13,7 @@ import {
   humanGoalCount,
   latestHumanGoal,
   projectAgentHistory,
+  type AgentStreamItem,
   type AgentToolStep,
 } from './agent-session'
 import {
@@ -458,6 +459,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
   const [taskSteps, setTaskSteps] = React.useState<AgentToolStep[]>([])
+  const [agentStream, setAgentStream] = React.useState<AgentStreamItem[]>([])
   const [agentAnswer, setAgentAnswer] = React.useState('')
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
   const activeGoalSeq = React.useRef<number | null>(null)
@@ -468,11 +470,12 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const layerState = useLayerWorkspace()
   const layers = layerState.sessionId === sessionId ? layerState.layers : []
 
+  const streamRevision = agentStream.map(item => `${item.id}:${item.status}:${item.text.length}`).join('|')
   React.useEffect(() => {
     const panel = agentScroll.current
     if (panel === null) return
-    panel.scrollTop = runStatus === 'success' || runStatus === 'failed' ? panel.scrollHeight : 0
-  }, [runStatus])
+    panel.scrollTop = runStatus === 'ready' ? 0 : panel.scrollHeight
+  }, [runStatus, streamRevision, taskSteps.length])
 
   React.useEffect(() => {
     layerWorkspace.activate(sessionId)
@@ -489,6 +492,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           setRunStatus('ready')
           setRunError(null)
           setTaskSteps([])
+          setAgentStream([])
           setAgentAnswer('')
           lastRunStatus.current = 'ready'
         } else {
@@ -503,6 +507,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           workspaceSeq = projection.maxSeq
           const status = projection.finished ? (projection.succeeded ? 'success' : 'failed') : 'running'
           setTaskSteps(projection.steps)
+          setAgentStream(projection.stream)
           setAgentAnswer(projection.answer)
           setRunStatus(status)
           setRunError(projection.error)
@@ -632,10 +637,27 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
             <section className="gh-agent-block gh-agent-result" aria-label="Agent result">
-              <span className="gh-eyebrow">AGENT RESULT</span>
-              {agentAnswer === ''
-                ? <p className="gh-result-empty">Agent 的自然语言结论会在 Tool 结果验证完成后显示在这里。</p>
-                : <strong className="gh-result-headline">{agentAnswer}</strong>}
+              <div className="gh-stream-heading">
+                <span className="gh-eyebrow">AGENT STREAM</span>
+                <small>{runStatus === 'running' ? 'LIVE' : runStatus.toUpperCase()} · {successfulSteps.length}/{taskSteps.length} tools</small>
+              </div>
+              {agentStream.length === 0
+                ? <p className="gh-result-empty">{runStatus === 'running'
+                    ? '已提交给模型，等待首个流式 token…'
+                    : agentAnswer === '' ? 'Agent 的完整流式输出会显示在这里。' : agentAnswer}</p>
+                : <div className="gh-stream-list" aria-live="polite">
+                    {agentStream.map(item => item.kind === 'retry'
+                      ? <div className="gh-stream-retry" data-stream-status={item.status} key={item.id}>↻ {item.text}</div>
+                      : item.kind === 'reasoning'
+                        ? <details className="gh-stream-reasoning" open={item.status === 'streaming'} key={item.id}>
+                            <summary>Reasoning · Turn {item.turn} / Step {item.step}</summary>
+                            <p>{item.text}{item.status === 'streaming' && <i className="gh-stream-cursor" />}</p>
+                          </details>
+                        : <article className="gh-stream-text" data-stream-status={item.status} key={item.id}>
+                            <small>Agent · Turn {item.turn} / Step {item.step}</small>
+                            <p>{item.text}{item.status === 'streaming' && <i className="gh-stream-cursor" />}</p>
+                          </article>)}
+                  </div>}
               <div className="gh-result-trace">
                 {successfulSteps.slice(-3).map(step => <small key={step.id}><i>✓</i>{step.summary ?? step.title}</small>)}
               </div>

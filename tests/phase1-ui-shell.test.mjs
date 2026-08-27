@@ -23,7 +23,7 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   const styles = await readFile(join(bundleRoot, 'src', 'styles.css'), 'utf8')
   for (const label of [
     'GeoHarness', 'Map workspace', 'Layer panel', 'Agent workspace',
-    'Native Harness Agent', 'LIVE AGENT TOOL TRACE', 'AGENT RESULT',
+    'Native Harness Agent', 'LIVE AGENT TOOL TRACE', 'AGENT STREAM',
   ]) assert.match(source, new RegExp(label, 'i'))
 
   assert.match(source, /name: 'conversation\.session'/)
@@ -40,6 +40,7 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   assert.match(source, /workspace_key: sessionId/)
   assert.match(source, /latestHumanGoal/)
   assert.match(source, /projectAgentHistory/)
+  assert.match(source, /projection\.stream/)
   assert.doesNotMatch(source, /SCENARIOS|goal\/start|scenario\/progress|Example|expectedResult/)
 
   assert.match(styles, /grid-template-columns: minmax\(400px, 1fr\) var\(--gh-agent-column-width\)/)
@@ -48,6 +49,7 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   assert.match(styles, /\[data-phase="hero"\]:has\(\[data-geoharness-plugin="loaded"\]\)/)
   assert.match(styles, /data-chain-overlay-fallback="conversation\.composer"/)
   assert.match(styles, /native Harness ConversationRoot still owns the composer/i)
+  assert.match(styles, /\.gh-agent-scroll[^}]+padding:\s*11px 11px 210px/s)
   assert.doesNotMatch(styles, /\.gh-composer\s*\{/)
   assert.match(styles, /--dsw-alias-bg-base/)
   assert.match(styles, /--dsw-alias-state-business-primary/)

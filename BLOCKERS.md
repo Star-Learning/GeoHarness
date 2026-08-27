@@ -2,9 +2,10 @@
 
 ## 当前状态
 
-代码实现没有活跃阻塞。Phase 0–10 和本轮 Root/Native Agent 改造均已实现；当前有一个
-外部验收阻塞：环境没有可用模型凭据/连接，无法执行“模型自主规划并实际调用 Geo Tools”
-的模型 E2E。正式 UI 会明确报错且不会回退到 Scenario，详见下方“外部模型凭据”。
+代码实现没有活跃阻塞。Phase 0–10、Native Agent 改造和完整 Agent Stream 均已实现。此前
+模型 E2E 的 `Connection error` 已确认是旧 Harness 服务进程的出站网络权限问题，不是 API Key
+未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
+完成 planning smoke test，详见下方“外部模型连接”。
 
 ## Phase 0
 
@@ -133,22 +134,22 @@ PyProj 3.7.2 和 Pyogrio 环境中通过测试，没有当前依赖阻塞。其�
 `backend/geo-service/pyproject.toml` 的版本范围并重跑全部空间测试，尤其不能只用
 mock 替代 GEOS/PROJ 运算。
 
-### 5. 外部模型凭据
+### 5. 外部模型连接
 
-当前环境同时缺少 `DEEPSEEK_API_KEY` 和 `OPENAI_API_KEY`。预览 profile 的
-`sessions.models` 仍广告 `ustc / deepseek-v4-flash-ascend1` 为当前 route，但实际提交
-“Broadway 200 米”和“检查建筑数量”两个 Prompt 后，turn 都在产生任何 Tool Call 之前以
-`Connection error` 结束。服务本身仍正常监听 31994，故当前证据指向 LLM Provider/网络/凭据
-边界，而不是 Geo Tool 或地图执行失败。
+预览实际使用 `.tmp/dsh-home-preview`。Harness 原生设置与 profile 均确认当前 route 是
+`ustc / deepseek-v4-flash-ascend1`，所引用的 `USTC_API_KEY` credential 已配置；排查过程中没有
+读取、回显或复制密钥值。失败 Session 连续记录六次 `TRANSPORT / Connection error`（五次
+retry），而不是 `MISSING_CREDENTIAL`、HTTP 401 或认证失败。
 
-这意味着目前无法验证外部模型是否会针对任意自然语言目标自主选择正确数据和 Geo Tools。
-这是实际外部验收阻塞，不能用固定 Scenario fallback 伪装成功。客户端已把这类错误提升为
-“检查 LLM Provider、网络和 API Key；不会回退到预设 Scenario”的明确失败态。
+旧服务运行环境中的 Node `fetch` 直接复现 socket `EACCES`。允许出站网络后，PowerShell 与
+Node 均能到达相同 Provider Base URL；无凭据请求按预期返回 HTTP 401，证明 DNS、TLS 和 HTTP
+路径可用。根因因此收敛为旧 Harness 进程的网络限制。旧进程已停止，并使用相同 profile、
+DSH_HOME 与 credential store 在允许联网的进程中重启 31994 服务。
 
-已完成的本地证据包括：13 个 Tool schema 注册、System Prompt 注入、Native Session event
-投影、Agent workspace RPC、真实官方数据 discovery/load、Python/GeoPandas buffer/filter 和
-51/51 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
-正确性仍以确定性 Scenario/oracle 为准，不能依赖模型措辞。
+尚未主动代用户产生一次可能计费的模型调用，所以不能仅凭“已配置”断言 Provider 已接受该
+API Key。下一次由用户提交真实 Prompt 后，应确认没有新的 `TRANSPORT`/认证错误，并观察模型
+自主产生 Geo Tool Call；该验收不能用固定 Scenario fallback 替代。空间正确性仍以确定性
+Scenario/oracle 为准，不能依赖模型措辞。
 
 ### 6. 左下角原生 Harness 设置入口
 

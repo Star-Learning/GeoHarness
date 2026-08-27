@@ -130,7 +130,7 @@
 .gh-agent-state.is-running { color: var(--gh-accent); }
 .gh-agent-state.is-success { color: var(--gh-success); }
 .gh-agent-state.is-failed { color: var(--gh-error); }
-.gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px 11px 162px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }
+.gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px 11px 210px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }
 .gh-agent-block { padding: 12px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 35%, transparent); }
 .gh-agent-block:first-child { padding-top: 12px; }
 .gh-agent-block p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }
@@ -150,6 +150,20 @@
 .gh-current-step > div span { color: var(--gh-muted); }
 .gh-current-step .is-teal { color: var(--gh-success); }
 .gh-agent-result { display: grid; gap: 8px; }
+.gh-stream-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gh-stream-heading small { color: var(--gh-muted); font: 600 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .25px; }
+.gh-stream-list { display: grid; gap: 8px; }
+.gh-stream-text { padding: 9px 10px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }
+.gh-stream-text > small { color: var(--gh-muted); font: 500 9px/1.3 var(--dsw-font-mono), monospace; }
+.gh-stream-text > p,
+.gh-stream-reasoning > p { margin: 5px 0 0; color: var(--gh-ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.gh-stream-text[data-stream-status="interrupted"] { border-color: color-mix(in srgb, var(--gh-error) 35%, var(--gh-line)); }
+.gh-stream-reasoning { padding: 8px 10px; border-radius: 8px; background: var(--gh-fill); color: var(--gh-muted); }
+.gh-stream-reasoning > summary { cursor: pointer; font-size: 10px; font-weight: 600; }
+.gh-stream-reasoning > p { color: var(--gh-muted); font-size: 11px; }
+.gh-stream-retry { padding: 7px 9px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 8%, var(--gh-fill)); color: var(--gh-error); font: 500 10px/1.4 var(--dsw-font-mono), monospace; }
+.gh-stream-cursor { display: inline-block; width: 5px; height: 13px; margin-left: 2px; vertical-align: -2px; border-radius: 1px; background: var(--gh-accent); animation: gh-stream-blink .8s steps(1, end) infinite; }
+@keyframes gh-stream-blink { 50% { opacity: 0; } }
 .gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }
 .gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }
 .gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }

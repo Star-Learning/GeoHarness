@@ -17,19 +17,19 @@ source, and it is not a separate Chat + Map website.
 
 - A dual-face Harness plugin/bundle: Host plugin plus browser module, composed through current
   `dsh.bundle`, `dsh.client`, Cordis Service and Harness Slot contracts.
-- A three-column GIS workspace that takes over the official `root` single Slot at priority `-100`:
-  opening Harness immediately shows GeoHarness without the upstream session/project sidebar. The
-  workspace still uses upstream Connection, Session APIs and DSW theme tokens.
-- A lower-left **模型与 API Key** surface backed by the official `settings.describe`,
-  `llm.providers` and secure `credentials.describe/set` APIs. It preserves Provider credential
-  setup without bringing the unrelated session/project browser back.
+- A three-column GIS workspace mounted inside the upstream `AppFrame` through
+  `conversation.session`, with GeoHarness branding/workspace seats and the native Harness settings
+  entry, composer and model selector preserved.
+- The native lower-left **设置** surface, including the upstream Provider and secure credential
+  configuration. GeoHarness never reads, renders or stores the secret value itself.
 - 13 Harness defineTool consumers, including `discover_datasets`, with schema validation,
   timeout/cancellation, structured `ToolResult` and Agent planning guidance.
 - A cancellable local Python provider using GeoPandas, Shapely, PyProj and persistent GeoPackage
   workspaces.
-- Native Harness Session integration through `sessions.create/models/history/prompt`; real
-  `tool/call`, `tool/result`, `assistant/message` and `turn/end` events progressively drive the
-  right-hand execution steps and final Agent result.
+- Native Harness Session integration through the current conversation runtime and
+  `sessions.history`; real `assistant/chunk`, `llm/retry`, `tool/call`, `tool/result`,
+  `assistant/message` and `turn/end` events progressively drive the synchronized right-hand
+  Agent Stream, execution steps and Layers.
 - Verified live `Agent workspace → Layer Registry → Map` projection over the official loopback
   Connection RPC, including feature-count and parent-lineage checks.
 - A reusable `nyc-core-official` data catalog containing dated official NYC buildings, roads,
@@ -45,15 +45,16 @@ source, and it is not a separate Chat + Map website.
 ## Architecture
 
 ```text
-DeepSeek Harness Web
-  └─ root single Slot (priority -100 takeover)
-       └─ GeoHarness primary GIS workspace (no Harness sidebar)
-            ├─ Harness Session API → Native Harness Agent
-            │    └─ SystemPrompt + ToolRuntime → 13 Harness defineTool consumers
-            │         └─ Geo Service → cancellable local Python provider
-            │              └─ GeoPandas / Shapely / PyProj / GeoPackage
-            └─ Connection RPC (/geoharness/agent/workspace)
-                 └─ verified Layer Registry projection → interactive map
+DeepSeek Harness Web AppFrame
+  ├─ native sidebar settings → Provider / credential configuration
+  └─ conversation.session → GeoHarness primary GIS workspace
+       ├─ native InputBar / ModelSelect → Harness Session → Native Agent
+       │    └─ SystemPrompt + ToolRuntime → 13 Harness defineTool consumers
+       │         └─ Geo Service → cancellable local Python provider
+       │              └─ GeoPandas / Shapely / PyProj / GeoPackage
+       ├─ sessions.history → synchronized Agent stream / Tool progress
+       └─ Connection RPC (/geoharness/agent/workspace)
+            └─ verified Layer Registry projection → interactive map
 ```
 
 The Registry is the Layer truth source. Agent text never invents Layer IDs or map state. The map
@@ -93,21 +94,23 @@ dsh plugin --profile web add ./bundle/geoharness-bundle
 dsh --profile web --no-open
 ```
 
-Open Harness and the whole surface is already GeoHarness. There is no Harness session/project
-sidebar, separate GIS tab, drawer or Examples selector. Enter any supported spatial requirement in
-the bottom composer and press **执行 GIS 任务**. The Agent discovers the available data catalog,
-plans from the submitted text and chooses its tools; explicit values such as 200 m or 275 m remain
-the values supplied to the GIS operation. Real Session events advance the right-hand steps,
-verified workspace Layers appear on the map, and the Agent Result panel shows the final answer.
+Open Harness and the conversation workspace is already GeoHarness; there is no separate GIS tab,
+drawer or Examples selector. Enter any supported spatial requirement in the native composer. The
+Agent discovers the available data catalog, plans from the submitted text and chooses its tools;
+explicit values such as 200 m or 275 m remain the values supplied to the GIS operation. Real
+Session events append the complete right-hand Agent Stream while Tool steps advance and verified
+workspace Layers appear on the map from the same run.
 Pan with pointer drag and zoom with the mouse wheel or map controls.
 
-Use the lower-left **模型与 API Key** button to inspect configured Providers and securely add or
+Use the native lower-left **设置** button to inspect configured Providers and securely add or
 replace a credential. Stored values remain write-only in the Harness credential store and are never
 written to this repository or echoed back into the page.
 
 A configured Harness model provider is required for this production path. When no routable model
 exists, GeoHarness shows an explicit configuration error and does not silently fall back to a
-Scenario. No API key is stored in this repository.
+Scenario. The Harness server process must also have outbound HTTPS access to the Provider Base URL;
+a configured key cannot prevent a transport-level `Connection error` when that process is blocked
+by a sandbox, proxy or firewall. No API key is stored in this repository.
 
 ## Seven official-data v1.0 deterministic regressions
 

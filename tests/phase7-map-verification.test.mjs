@@ -141,11 +141,20 @@ test('native Harness Session events become live Agent tool steps and a final ans
       source: { kind: 'user' }, content: [{ type: 'text', text: '请创建 275 米缓冲区。' }],
     } } },
     { event: { type: 'turn/start', seq: 11, data: { turn: 2 } } },
-    { event: { type: 'tool/call', seq: 12, data: {
+    { event: { type: 'assistant/chunk', seq: 12, data: {
+      turn: 2, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' },
+    } } },
+    { event: { type: 'assistant/chunk', seq: 13, data: {
+      turn: 2, step: 1, chunk: { type: 'reasoning-delta', index: 0, text: '正在选择真实图层和缓冲参数。' },
+    } } },
+    { event: { type: 'assistant/chunk', seq: 14, data: {
+      turn: 2, step: 1, chunk: { type: 'block-end', index: 0, block: { type: 'reasoning', text: '正在选择真实图层和缓冲参数。' } },
+    } } },
+    { event: { type: 'tool/call', seq: 15, data: {
       turn: 2, step: 1, callId: 'call-1', name: 'create_buffer',
       arguments: '{"input_layer":"layer_0001","distance":275,"unit":"meter"}',
     } } },
-    { event: { type: 'tool/result', seq: 13, data: {
+    { event: { type: 'tool/result', seq: 16, data: {
       turn: 2, step: 1,
       message: {
         source: { kind: 'tool', callId: 'call-1' },
@@ -153,11 +162,17 @@ test('native Harness Session events become live Agent tool steps and a final ans
       },
       meta: { summary: 'Created a 275 m buffer.', outputs: ['layer_0002'] },
     } } },
-    { event: { type: 'assistant/message', seq: 14, data: {
+    { event: { type: 'assistant/chunk', seq: 17, data: {
+      turn: 2, step: 2, chunk: { type: 'block-start', index: 0, blockType: 'text' },
+    } } },
+    { event: { type: 'assistant/chunk', seq: 18, data: {
+      turn: 2, step: 2, chunk: { type: 'text-delta', index: 0, text: '275 米缓冲区已完成并通过图层验证。' },
+    } } },
+    { event: { type: 'assistant/message', seq: 19, data: {
       turn: 2, step: 2,
       message: { content: [{ type: 'text', text: '275 米缓冲区已完成并通过图层验证。' }] },
     } } },
-    { event: { type: 'turn/end', seq: 15, data: { turn: 2, reason: { kind: 'completed' } } } },
+    { event: { type: 'turn/end', seq: 20, data: { turn: 2, reason: { kind: 'completed' } } } },
   ]
   const projection = plugin.projectAgentHistory(entries, 10)
   assert.deepEqual(JSON.parse(JSON.stringify(plugin.latestHumanGoal(entries))), { seq: 10, text: '请创建 275 米缓冲区。' })
@@ -170,6 +185,13 @@ test('native Harness Session events become live Agent tool steps and a final ans
   assert.equal(projection.finished, true)
   assert.equal(projection.succeeded, true)
   assert.equal(projection.answer, '275 米缓冲区已完成并通过图层验证。')
+  assert.deepEqual(JSON.parse(JSON.stringify(projection.stream)), [{
+    id: 'assistant:2:1:0:0', kind: 'reasoning', text: '正在选择真实图层和缓冲参数。',
+    status: 'settled', turn: 2, step: 1, seq: 12,
+  }, {
+    id: 'assistant:2:2:0:0', kind: 'text', text: '275 米缓冲区已完成并通过图层验证。',
+    status: 'settled', turn: 2, step: 2, seq: 17,
+  }])
   assert.deepEqual(JSON.parse(JSON.stringify(projection.steps)), [{
     id: 'call-1', name: 'create_buffer', title: 'Geo · create_buffer',
     arguments: { input_layer: 'layer_0001', distance: 275, unit: 'meter' },
@@ -177,13 +199,26 @@ test('native Harness Session events become live Agent tool steps and a final ans
   }])
 
   const failed = plugin.projectAgentHistory([{
-    event: { type: 'turn/end', seq: 21, data: {
-      turn: 3, reason: { kind: 'error', error: { message: 'Connection error.' } },
+    event: { type: 'assistant/chunk', seq: 21, data: {
+      turn: 3, step: 1, chunk: { type: 'finish', reason: { kind: 'error', failure: { message: 'Connection error.', code: 'TRANSPORT' } } },
+    } },
+  }, {
+    event: { type: 'llm/retry', seq: 22, data: {
+      turn: 3, step: 1, provider: 'ustc', retry: 1, maxRetries: 5,
+      failure: { message: 'Connection error.', code: 'TRANSPORT' },
+    } },
+  }, {
+    event: { type: 'turn/end', seq: 23, data: {
+      turn: 3, reason: { kind: 'error', error: { message: 'Connection error.', code: 'TRANSPORT' } },
     } },
   }], 20)
   assert.equal(failed.finished, true)
   assert.equal(failed.succeeded, false)
-  assert.match(failed.error, /Connection error.*LLM Provider.*API Key.*不会回退/u)
+  assert.match(failed.error, /TRANSPORT.*Connection error.*API Key.*外网权限.*不会回退/u)
+  assert.deepEqual(JSON.parse(JSON.stringify(failed.stream)), [{
+    id: 'retry:22', kind: 'retry', text: 'ustc · TRANSPORT · retry 1/5',
+    status: 'interrupted', turn: 3, step: 1, seq: 22,
+  }])
 })
 
 test('the Agent workspace RPC verifies and returns canonical live Registry projection', async () => {

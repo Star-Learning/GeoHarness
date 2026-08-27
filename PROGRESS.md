@@ -505,3 +505,23 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   同时隔离 Layer Store 与 workspace RPC，不恢复固定 Scenario UI fallback。
 - [x] 最终门禁通过：client build、typecheck、peer、Node 51/51、Python 9/9 和
   `git diff --check`。
+
+## Agent 完整流式输出与 Provider TRANSPORT 诊断
+
+状态：实现完成；真实 Provider 凭据验收待下一次用户 Prompt（2026-08-27）
+
+- [x] 右侧由单一最终 `Agent Result` 升级为完整 `Agent Stream`，按 turn、step、retry attempt
+  和 block index 合并 Harness `assistant/chunk` 的 text/reasoning delta，并用
+  `assistant/message` 收敛最终内容。
+- [x] Stream、Tool Trace、Layer projection 继续读取同一个 Native Session history，每 400 ms
+  同步更新；运行中输出自动跟随滚动，Tool 成功数和 `LIVE/SUCCESS/FAILED` 状态同步展示。
+- [x] 保留 Provider `llm/retry` 事件，显示 Provider、失败码和 retry 计数；`TRANSPORT`、
+  `MISSING_CREDENTIAL`、认证失败分别给出可操作错误，不再把所有连接问题笼统归因于 API Key。
+- [x] 确认预览实际 `DSH_HOME` 为 `.tmp/dsh-home-preview`，当前 USTC credential 已配置；失败
+  Session 是六次 `TRANSPORT`，不是缺失凭据或 HTTP 401。
+- [x] 在旧进程环境复现 Node socket `EACCES`，并在允许出站网络后确认 Provider Base URL 可达；
+  使用相同 profile、DSH_HOME 与 credential store 重启 31994 服务，没有读取或回显密钥。
+- [x] 新增真实 Session chunk/reasoning/retry/TRANSPORT 投影回归，并更新集成说明和运行边界。
+- [x] 浏览器 1280×720 验收发现原生 composer 高度为 190 px 后，将 Agent 滚动区底部 clearance
+  调整为 210 px；滚动到底时完整 Stream 与 composer 保持 12.5 px 间距，页面无溢出或
+  console error。

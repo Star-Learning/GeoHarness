@@ -10,8 +10,23 @@ export interface AgentToolStep {
   outputs: string[]
 }
 
+export type AgentStreamKind = 'text' | 'reasoning' | 'retry'
+export type AgentStreamStatus = 'streaming' | 'settled' | 'interrupted'
+
+/** One chronological item from the native Harness Assistant stream. */
+export interface AgentStreamItem {
+  id: string
+  kind: AgentStreamKind
+  text: string
+  status: AgentStreamStatus
+  turn: number
+  step: number
+  seq: number
+}
+
 export interface AgentRunProjection {
   steps: AgentToolStep[]
+  stream: AgentStreamItem[]
   answer: string
   finished: boolean
   succeeded: boolean
@@ -119,6 +134,16 @@ function turnFailure(value: unknown): string | null {
   if (value.kind === 'error') {
     const failure = recordValue(value.error) ? value.error : {}
     const message = stringValue(failure.message) ?? 'Agent execution failed.'
+    const code = stringValue(failure.code)
+    if (code === 'TRANSPORT') {
+      return `Harness 模型传输失败（TRANSPORT）：${message} API Key 已配置也可能发生此错误；请检查运行服务的外网权限、代理/防火墙和 Provider Base URL。GeoHarness 不会回退到预设 Scenario。`
+    }
+    if (code === 'MISSING_CREDENTIAL') {
+      return `Harness 没有从当前 DSH_HOME 解析到模型凭据（MISSING_CREDENTIAL）：${message}`
+    }
+    if (code === 'AUTHENTICATION' || code === 'INVALID_CREDENTIAL') {
+      return `Harness 拒绝了当前模型凭据（${code}）：${message}`
+    }
     if (/connection|network|fetch|provider|api.?key|credential/i.test(message)) {
       return `Harness 模型调用失败：${message} 请检查当前 LLM Provider、网络和 API Key 配置；GeoHarness 不会回退到预设 Scenario。`
     }
@@ -130,6 +155,8 @@ function turnFailure(value: unknown): string | null {
 /** Fold one native Harness Session history window into GeoHarness presentation state. */
 export function projectAgentHistory(entries: readonly unknown[], afterSeq: number): AgentRunProjection {
   const steps = new Map<string, AgentToolStep>()
+  const stream = new Map<string, AgentStreamItem>()
+  const attempts = new Map<string, number>()
   const answers: string[] = []
   let turn: number | null = null
   let finished = false
@@ -140,9 +167,84 @@ export function projectAgentHistory(entries: readonly unknown[], afterSeq: numbe
   for (const raw of entries) {
     const event = asEvent(raw)
     if (event === null || typeof event.seq !== 'number' || event.seq <= afterSeq) continue
-    maxSeq = Math.max(maxSeq, event.seq)
+    const eventSeq: number = event.seq
+    maxSeq = Math.max(maxSeq, eventSeq)
     const data = recordValue(event.data) ? event.data : {}
     if (event.type === 'turn/start' && typeof data.turn === 'number') turn = data.turn
+    if (event.type === 'assistant/chunk') {
+      const eventTurn = typeof data.turn === 'number' ? data.turn : 0
+      const eventStep = typeof data.step === 'number' ? data.step : 0
+      const chunk = recordValue(data.chunk) ? data.chunk : {}
+      const stepKey = `${eventTurn}:${eventStep}`
+      const attempt = attempts.get(stepKey) ?? 0
+      const index = typeof chunk.index === 'number' ? chunk.index : 0
+      const itemKey = `assistant:${stepKey}:${attempt}:${index}`
+      const existing = stream.get(itemKey)
+      if (chunk.type === 'block-start' && (chunk.blockType === 'text' || chunk.blockType === 'reasoning')) {
+        stream.set(itemKey, {
+          id: itemKey,
+          kind: chunk.blockType,
+          text: '',
+          status: 'streaming',
+          turn: eventTurn,
+          step: eventStep,
+          seq: event.seq,
+        })
+      }
+      if ((chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') && typeof chunk.text === 'string') {
+        const kind = chunk.type === 'text-delta' ? 'text' : 'reasoning'
+        stream.set(itemKey, {
+          id: itemKey,
+          kind,
+          text: (existing?.kind === kind ? existing.text : '') + chunk.text,
+          status: 'streaming',
+          turn: eventTurn,
+          step: eventStep,
+          seq: existing?.seq ?? event.seq,
+        })
+      }
+      if (chunk.type === 'block-end' && recordValue(chunk.block)) {
+        const block = chunk.block
+        if ((block.type === 'text' || block.type === 'reasoning') && typeof block.text === 'string') {
+          stream.set(itemKey, {
+            id: itemKey,
+            kind: block.type,
+            text: block.text,
+            status: 'settled',
+            turn: eventTurn,
+            step: eventStep,
+            seq: existing?.seq ?? event.seq,
+          })
+        }
+      }
+      if (chunk.type === 'finish') {
+        const reason = recordValue(chunk.reason) ? chunk.reason : {}
+        const nextStatus: AgentStreamStatus = reason.kind === 'error' ? 'interrupted' : 'settled'
+        for (const [key, item] of stream) {
+          if (key.startsWith(`assistant:${stepKey}:${attempt}:`)) stream.set(key, { ...item, status: nextStatus })
+        }
+      }
+    }
+    if (event.type === 'llm/retry') {
+      const eventTurn = typeof data.turn === 'number' ? data.turn : 0
+      const eventStep = typeof data.step === 'number' ? data.step : 0
+      const retry = typeof data.retry === 'number' ? data.retry : 0
+      const maxRetries = typeof data.maxRetries === 'number' ? data.maxRetries : 0
+      const provider = stringValue(data.provider) ?? 'provider'
+      const failure = recordValue(data.failure) ? data.failure : {}
+      const code = stringValue(failure.code) ?? 'ERROR'
+      const stepKey = `${eventTurn}:${eventStep}`
+      attempts.set(stepKey, retry)
+      stream.set(`retry:${event.seq}`, {
+        id: `retry:${event.seq}`,
+        kind: 'retry',
+        text: `${provider} · ${code} · retry ${retry}/${maxRetries}`,
+        status: 'interrupted',
+        turn: eventTurn,
+        step: eventStep,
+        seq: event.seq,
+      })
+    }
     if (event.type === 'tool/call') {
       const id = stringValue(data.callId)
       const name = stringValue(data.name)
@@ -179,6 +281,26 @@ export function projectAgentHistory(entries: readonly unknown[], afterSeq: numbe
       const message = recordValue(data.message) ? data.message : {}
       const text = contentText(message.content)
       if (text !== '') answers.push(text)
+      const eventTurn = typeof data.turn === 'number' ? data.turn : 0
+      const eventStep = typeof data.step === 'number' ? data.step : 0
+      const stepKey = `${eventTurn}:${eventStep}`
+      const attempt = attempts.get(stepKey) ?? 0
+      if (Array.isArray(message.content)) {
+        message.content.forEach((rawBlock, index) => {
+          if (!recordValue(rawBlock)) return
+          if ((rawBlock.type !== 'text' && rawBlock.type !== 'reasoning') || typeof rawBlock.text !== 'string') return
+          const itemKey = `assistant:${stepKey}:${attempt}:${index}`
+          stream.set(itemKey, {
+            id: itemKey,
+            kind: rawBlock.type,
+            text: rawBlock.text,
+            status: 'settled',
+            turn: eventTurn,
+            step: eventStep,
+            seq: stream.get(itemKey)?.seq ?? eventSeq,
+          })
+        })
+      }
     }
     if (event.type === 'turn/end') {
       finished = true
@@ -190,6 +312,7 @@ export function projectAgentHistory(entries: readonly unknown[], afterSeq: numbe
 
   return {
     steps: [...steps.values()],
+    stream: [...stream.values()].filter(item => item.kind === 'retry' || item.text !== '').sort((a, b) => a.seq - b.seq),
     answer: answers.at(-1) ?? '',
     finished,
     succeeded,
