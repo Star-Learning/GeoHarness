@@ -2,11 +2,9 @@
 
 ## 当前状态
 
-没有阻止 GeoHarness v1.0 完成的活跃问题。Phase 0–10 均已实现、验证并提交；以下内容
-保留已解决问题和不会阻塞 v1.0 的环境/升级门禁，便于后续维护时复核。
-
-本轮主界面替换与动态参数回归通过 Node 46/46、Python 9/9、官方数据/媒体/peer 门禁及
-真实浏览器测试；没有新增外部阻塞。
+代码实现没有活跃阻塞。Phase 0–10 和本轮 Root/Native Agent 改造均已实现；当前有一个
+外部验收阻塞：环境没有可用模型凭据/连接，无法执行“模型自主规划并实际调用 Geo Tools”
+的模型 E2E。正式 UI 会明确报错且不会回退到 Scenario，详见下方“外部模型凭据”。
 
 ## Phase 0
 
@@ -23,16 +21,16 @@ Harness externals、CSS 注入和产物新鲜度增加测试。GeoHarness 不依
 
 ### 三栏 UI Shell 的 Slot 适配性
 
-当前 Harness 源码与真实 Web 验证确认：`ui-layout` 公开的 `conversation` 是
-`single + session-maybe` Slot，`ui-conversation` 的默认 entry 为 priority 0；GeoHarness
-使用 priority -100 成为同一 cell 的 winner，可在不遮蔽 `root` AppFrame 的前提下直接
-替换中心表面。GeoHarness 不再注册 `conversation.view`、标题栏 action 或 `shell.overlay`。
+当前 Harness 源码确认 `ui-layout` 把完整 AppFrame 注册到公开的 `root` single Slot；其中
+才声明 `sidebar`、`conversation`、`details` 和 `shell.overlay` 子槽。旧版 GeoHarness 只接管
+`conversation`，所以仍显示会话/项目侧栏。本轮按产品要求改用 `root`、priority `-100` 成为
+winner，直接显示 GeoHarness 全页；不再注册上述子槽，也没有修改上游源码。
 
 ### 真实矢量地图的 Slot 适配性
 
-Phase 3 已在真实 Harness Web 中验证：七个 Scenario 数据可嵌入客户端，三栏视图
-可在 `conversation` 主槽中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
-检查。720p 容器高度问题已通过视口约束修复，无需独立 Web surface。
+Phase 3 曾用嵌入式 Scenario 数据验证地图交互；正式客户端现已移除这些 fixture，改为
+`agent/workspace` RPC 的 Registry projection。Layer 显隐、连续透明度、缩放、平移和要素
+检查仍由同一地图组件承担，客户端产物测试禁止再次嵌入 Scenario ID/GeoJSON。
 
 ### Task Step 与地图绑定
 
@@ -98,10 +96,10 @@ Python 9/9、Node 45/45 均通过。
 
 ### 动态任务进度与地图交互
 
-当前无产品阻塞。步骤进度、输出 Layer 状态和 Agent Result 都来自真实 TaskGraph/ToolResult；
-派生几何必须先通过 partial Map Verification 才进入浏览器。后台 job 只保存在当前 Harness
-Host 进程内，服务重启后不恢复正在运行的任务，这是 v1.0 本地工作区运行模型的已知边界，
-不影响已完成结果落在 workspace Registry。持久化/跨进程任务队列不在 v1.0 范围内。
+当前无代码阻塞。正式 UI 的步骤和 Agent Result 来自原生 Harness Session 的 tool/message/turn
+事件，Layer 来自当前 Agent workspace Registry；旧 TaskGraph/partial Map Verification 只保留
+为确定性回归。Session history 与 workspace Registry 分属 Harness/GeoHarness 的现有本地运行
+模型，持久化分布式任务队列不在 v1.0 范围内。
 
 ## 非阻塞限制与后续门禁
 
@@ -137,8 +135,17 @@ mock 替代 GEOS/PROJ 运算。
 
 ### 5. 外部模型凭据
 
-Phase 5 隔离 profile 未配置 DeepSeek API Key，因而没有执行会产生外部请求的自然语言
-Agent 对话。该条件不阻塞本地 v1.0 开发：当前官方 `SystemPrompt + ToolRuntime` 已真实
-注册、校验并执行模型可见 Tool 调用链，完整 Harness Web 也已成功激活 Host 插件。
-未来配置凭据后可补充模型规划质量 smoke test，但空间正确性仍必须由确定性 Scenario
-回归测试判定，不能依赖模型措辞。
+当前环境同时缺少 `DEEPSEEK_API_KEY` 和 `OPENAI_API_KEY`。预览 profile 的
+`sessions.models` 仍广告 `ustc / deepseek-v4-flash-ascend1` 为当前 route，但实际提交
+“Broadway 200 米”和“检查建筑数量”两个 Prompt 后，turn 都在产生任何 Tool Call 之前以
+`Connection error` 结束。服务本身仍正常监听 31994，故当前证据指向 LLM Provider/网络/凭据
+边界，而不是 Geo Tool 或地图执行失败。
+
+这意味着目前无法验证外部模型是否会针对任意自然语言目标自主选择正确数据和 Geo Tools。
+这是实际外部验收阻塞，不能用固定 Scenario fallback 伪装成功。客户端已把这类错误提升为
+“检查 LLM Provider、网络和 API Key；不会回退到预设 Scenario”的明确失败态。
+
+已完成的本地证据包括：13 个 Tool schema 注册、System Prompt 注入、Native Session event
+投影、Agent workspace RPC、真实官方数据 discovery/load、Python/GeoPandas buffer/filter 和
+50/50 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
+正确性仍以确定性 Scenario/oracle 为准，不能依赖模型措辞。

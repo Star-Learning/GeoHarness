@@ -30,6 +30,37 @@ function goalRequestPayload(payload) {
   return { prompt, workspaceKey }
 }
 
+function agentWorkspacePayload(payload) {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const workspaceKey = payload.workspace_key
+  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  return { workspaceKey }
+}
+
+function verifyWorkspaceProjection(projection) {
+  const ids = new Set(projection.map(item => item.metadata?.layer_id))
+  const issues = []
+  for (const item of projection) {
+    const metadata = item.metadata ?? {}
+    const featureCount = item.geojson?.type === 'FeatureCollection' && Array.isArray(item.geojson.features)
+      ? item.geojson.features.length
+      : -1
+    if (featureCount !== metadata.feature_count) issues.push(`Feature count mismatch for ${metadata.layer_id ?? 'unknown layer'}`)
+    if (!Array.isArray(metadata.parents) || metadata.parents.some(parent => !ids.has(parent))) {
+      issues.push(`Missing parent Layer for ${metadata.layer_id ?? 'unknown layer'}`)
+    }
+  }
+  return {
+    status: issues.length === 0 ? 'ready' : 'failed',
+    checks: {
+      feature_counts_match: !issues.some(issue => issue.startsWith('Feature count')),
+      parent_layers_present: !issues.some(issue => issue.startsWith('Missing parent')),
+    },
+    issues,
+    layers: projection,
+  }
+}
+
 function toMeters(value, unit) {
   const distance = ['公里', '千米', 'km', 'kilometer', 'kilometers'].includes(unit.toLowerCase())
     ? value * 1000
@@ -160,6 +191,12 @@ export function registerGeoRpc(ctx) {
   }
 
   return ctx.connection.rpc.handle('/geoharness', async (endpoint, payload, signal) => {
+    if (endpoint === 'agent/workspace') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      const projection = await ctx.geo.execute({ action: 'projection', workspaceKey: request.workspaceKey }, signal)
+      return { ok: true, value: verifyWorkspaceProjection(projection) }
+    }
     if (endpoint === 'goal/run' || endpoint === 'goal/start') {
       const request = goalRequestPayload(payload)
       if (request === null) return badRequest('A non-empty goal_prompt and valid workspace_key are required')

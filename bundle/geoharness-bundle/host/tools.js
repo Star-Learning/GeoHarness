@@ -10,6 +10,17 @@ const SCENARIO_IDS = [
   '07-official-nyc-building-inspection',
 ]
 
+const DATASET_CATALOG = [
+  {
+    id: 'nyc-core-official',
+    title: 'NYC Core Official GIS Catalog',
+    region: 'Manhattan, New York City',
+    snapshot_date: '2026-08-27',
+    layers: ['buildings', 'roads', 'rivers', 'districts', 'lower_manhattan_buildings'],
+    description: 'Reusable official NYC vector layers for agent-planned inspection, distance, accessibility, aggregation and multi-constraint analysis.',
+  },
+]
+
 const STEP_ID = {
   type: 'string',
   description: 'Optional stable Task Graph step id. Omit to use the Harness tool-call id.',
@@ -36,6 +47,13 @@ const OUTPUT_SCHEMA = {
 
 const TOOL_SPECS = [
   {
+    name: 'discover_datasets',
+    description: 'Discover reusable real-data catalogs available to this GeoHarness deployment. This returns data capabilities only; it does not prescribe a workflow.',
+    parameters: {
+      step_id: STEP_ID,
+    },
+  },
+  {
     name: 'inspect_dataset',
     description: 'Inspect one registered vector layer: feature count, geometry, CRS, fields, missing values, validity, bounds and area summary.',
     parameters: {
@@ -45,9 +63,9 @@ const TOOL_SPECS = [
   },
   {
     name: 'list_layers',
-    description: 'List canonical layers. On the first GIS call, pass the matching Scenario id to load that independent package into this session workspace.',
+    description: 'List canonical layers in this Agent workspace. Pass a dataset_id to load that reusable real-data catalog before analysis.',
     parameters: {
-      scenario_id: { type: 'string', enum: SCENARIO_IDS, description: 'Optional official Scenario package to activate and load.' },
+      dataset_id: { type: 'string', enum: DATASET_CATALOG.map(item => item.id), description: 'Optional official Dataset catalog to activate and load.' },
       step_id: STEP_ID,
     },
   },
@@ -181,13 +199,27 @@ async function executeSpec(ctx, spec, args, exec) {
   const parameters = { ...args }
   const stepId = parameters.step_id ?? String(exec.callId)
   delete parameters.step_id
-  if (spec.name === 'list_layers' && parameters.scenario_id !== undefined) {
-    const scenarioId = parameters.scenario_id
-    delete parameters.scenario_id
+  if (spec.name === 'discover_datasets') {
+    return {
+      success: true,
+      tool: spec.name,
+      step_id: stepId,
+      inputs: [],
+      parameters: {},
+      outputs: [],
+      summary: `${DATASET_CATALOG.length} reusable official dataset catalog is available.`,
+      warnings: [],
+      data: { datasets: DATASET_CATALOG },
+    }
+  }
+  if (spec.name === 'list_layers' && parameters.dataset_id !== undefined) {
+    const datasetId = parameters.dataset_id
+    delete parameters.dataset_id
     await ctx.geo.execute({
-      action: 'load_scenario',
+      action: 'load_dataset',
       workspaceKey: workspaceKey(exec),
-      scenarioId,
+      datasetId,
+      reset: true,
     }, exec.signal)
   }
   return ctx.geo.execute({
@@ -203,7 +235,7 @@ export function registerGeoTools(ctx) {
   ctx.systemPrompt.section({
     name: 'tool:geoharness',
     order: 118,
-    text: `For a spatial request, follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. First call list_layers with the matching scenario_id so its independent data package is loaded for this session: 01-building-data-inspection for understanding deterministic building data; 02-river-building-query for buildings within 500 m of Hudson/East River; 03-building-statistics-by-district for Community District statistics; 04-road-accessibility for buildings within 300 m of major roads by district; 05-parameter-revision for the 500 m major-road query; 06-multi-constraint-selection for road-near and river-far constraints; 07-official-nyc-building-inspection for the audited NYC Open Data building snapshot. Use only returned Layer IDs, create metric CRS layers before distance operations, keep important intermediate output layers, inspect structured success fields, and never claim completion from prose alone.`,
+    text: `For every spatial request, plan from the user's actual goal rather than selecting a predefined analysis. Follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. If the workspace has no suitable data, call discover_datasets, choose a catalog from its declared region/layers, then call list_layers with that dataset_id. Reuse existing Layer IDs for conversational revisions. Choose and sequence Geo tools yourself from the goal; never infer distance, predicate, field, output, or conclusion from a sample Scenario. Use only returned Layer IDs, create metric CRS layers before distance operations, preserve useful intermediate layers, inspect every structured success field, and never claim completion from prose alone. State when the available catalog cannot support the request.`,
   })
 
   for (const spec of TOOL_SPECS) {
@@ -233,4 +265,4 @@ export function registerGeoTools(ctx) {
   }
 }
 
-export { SCENARIO_IDS, TOOL_SPECS }
+export { DATASET_CATALOG, SCENARIO_IDS, TOOL_SPECS }

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "id": "nyc-core-official",
+  "title": "NYC Core Official GIS Catalog",
+  "description": "A reusable real-data catalog for agent-planned NYC vector analysis. It exposes buildings, Broadway centerlines, rivers, Community Districts, and an audited Lower Manhattan building subset without prescribing an analysis workflow.",
+  "region": "Manhattan, New York City",
+  "crs": "OGC:CRS84",
+  "snapshot_date": "2026-08-27",
+  "publishers": [
+    "NYC Department of City Planning",
+    "NYC Department of Information Technology and Telecommunications"
+  ],
+  "layers": [
+    {
+      "name": "buildings",
+      "path": "../../scenarios/01-building-data-inspection/data/buildings.geojson",
+      "description": "360 official Manhattan building footprints for general inspection and spatial analysis."
+    },
+    {
+      "name": "roads",
+      "path": "../../scenarios/04-road-accessibility/data/roads.geojson",
+      "description": "Official NYC street centerline features covering Broadway and nearby roads."
+    },
+    {
+      "name": "rivers",
+      "path": "../../scenarios/06-multi-constraint-selection/data/rivers.geojson",
+      "description": "Hudson River and East River polygons derived reproducibly from official NYC land/water boundaries."
+    },
+    {
+      "name": "districts",
+      "path": "../../scenarios/03-building-statistics-by-district/data/districts.geojson",
+      "description": "Official Manhattan Community District boundaries."
+    },
+    {
+      "name": "lower_manhattan_buildings",
+      "path": "../../scenarios/07-official-nyc-building-inspection/data/buildings.geojson",
+      "description": "133 audited Lower Manhattan building footprints with construction-year and roof-height attributes."
+    }
+  ],
+  "license": "NYC Open Data Terms of Use",
+  "source_audit": "../../../data/official-sources/nyc/README.md"
+}

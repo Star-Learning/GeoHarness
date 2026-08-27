@@ -408,3 +408,29 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 七个 Scenario 全部以新动态界面重新执行并保存 15 张 1280×720 Harness 截图，重建
   七个 960×540 GIF；最终门禁通过 Node 48/48、Python 9/9、build、typecheck、官方数据、
   场景新鲜度、media、peer 和 `git diff --check`。
+
+## Root 工作台与全 Agent 正式执行链
+
+状态：实现完成；外部模型 E2E 待凭据（2026-08-27）
+
+- [x] 重新核对上游 `ui-layout` 的 `root`/AppFrame 注册和 current Slot winner 规则；GeoHarness
+  改以 `root`、`priority: -100` 接管整页，正式界面不再渲染 DeepSeek Harness 的会话/项目
+  侧栏，也不修改上游源码。
+- [x] 删除正式 UI 的 Examples 下拉框、Scenario fixture 初始化和 Scenario ID/GeoJSON 客户端
+  打包；空工作区打开时地图为空，等待 Agent 产生真实 Layer。
+- [x] 底部唯一输入入口接入 Harness 原生 `sessions.create/models/history/prompt`；没有可路由
+  模型时明确报错，禁止静默回退到 `goal/start` 或固定 Scenario DAG。
+- [x] 新增 Native Session event projector，将真实 `tool/call`、`tool/result`、
+  `assistant/message`、`turn/end` 逐步投影为执行步骤和 Agent 最终回答。
+- [x] 新增 `nyc-core-official` 可复用官方数据 catalog 和 `discover_datasets`，Geo Tools 增至
+  13 个；System Prompt 明确要求从用户目标自主规划，禁止从 Scenario 模板猜测参数与结论。
+- [x] 新增 `/geoharness/agent/workspace`，从 Agent 当前 workspace Registry 返回经 feature
+  count/parent 校验的 canonical GeoJSON；地图 Layer 不再依赖 Scenario Map Verification 响应。
+- [x] 七个 Scenario DAG、goal/scenario RPC 和展示素材继续作为确定性 GIS 回归路径保留，
+  不再由正式 UI 调用，仍满足“一需求一目录一数据一测试一 Demo”。
+- [x] 更新集成文档和旧门禁；Node 全量 50/50 通过，真实 Python/GeoPandas ToolRuntime 已验证
+  dataset discovery/load 和 500 m 河流缓冲为 132/360。
+- [ ] 当前环境没有 `DEEPSEEK_API_KEY`/`OPENAI_API_KEY`。预览 profile 虽列出
+  `ustc / deepseek-v4-flash-ascend1`，但两次真实 Prompt 都在任何 Tool Call 之前以
+  `Connection error` 结束，因此外部模型自主规划 E2E 仍受 Provider/网络配置阻塞；UI 已
+  fail-loud，且错误明确说明不会回退到 Scenario。

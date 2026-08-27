@@ -33,7 +33,7 @@ async function setup(workspaceRoot) {
   return ctx
 }
 
-test('all supported independent Scenario DAGs validate with pending steps, dependencies and declared outputs', async () => {
+test('all deterministic Scenario regression DAGs validate without being bundled into the Agent UI', async () => {
   const { TaskGraphExecution } = await import('../bundle/geoharness-bundle/host/task-graph.js')
   const entries = (await readdir(scenarioRoot, { withFileTypes: true }))
     .filter(entry => entry.isDirectory())
@@ -55,7 +55,8 @@ test('all supported independent Scenario DAGs validate with pending steps, depen
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   assert.match(client, /data-task-graph/)
   assert.match(client, /data-step-status/)
-  for (const entry of entries) assert.match(client, new RegExp(entry.name))
+  assert.match(client, /Native Harness Agent/)
+  for (const entry of entries) assert.doesNotMatch(client, new RegExp(entry.name))
 })
 
 test('TaskGraphRuntime executes Scenario 02 through the real Geo provider and records every state transition', async () => {

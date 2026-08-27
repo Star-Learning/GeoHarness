@@ -134,6 +134,72 @@ test('the browser projection adds derived layers and selects map layers by Task 
   }
 })
 
+test('native Harness Session events become live Agent tool steps and a final answer', async () => {
+  const plugin = await clientPlugin()
+  const entries = [
+    { event: { type: 'turn/start', seq: 11, data: { turn: 2 } } },
+    { event: { type: 'tool/call', seq: 12, data: {
+      turn: 2, step: 1, callId: 'call-1', name: 'create_buffer',
+      arguments: '{"input_layer":"layer_0001","distance":275,"unit":"meter"}',
+    } } },
+    { event: { type: 'tool/result', seq: 13, data: {
+      turn: 2, step: 1,
+      message: {
+        source: { kind: 'tool', callId: 'call-1' },
+        content: [{ type: 'tool-result', toolCallId: 'call-1', content: [{ type: 'text', text: 'Geo operation succeeded: Created a 275 m buffer.' }] }],
+      },
+      meta: { summary: 'Created a 275 m buffer.', outputs: ['layer_0002'] },
+    } } },
+    { event: { type: 'assistant/message', seq: 14, data: {
+      turn: 2, step: 2,
+      message: { content: [{ type: 'text', text: '275 米缓冲区已完成并通过图层验证。' }] },
+    } } },
+    { event: { type: 'turn/end', seq: 15, data: { turn: 2, reason: { kind: 'completed' } } } },
+  ]
+  const projection = plugin.projectAgentHistory(entries, 10)
+  assert.equal(projection.finished, true)
+  assert.equal(projection.succeeded, true)
+  assert.equal(projection.answer, '275 米缓冲区已完成并通过图层验证。')
+  assert.deepEqual(JSON.parse(JSON.stringify(projection.steps)), [{
+    id: 'call-1', name: 'create_buffer', title: 'Geo · create_buffer',
+    arguments: { input_layer: 'layer_0001', distance: 275, unit: 'meter' },
+    status: 'success', summary: 'Created a 275 m buffer.', outputs: ['layer_0002'],
+  }])
+
+  const failed = plugin.projectAgentHistory([{
+    event: { type: 'turn/end', seq: 21, data: {
+      turn: 3, reason: { kind: 'error', error: { message: 'Connection error.' } },
+    } },
+  }], 20)
+  assert.equal(failed.finished, true)
+  assert.equal(failed.succeeded, false)
+  assert.match(failed.error, /Connection error.*LLM Provider.*API Key.*不会回退/u)
+})
+
+test('the Agent workspace RPC verifies and returns canonical live Registry projection', async () => {
+  const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
+  let registration
+  const projection = [{
+    metadata: {
+      layer_id: 'layer_0001', name: 'buildings', feature_count: 1,
+      parents: [], source: 'scenario', generated_by: null,
+    },
+    geojson: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: {} }] },
+  }]
+  registerGeoRpc({
+    connection: { rpc: { handle: (channel, handler, options) => { registration = { channel, handler, options }; return () => {} } } },
+    geo: { execute: async request => {
+      assert.deepEqual(request, { action: 'projection', workspaceKey: 'geoharness-main' })
+      return projection
+    } },
+  })
+  const response = await registration.handler('agent/workspace', { workspace_key: 'geoharness-main' })
+  assert.equal(response.ok, true)
+  assert.equal(response.value.status, 'ready')
+  assert.deepEqual(response.value.checks, { feature_counts_match: true, parent_layers_present: true })
+  assert.deepEqual(response.value.layers, projection)
+})
+
 test('the loopback Connection RPC exposes validated Scenario and goal-driven endpoints', async () => {
   const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
   let registration

@@ -23,32 +23,26 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
   const styles = await readFile(join(bundleRoot, 'src', 'styles.css'), 'utf8')
   for (const label of [
     'GeoHarness', 'Map workspace', 'Layer panel', 'Agent workspace',
-    'Describe your spatial goal', 'Scenario',
+    'Describe your spatial goal', 'Native Harness Agent', 'LIVE AGENT TOOL TRACE',
   ]) assert.match(source, new RegExp(label, 'i'))
-  for (const id of [
-    '01-building-data-inspection', '02-river-building-query',
-    '03-building-statistics-by-district', '04-road-accessibility',
-    '05-parameter-revision', '06-multi-constraint-selection',
-    '07-official-nyc-building-inspection',
-  ]) assert.match(source, new RegExp(id))
   assert.match(styles, /grid-template-columns: 220px minmax\(340px, 1fr\) 272px/)
   assert.match(styles, /--dsw-alias-bg-base/)
   assert.match(styles, /--dsw-alias-state-business-primary/)
-  assert.doesNotMatch(source, /name: 'conversation\.view'/)
-  assert.match(source, /name: 'conversation'/)
+  assert.doesNotMatch(source, /name: 'conversation(?:\.|')/)
+  assert.match(source, /name: 'root'/)
   assert.match(source, /priority: -100/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
-  assert.match(source, /goal\/start/)
-  assert.match(source, /scenario\/progress/)
+  assert.match(source, /connection\.api\.sessions\.prompt/)
+  assert.match(source, /agent\/workspace/)
   assert.match(source, /AGENT RESULT/)
-  assert.match(source, /resolvedPreviewSteps/)
-  assert.doesNotMatch(source, /expectedResult/)
+  assert.match(source, /projectAgentHistory/)
+  assert.doesNotMatch(source, /SCENARIOS|goal\/start|scenario\/progress|Example|expectedResult/)
   assert.equal((source.match(/执行 GIS 任务/g) ?? []).length, 1)
   assert.doesNotMatch(source, /Run current input|gh-run-button/)
 })
 
-test('the generated factory replaces the Harness conversation Slot with the GeoHarness shell', async () => {
+test('the generated factory replaces the Harness root Slot with the GeoHarness shell', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let registration
   const appendedStyles = []
@@ -76,23 +70,25 @@ test('the generated factory replaces the Harness conversation Slot with the GeoH
   })
   assert.deepEqual([...plugin.inject], ['slots', 'connection'])
 
-  const awaited = []
   const slots = []
   plugin.apply({
     slots: {
-      inject: (name, setup) => { awaited.push(name); return setup() },
       register: (options, component) => { slots.push({ options, component }); return () => {} },
     },
+    connection: {
+      api: { sessions: {} },
+      rpc: {},
+    },
   })
-  assert.deepEqual(awaited, ['conversation'])
   assert.deepEqual(
     slots.map(slot => ({ name: slot.options.name, priority: slot.options.priority })),
-    [{ name: 'conversation', priority: -100 }],
+    [{ name: 'root', priority: -100 }],
   )
   assert.equal(appendedStyles.length, 1)
   assert.match(appendedStyles[0].textContent, /\.gh-shell/)
 
-  const shell = slots[0].component()
+  const shell = slots[0].component(slots[0].options.inject())
   assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
+  assert.equal(shell.props['data-geoharness-agent'], 'native')
   assert.equal(shell.type, 'main')
 })

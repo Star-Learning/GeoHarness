@@ -1,43 +1,65 @@
 import { jsx as _jsx } from 'react/jsx-runtime'
 import * as React from 'react'
 import {
-  registerScenarioLayers,
-  registerUploadedLayer,
+  registerWorkspaceProjection,
   setLayerOpacity,
   toggleLayerVisibility,
-  type EmbeddedScenario,
   type GeoJsonFeature,
   type GeoJsonGeometry,
   type LayerRecord,
+  type WorkspaceProjectionItem,
 } from './layer-registry'
+import {
+  historyMaxSeq,
+  projectAgentHistory,
+  type AgentToolStep,
+} from './agent-session'
 import {
   layerIdsForStep,
   mergeVerificationLayers,
   stepStatus,
-  type MapVerification,
-  type TaskStepStatus,
 } from './verification-map'
 
 declare const __GE0HARNESS_CSS__: string
-declare const __GEOHARNESS_SCENARIOS__: EmbeddedScenario[]
 
 const PACKAGE_NAME = '@geoharness/harness-plugin'
+const AGENT_SESSION_ID = 'geoharness-main'
 
-type SlotName = 'conversation'
+type SlotName = 'root'
 
 interface SlotRegistration {
   name: SlotName
   priority?: number
+  inject?: () => GeoHarnessInjected
 }
 
 interface SlotService {
-  inject(name: SlotName, setup: () => void | (() => void)): () => void
-  register(options: SlotRegistration, component: React.ComponentType): () => void
+  register(options: SlotRegistration, component: React.ComponentType<GeoHarnessInjected>): () => void
+}
+
+interface ApiResponse<T> {
+  result: { ok: true, value: T } | { ok: false, error: { message: string, code?: string } }
 }
 
 interface ClientContext {
   slots: SlotService
   connection?: {
+    api: {
+      sessions: {
+        create(payload: { sessionId: string }): Promise<ApiResponse<{ sessionId: string }>>
+        history(payload: { sessionId: string, maxMessages?: number }): Promise<ApiResponse<{ events: unknown[] }>>
+        models(payload: { sessionId: string }): Promise<ApiResponse<{
+          routable: boolean
+          current: { provider: string, model: string }
+        }>>
+        prompt(payload: {
+          sessionId: string
+          mode: 'queue' | 'steer'
+          content: Array<{ type: 'text', text: string }>
+          clientTimeZone?: string
+        }): Promise<ApiResponse<{ accepted: true }>>
+      }
+    }
     rpc: {
       call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{
         ok: boolean
@@ -48,141 +70,12 @@ interface ClientContext {
   }
 }
 
-let clientConnection: ClientContext['connection']
-
-interface ScenarioPreview {
-  id: string
-  number: string
-  title: string
-  prompt: string
-  payload: EmbeddedScenario
-}
-
 interface SelectedFeature {
   layer: LayerRecord
   feature: GeoJsonFeature
   featureIndex: number
 }
 
-const SCENARIO_LABELS: Record<string, string> = {
-  '01-building-data-inspection': 'Understand Building Data',
-  '02-river-building-query': 'Buildings Near Rivers',
-  '03-building-statistics-by-district': 'Buildings by District',
-  '04-road-accessibility': 'Road Accessibility',
-  '05-parameter-revision': 'Revise a Spatial Query',
-  '06-multi-constraint-selection': 'Multi-Constraint Selection',
-  '07-official-nyc-building-inspection': 'Official NYC Building Data',
-}
-
-const SCENARIOS: readonly ScenarioPreview[] = __GEOHARNESS_SCENARIOS__.map(payload => ({
-  id: payload.manifest.id,
-  number: payload.manifest.id.slice(0, 2),
-  title: SCENARIO_LABELS[payload.manifest.id] ?? payload.manifest.title,
-  prompt: payload.prompt,
-  payload,
-}))
-
-const BROWSER_WORKSPACE_KEY = 'browser:goal'
-
-type TaskGraphStep = EmbeddedScenario['taskGraph']['steps'][number]
-
-interface ToolExecutionResult {
-  success?: boolean
-  summary?: string
-  data?: unknown
-  parameters?: Record<string, unknown>
-  outputs?: string[]
-}
-
-interface ExecutionStep extends TaskGraphStep {
-  status?: TaskStepStatus
-  resolved_outputs?: Array<{ alias: string, layer_id: string }>
-  result?: ToolExecutionResult | null
-  error?: string | null
-}
-
-interface GoalRunResult {
-  scenario_id?: string
-  goal?: string
-  status?: TaskStepStatus
-  steps?: ExecutionStep[]
-  map_verification?: MapVerification
-  run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
-  goal_resolution?: {
-    prompt: string
-    scenario_id: string
-    parameters: Record<string, unknown>
-  }
-}
-
-interface GoalStartResult {
-  job_status: 'running'
-  goal_resolution: NonNullable<GoalRunResult['goal_resolution']>
-}
-
-interface JobProgressResult {
-  job_status: 'running' | 'success' | 'failed'
-  execution: GoalRunResult | null
-  map_preview: MapVerification | null
-  error: string | null
-}
-
-interface ResultFact {
-  label: string
-  value: string
-}
-
-function recordValue(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function collectResultFacts(value: unknown, prefix = '', depth = 0): ResultFact[] {
-  if (!recordValue(value) || depth > 2) return []
-  const facts: ResultFact[] = []
-  for (const [key, item] of Object.entries(value)) {
-    const label = prefix === '' ? key : `${prefix}.${key}`
-    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
-      facts.push({ label, value: typeof item === 'number' ? item.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(item) })
-    } else if (Array.isArray(item)) {
-      facts.push({ label, value: `${item.length} item${item.length === 1 ? '' : 's'}` })
-      for (const [index, row] of item.slice(0, 4).entries()) {
-        if (!recordValue(row)) continue
-        const identity = Object.entries(row).find(([rowKey, rowValue]) =>
-          (rowKey.endsWith('_id') || rowKey === 'name') && (typeof rowValue === 'string' || typeof rowValue === 'number'))
-        const metric = Object.entries(row).find(([rowKey, rowValue]) =>
-          ['feature_count', 'selected_count', 'count', 'area_sum_m2'].includes(rowKey) && typeof rowValue === 'number')
-        if (metric !== undefined) {
-          const rowLabel = identity === undefined ? `${label}.${index + 1}` : `${label}.${String(identity[1])}`
-          facts.push({
-            label: rowLabel,
-            value: Number(metric[1]).toLocaleString('en-US', { maximumFractionDigits: 2 }),
-          })
-        }
-      }
-    } else if (recordValue(item)) {
-      facts.push(...collectResultFacts(item, label, depth + 1))
-    }
-    if (facts.length >= 8) break
-  }
-  return facts.slice(0, 8)
-}
-
-function resolvedPreviewSteps(steps: readonly TaskGraphStep[], parameters: Record<string, unknown>): ExecutionStep[] {
-  return steps.map(step => {
-    if (step.tool !== 'create_buffer') return { ...step }
-    const river = step.id.includes('river')
-    const distance = parameters[river ? 'river_distance_m' : 'road_distance_m']
-    if (typeof distance !== 'number' || !Number.isFinite(distance)) return { ...step }
-    const subject = river
-      ? (step.title.toLowerCase().includes('exclusion') ? 'river exclusion' : 'river')
-      : 'road'
-    return {
-      ...step,
-      title: `Create ${distance} m ${subject} buffer`,
-      parameters: { ...step.parameters, distance, unit: 'meter' },
-    }
-  })
-}
 
 function waitForNextProgress() {
   return new Promise<void>(resolve => { setTimeout(resolve, 280) })
@@ -323,12 +216,12 @@ function GeoMap({
         <button type="button" onClick={() => setZoom(value => Math.max(0.7, value / 1.35))} aria-label="Zoom out">−</button>
         <button type="button" onClick={fitBounds} aria-label="Fit bounds">⌖</button>
       </div>
-      <div className="gh-map-label"><span>{officialData ? 'NYC OPEN DATA' : 'MANHATTAN FIXTURE'}</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
+      <div className="gh-map-label"><span>{officialData ? 'NYC OPEN DATA' : 'AGENT WORKSPACE'}</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
       <svg
         className="gh-map-canvas"
         viewBox="0 0 1000 700"
         role="img"
-        aria-label="Interactive Scenario map"
+        aria-label="Interactive Agent workspace map"
         onPointerDown={event => {
           drag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }
           event.currentTarget.setPointerCapture(event.pointerId)
@@ -401,10 +294,10 @@ function GeoMap({
       {layers.length === 0 && <div className="gh-map-empty-card">
         <span className="gh-eyebrow">MAP WORKSPACE</span>
         <strong>No registered layers</strong>
-        <p>Choose a Scenario or upload a GeoJSON FeatureCollection.</p>
+        <p>在下方描述空间目标后，Agent 会发现真实数据、选择 Geo Tools，并把产生的图层逐步加载到这里。</p>
       </div>}
       <div className="gh-map-scale"><span /> {zoom.toFixed(1)}×</div>
-      <div className="gh-map-attribution">{officialData ? 'Official NYC Open Data' : 'Deterministic demo fixture'} · OGC:CRS84</div>
+      <div className="gh-map-attribution">{officialData ? 'Official NYC Open Data' : 'Agent workspace awaiting data'} · OGC:CRS84</div>
       {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
         <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
         <span className="gh-eyebrow">FEATURE INSPECTION</span>
@@ -420,32 +313,46 @@ function GeoMap({
   )
 }
 
-function isDistanceOnlyRevision(value: string) {
-  const hasDistance = /(\d+(?:\.\d+)?)\s*(公里|千米|km|kilometers?|米|m|meters?)/iu.test(value)
-  const hasRevisionVerb = /改|调整|变成|change|set|instead/iu.test(value)
-  const namesNewWorkflow = /broadway|主要道路|道路|road|hudson|east river|河流|river|建筑|building/iu.test(value)
-  return hasDistance && hasRevisionVerb && !namesNewWorkflow
+interface WorkspaceProjection {
+  status: 'ready' | 'failed'
+  issues: string[]
+  layers: WorkspaceProjectionItem[]
 }
 
-function GeoHarnessShell() {
-  const initialScenario = SCENARIOS[1] ?? SCENARIOS[0]
-  const [selectedId, setSelectedId] = React.useState(initialScenario.id)
-  const selected = React.useMemo(
-    () => SCENARIOS.find(scenario => scenario.id === selectedId) ?? SCENARIOS[0],
-    [selectedId],
-  )
-  const [prompt, setPrompt] = React.useState(selected.prompt)
-  const [goal, setGoal] = React.useState(selected.prompt)
-  const [layers, setLayers] = React.useState<LayerRecord[]>(() => registerScenarioLayers(initialScenario.payload))
+interface GeoHarnessInjected {
+  agent: {
+    createSession(): Promise<{ sessionId: string }>
+    history(): Promise<{ events: unknown[] }>
+    models(): Promise<{ routable: boolean, current: { provider: string, model: string } }>
+    prompt(text: string): Promise<{ accepted: true }>
+    workspace(): Promise<WorkspaceProjection>
+  }
+}
+
+function resultValue<T>(response: ApiResponse<T>, operation: string): T {
+  if (!response.result.ok) throw new Error(`${operation}: ${response.result.error.message}`)
+  return response.result.value
+}
+
+function argumentSummary(args: Record<string, unknown>) {
+  const pairs = Object.entries(args).filter(([key]) => key !== 'step_id').slice(0, 3)
+  if (pairs.length === 0) return 'Agent-selected parameters'
+  return pairs.map(([key, value]) => `${key}=${typeof value === 'string' || typeof value === 'number' ? value : '…'}`).join(' · ')
+}
+
+function GeoHarnessShell({ agent }: GeoHarnessInjected) {
+  const [prompt, setPrompt] = React.useState('')
+  const [goal, setGoal] = React.useState('等待你从下方输入一个空间分析目标。')
+  const [layers, setLayers] = React.useState<LayerRecord[]>([])
   const [selectedFeature, setSelectedFeature] = React.useState<SelectedFeature | null>(null)
-  const [uploadError, setUploadError] = React.useState<string | null>(null)
-  const [verification, setVerification] = React.useState<MapVerification | null>(null)
   const [runStatus, setRunStatus] = React.useState<'ready' | 'running' | 'success' | 'failed'>('ready')
   const [runError, setRunError] = React.useState<string | null>(null)
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
-  const [revisionSummary, setRevisionSummary] = React.useState<string | null>(null)
-  const [taskSteps, setTaskSteps] = React.useState<ExecutionStep[]>(initialScenario.payload.taskGraph.steps)
+  const [taskSteps, setTaskSteps] = React.useState<AgentToolStep[]>([])
+  const [agentAnswer, setAgentAnswer] = React.useState('')
+  const [agentModel, setAgentModel] = React.useState('Harness model not checked')
+  const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
   const runSequence = React.useRef(0)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
 
@@ -455,25 +362,6 @@ function GeoHarnessShell() {
     panel.scrollTop = runStatus === 'success' || runStatus === 'failed' ? panel.scrollHeight : 0
   }, [runStatus])
 
-  const selectScenario = (id: string) => {
-    const next = SCENARIOS.find(scenario => scenario.id === id)
-    if (next === undefined) return
-    runSequence.current += 1
-    setSelectedId(id)
-    setPrompt(next.prompt)
-    setGoal(next.prompt)
-    setLayers(registerScenarioLayers(next.payload))
-    setSelectedFeature(null)
-    setUploadError(null)
-    setVerification(null)
-    setRunStatus('ready')
-    setRunError(null)
-    setSelectedStepId(null)
-    setRunHistoryCount(0)
-    setRevisionSummary(null)
-    setTaskSteps(next.payload.taskGraph.steps)
-  }
-
   const submitGoal = async (event: React.FormEvent) => {
     event.preventDefault()
     const value = prompt.trim()
@@ -481,172 +369,89 @@ function GeoHarnessShell() {
     await executePrompt(value)
   }
 
-  const uploadGeoJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0]
-    if (file === undefined) return
-    try {
-      const data: unknown = JSON.parse(await file.text())
-      const layer = registerUploadedLayer(file.name, data)
-      setLayers(current => [...current, layer])
-      setUploadError(null)
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Unable to read this GeoJSON file.')
-    } finally {
-      event.currentTarget.value = ''
-    }
-  }
-
   const toggleLayer = (layer: LayerRecord) => {
     setLayers(current => toggleLayerVisibility(current, layer.id))
     if (layer.visible && selectedFeature?.layer.id === layer.id) setSelectedFeature(null)
   }
 
-  const visibleCount = layers.filter(layer => layer.visible).length
-  const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
-  const plannedOutputs = taskSteps.flatMap(step => step.outputs)
-  const highlightedLayerIds = layerIdsForStep(verification, selectedStepId)
-  const inputLayers = layers.filter(layer => layer.source !== 'derived')
-  const derivedLayers = layers.filter(layer => layer.source === 'derived')
-  const statusForStep = (step: ExecutionStep) => step.status ?? stepStatus(verification, step.id)
-  const outputStates = taskSteps.flatMap(step => step.outputs.map(alias => ({
-    alias,
-    step,
-    status: statusForStep(step),
-    resolved: step.resolved_outputs?.find(output => output.alias === alias) ?? null,
-    layer: derivedLayers.find(layer => layer.name === alias) ?? null,
-  })))
-  const successfulResults = taskSteps.filter(step => statusForStep(step) === 'success'
-    && step.result?.success === true && typeof step.result.summary === 'string')
-  const latestAgentStep = successfulResults.at(-1) ?? null
-  const agentFacts = collectResultFacts(latestAgentStep?.result?.data)
-
-  const pollJob = async (scenarioId: string, sequence: number): Promise<GoalRunResult | null> => {
-    if (clientConnection === undefined) return null
-    while (runSequence.current === sequence) {
-      const response = await clientConnection.rpc.call('/geoharness', 'scenario/progress', {
-        scenario_id: scenarioId,
-        workspace_key: BROWSER_WORKSPACE_KEY,
-      })
-      if (!response.ok || response.value === null || typeof response.value !== 'object') {
-        throw new Error(response.error?.message ?? 'GeoHarness progress is unavailable')
-      }
-      const progress = response.value as JobProgressResult
-      if (runSequence.current !== sequence) return null
-      const execution = progress.execution
-      if (execution?.steps !== undefined) {
-        setTaskSteps(execution.steps)
-        setRunHistoryCount(execution.run_history?.length ?? 0)
-        const activeStep = execution.steps.find(step => step.status === 'running')
-        if (activeStep !== undefined) setSelectedStepId(activeStep.id)
-      }
-      if (progress.map_preview?.status === 'ready'
-        && Object.values(progress.map_preview.checks).every(Boolean)) {
-        setLayers(current => mergeVerificationLayers(current, progress.map_preview as MapVerification))
-      }
-      if (progress.job_status === 'failed') {
-        throw new Error(progress.error ?? execution?.steps?.find(step => step.status === 'failed')?.error ?? 'GIS workflow failed')
-      }
-      if (progress.job_status === 'success') {
-        const finalVerification = execution?.map_verification
-        if (execution === null || finalVerification === undefined) throw new Error('Completed Task Graph has no map verification')
-        if (finalVerification.status !== 'ready' || !Object.values(finalVerification.checks).every(Boolean)) {
-          throw new Error(finalVerification.issues.join('; ') || 'Map verification failed')
-        }
-        setLayers(current => mergeVerificationLayers(current, finalVerification))
-        setVerification(finalVerification)
-        setTaskSteps(execution.steps ?? [])
-        setRunHistoryCount(execution.run_history?.length ?? 1)
-        setRunStatus('success')
-        return execution
-      }
-      await waitForNextProgress()
-    }
-    return null
-  }
-
-  const runGoal = async (goalPrompt: string) => {
-    if (clientConnection === undefined || runStatus === 'running') return
-    const sequence = ++runSequence.current
-    setGoal(goalPrompt)
-    setRunStatus('running')
-    setRunError(null)
-    setSelectedStepId(null)
-    setRevisionSummary(null)
-    try {
-      const response = await clientConnection.rpc.call('/geoharness', 'goal/start', {
-        goal_prompt: goalPrompt,
-        workspace_key: BROWSER_WORKSPACE_KEY,
-      })
-      if (!response.ok || response.value === null || typeof response.value !== 'object') {
-        throw new Error(response.error?.message ?? 'GeoHarness could not start the GIS workflow')
-      }
-      const start = response.value as GoalStartResult
-      const resolved = SCENARIOS.find(scenario => scenario.id === start.goal_resolution.scenario_id)
-      if (resolved === undefined) throw new Error(`Goal resolved to unknown Scenario ${start.goal_resolution.scenario_id}`)
-      if (runSequence.current !== sequence) return
-      setSelectedId(resolved.id)
-      setLayers(registerScenarioLayers(resolved.payload))
-      setVerification(null)
-      setTaskSteps(resolvedPreviewSteps(resolved.payload.taskGraph.steps, start.goal_resolution.parameters))
-      setRunHistoryCount(0)
-      const result = await pollJob(resolved.id, sequence)
-      if (result === null) return
-      const firstOutputStep = result.map_verification?.step_bindings.find(binding => binding.outputs.length > 0)
-      setSelectedStepId(firstOutputStep?.step_id ?? null)
-    } catch (error) {
-      if (runSequence.current !== sequence) return
-      setRunStatus('failed')
-      setRunError(error instanceof Error ? error.message : String(error))
-    }
-  }
-
-  const reviseTaskGraph = async (revisionPrompt: string) => {
-    if (clientConnection === undefined || runStatus === 'running') return
-    const sequence = ++runSequence.current
-    setGoal(revisionPrompt)
-    setRunStatus('running')
-    setRunError(null)
-    setVerification(null)
-    try {
-      const response = await clientConnection.rpc.call('/geoharness', 'scenario/revise/start', {
-        scenario_id: selected.id,
-        workspace_key: BROWSER_WORKSPACE_KEY,
-        revision_prompt: revisionPrompt,
-      })
-      if (!response.ok || response.value === null || typeof response.value !== 'object') {
-        throw new Error(response.error?.message ?? 'GeoHarness could not start the revision')
-      }
-      const result = await pollJob(selected.id, sequence)
-      if (result === null) return
-      const latestRun = result.run_history?.at(-1)
-      setRevisionSummary(latestRun === undefined
-        ? null
-        : `${latestRun.executed_steps.length} rerun · ${latestRun.reused_steps.length} reused`)
-      setSelectedStepId('filter_candidate_buildings')
-    } catch (error) {
-      if (runSequence.current !== sequence) return
-      setRunStatus('failed')
-      setRunError(error instanceof Error ? error.message : String(error))
-    }
+  const refreshWorkspace = async (sequence: number) => {
+    const workspace = await agent.workspace()
+    if (workspace.status !== 'ready') throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed')
+    if (runSequence.current !== sequence) return
+    setLayers(current => registerWorkspaceProjection(current, workspace.layers))
+    setWorkspaceStatus(`${workspace.layers.length} verified layers`)
   }
 
   async function executePrompt(value: string) {
-    if (verification !== null && runStatus === 'success' && selected.id === '05-parameter-revision'
-      && isDistanceOnlyRevision(value)) {
-      await reviseTaskGraph(value)
-      return
+    if (runStatus === 'running') return
+    const sequence = ++runSequence.current
+    setGoal(value)
+    setRunStatus('running')
+    setRunError(null)
+    setSelectedStepId(null)
+    setTaskSteps([])
+    setAgentAnswer('')
+    setWorkspaceStatus('Agent planning')
+    try {
+      await agent.createSession()
+      const modelDirectory = await agent.models()
+      setAgentModel(`${modelDirectory.current.provider} / ${modelDirectory.current.model}`)
+      if (!modelDirectory.routable) {
+        throw new Error('当前 Harness 没有可路由的模型。请先配置 DeepSeek API Key 或其他 Harness LLM Provider；GeoHarness 不会回退到预设 Scenario。')
+      }
+      const before = await agent.history()
+      const baselineSeq = historyMaxSeq(before.events)
+      await agent.prompt(value)
+
+      while (runSequence.current === sequence) {
+        const history = await agent.history()
+        const projection = projectAgentHistory(history.events, baselineSeq)
+        if (runSequence.current !== sequence) return
+        setTaskSteps(projection.steps)
+        setAgentAnswer(projection.answer)
+        const active = projection.steps.find(step => step.status === 'running')
+        if (active !== undefined) setSelectedStepId(active.id)
+        await refreshWorkspace(sequence)
+        if (projection.finished) {
+          setRunHistoryCount(current => current + 1)
+          setRunStatus(projection.succeeded ? 'success' : 'failed')
+          setRunError(projection.error)
+          const latestOutput = [...projection.steps].reverse().find(step => step.outputs.length > 0)
+          if (latestOutput !== undefined) setSelectedStepId(latestOutput.id)
+          return
+        }
+        await waitForNextProgress()
+      }
+    } catch (error) {
+      if (runSequence.current !== sequence) return
+      setRunStatus('failed')
+      setRunError(error instanceof Error ? error.message : String(error))
+      setWorkspaceStatus('Agent unavailable')
     }
-    await runGoal(value)
   }
 
-  const stepIcon = (status: TaskStepStatus, index: number) => {
+  const visibleCount = layers.filter(layer => layer.visible).length
+  const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
+  const inputLayers = layers.filter(layer => layer.source !== 'derived')
+  const derivedLayers = layers.filter(layer => layer.source === 'derived')
+  const selectedStep = taskSteps.find(step => step.id === selectedStepId)
+  const selectedOutputs = new Set(selectedStep?.outputs ?? [])
+  const semanticStepId = typeof selectedStep?.arguments.step_id === 'string' ? selectedStep.arguments.step_id : null
+  const highlightedLayerIds = new Set(layers
+    .filter(layer => selectedOutputs.has(layer.id)
+      || layer.generatedBy === selectedStepId
+      || (semanticStepId !== null && layer.generatedBy === semanticStepId))
+    .map(layer => layer.id))
+  const successfulSteps = taskSteps.filter(step => step.status === 'success')
+
+  const stepIcon = (status: AgentToolStep['status'], index: number) => {
     if (status === 'success') return '✓'
     if (status === 'failed') return '!'
     if (status === 'running') return '…'
     return String(index + 1)
   }
 
-  const renderLayerRow = (layer: LayerRecord, outputStatus?: TaskStepStatus) => (
+  const renderLayerRow = (layer: LayerRecord, outputStatus?: AgentToolStep['status']) => (
     <article className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'} key={layer.id}>
       <button
         type="button"
@@ -679,7 +484,7 @@ function GeoHarnessShell() {
   )
 
   return (
-    <main className="gh-shell" data-geoharness-plugin="loaded" data-geoharness-phase="10">
+    <main className="gh-shell" data-geoharness-plugin="loaded" data-geoharness-phase="10" data-geoharness-agent="native">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
@@ -689,21 +494,7 @@ function GeoHarnessShell() {
           </span>
         </div>
         <div className="gh-launcher">
-          <label htmlFor="gh-scenario">Example</label>
-          <select
-            id="gh-scenario"
-            value={selectedId}
-            disabled={runStatus === 'running'}
-            onChange={event => selectScenario(event.currentTarget.value)}
-            aria-label="Choose a GeoHarness scenario"
-          >
-            {SCENARIOS.map(scenario => (
-              <option key={scenario.id} value={scenario.id}>
-                {scenario.number} · {scenario.title}
-              </option>
-            ))}
-          </select>
-          <span className="gh-status"><i /> {layers.length} layers · {featureCount} features</span>
+          <span className="gh-status"><i /> Native Harness Agent · {layers.length} layers · {featureCount} features</span>
         </div>
       </header>
 
@@ -711,26 +502,16 @@ function GeoHarnessShell() {
         <aside className="gh-panel gh-layers" aria-label="Layer panel">
           <div className="gh-panel-heading">
             <span><b>Layers</b><small>Layer Registry</small></span>
-            <label className="gh-icon-button" title="Upload a GeoJSON FeatureCollection">
-              <input type="file" accept=".geojson,.json,application/geo+json,application/json" onChange={uploadGeoJson} />
-              +
-            </label>
           </div>
-          <div className="gh-layer-section-label">Scenario inputs</div>
+          <div className="gh-layer-section-label">Agent-loaded data</div>
           <div className="gh-layer-list">
             {inputLayers.map(layer => renderLayerRow(layer))}
           </div>
-          <div className="gh-layer-section-label">Task outputs</div>
+          <div className="gh-layer-section-label">Agent-created outputs</div>
           <div className="gh-layer-list gh-output-list" aria-label="Task output layers">
-            {outputStates.length === 0 && <p className="gh-output-empty">This workflow returns structured results without a new map layer.</p>}
-            {outputStates.map(({ alias, step, status, resolved, layer }, index) => layer === null
-              ? <article className={`gh-output-row is-${status}`} key={`${step.id}-${alias}`} data-output-status={status}>
-                <i>{stepIcon(status, index)}</i>
-                <span><strong>{alias}</strong><small>{status === 'success' ? resolved?.layer_id ?? 'registered' : `${status} · ${step.title}`}</small></span>
-              </article>
-              : renderLayerRow(layer, status))}
+            {derivedLayers.length === 0 && <p className="gh-output-empty">Agent 尚未创建派生图层；纯统计结果会显示在右侧。</p>}
+            {derivedLayers.map(layer => renderLayerRow(layer, 'success'))}
           </div>
-          {uploadError !== null && <p className="gh-layer-error" role="alert">{uploadError}</p>}
           <div className="gh-layer-footer">
             <span>{visibleCount} visible</span><span>{layers[0]?.crs ?? 'CRS —'}</span>
           </div>
@@ -740,7 +521,7 @@ function GeoHarnessShell() {
           layers={layers}
           selected={selectedFeature}
           highlightedLayerIds={highlightedLayerIds}
-          officialData={selected.payload.manifest.fixture_profile.startsWith('official-')}
+          officialData={layers.length > 0}
           onSelect={setSelectedFeature}
         />
 
@@ -755,10 +536,11 @@ function GeoHarnessShell() {
               <p>{goal}</p>
             </section>
             <section className="gh-agent-block">
-              <span className="gh-eyebrow">PLAN PREVIEW</span>
-              <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
+              <span className="gh-eyebrow">LIVE AGENT TOOL TRACE</span>
+              {taskSteps.length === 0 && <p className="gh-result-empty">这里不加载预设 Plan；Harness Agent 实际发起 Tool Call 后，步骤才会逐项出现。</p>}
+              <ol className="gh-plan-list" data-task-graph="agent-generated">
                 {taskSteps.map((step, index) => {
-                  const status = statusForStep(step)
+                  const status = step.status
                   return <li
                   className={`is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`}
                   data-step-id={step.id}
@@ -769,7 +551,8 @@ function GeoHarnessShell() {
                   <i>{stepIcon(status, index)}</i>
                   <span>
                     <b>{step.title}</b>
-                    <small>{step.tool} · deps {step.dependencies.length === 0 ? '—' : step.dependencies.join(', ')}</small>
+                    <small>{argumentSummary(step.arguments)}</small>
+                    {step.summary !== null && <small>{step.summary}</small>}
                     {step.outputs.length > 0 && <small>→ {step.outputs.join(', ')}</small>}
                   </span>
                   </button>
@@ -778,29 +561,22 @@ function GeoHarnessShell() {
             </section>
             <section className="gh-agent-block gh-current-step">
               <span className="gh-eyebrow">CURRENT STEP</span>
-              <div><span>Phase</span><b>Task Graph</b></div>
-              <div><span>Steps</span><b>{taskSteps.filter(step => statusForStep(step) === 'success').length}/{taskSteps.length} success</b></div>
-              <div><span>Outputs</span><b>{plannedOutputs.length}</b></div>
-              <div><span>History</span><b>{runHistoryCount} run{runHistoryCount === 1 ? '' : 's'}</b></div>
-              {revisionSummary !== null && <div><span>Revision</span><b>{revisionSummary}</b></div>}
-              <div><span>Map</span><b className="is-teal">{verification?.status ?? 'awaiting run'}</b></div>
+              <div><span>Driver</span><b>Native Harness Agent</b></div>
+              <div><span>Model</span><b>{agentModel}</b></div>
+              <div><span>Tools</span><b>{successfulSteps.length}/{taskSteps.length} success</b></div>
+              <div><span>Outputs</span><b>{derivedLayers.length} layers</b></div>
+              <div><span>Turns</span><b>{runHistoryCount}</b></div>
+              <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
             <section className="gh-agent-block gh-agent-result" aria-label="Agent result">
               <span className="gh-eyebrow">AGENT RESULT</span>
-              {latestAgentStep === null
-                ? <p className="gh-result-empty">真实工具结果会随任务执行显示在这里。</p>
-                : <>
-                  <strong className="gh-result-headline">{latestAgentStep.result?.summary}</strong>
-                  {agentFacts.length > 0 && <dl>
-                    {agentFacts.map(fact => <React.Fragment key={fact.label}>
-                      <dt>{fact.label.replaceAll('_', ' ')}</dt><dd>{fact.value}</dd>
-                    </React.Fragment>)}
-                  </dl>}
-                  <div className="gh-result-trace">
-                    {successfulResults.slice(-3).map(step => <small key={step.id}><i>✓</i>{step.result?.summary}</small>)}
-                  </div>
-                </>}
+              {agentAnswer === ''
+                ? <p className="gh-result-empty">Agent 的自然语言结论会在 Tool 结果验证完成后显示在这里。</p>
+                : <strong className="gh-result-headline">{agentAnswer}</strong>}
+              <div className="gh-result-trace">
+                {successfulSteps.slice(-3).map(step => <small key={step.id}><i>✓</i>{step.summary ?? step.title}</small>)}
+              </div>
             </section>
           </div>
         </aside>
@@ -815,7 +591,7 @@ function GeoHarnessShell() {
           aria-label="Describe your spatial goal"
           placeholder="描述你想解决的空间问题……"
         />
-        <button type="submit" disabled={clientConnection === undefined || prompt.trim() === '' || runStatus === 'running'}>
+        <button type="submit" disabled={prompt.trim() === '' || runStatus === 'running'}>
           {runStatus === 'running' ? '正在执行…' : '执行 GIS 任务'} <span>↗</span>
         </button>
       </form>
@@ -826,15 +602,48 @@ function GeoHarnessShell() {
 export const inject = ['slots', 'connection'] as const
 
 export function apply(ctx: ClientContext) {
-  clientConnection = ctx.connection
+  const connection = ctx.connection
+  if (connection === undefined) throw new Error('GeoHarness requires the Harness connection service')
   installStyles()
-  ctx.slots.inject('conversation', () => ctx.slots.register({
-    name: 'conversation',
+  ctx.slots.register({
+    name: 'root',
     priority: -100,
-  }, GeoHarnessShell))
+    inject: () => ({
+      agent: {
+        createSession: async () => resultValue(
+          await connection.api.sessions.create({ sessionId: AGENT_SESSION_ID }),
+          '创建 GeoHarness Agent 会话失败',
+        ),
+        history: async () => resultValue(
+          await connection.api.sessions.history({ sessionId: AGENT_SESSION_ID, maxMessages: 50 }),
+          '读取 Agent 执行事件失败',
+        ),
+        models: async () => resultValue(
+          await connection.api.sessions.models({ sessionId: AGENT_SESSION_ID }),
+          '读取 Harness 模型配置失败',
+        ),
+        prompt: async (text: string) => resultValue(await connection.api.sessions.prompt({
+          sessionId: AGENT_SESSION_ID,
+          mode: 'queue',
+          content: [{ type: 'text', text }],
+          clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }), '提交 GIS 目标失败'),
+        workspace: async () => {
+          const response = await connection.rpc.call('/geoharness', 'agent/workspace', {
+            workspace_key: AGENT_SESSION_ID,
+          })
+          if (!response.ok || response.value === null || typeof response.value !== 'object') {
+            throw new Error(response.error?.message ?? 'Agent workspace projection is unavailable')
+          }
+          return response.value as WorkspaceProjection
+        },
+      },
+    }),
+  }, GeoHarnessShell)
 }
 
 // Kept as a value reference so TypeScript preserves the jsx-runtime external.
 void _jsx
 
 export { layerIdsForStep, mergeVerificationLayers, stepStatus } from './verification-map'
+export { historyMaxSeq, projectAgentHistory } from './agent-session'

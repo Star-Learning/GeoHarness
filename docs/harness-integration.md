@@ -1,66 +1,152 @@
 # GeoHarness 与 DeepSeek Harness 的真实集成方式
 
-本文记录 Phase 0 基线以及 Phase 1–10 在同一上游版本完成的 Host、Client、Tool、
-Connection RPC 和真实 Web 集成事实，不把 `GeoHarness_Agentic_GIS_方案_v1.0.md`
-中的设想当作现行 API。
+本文记录当前仓库实际使用的 Harness API。结论来自 `../deepseek-harness` 当前源码，不把
+`GeoHarness_Agentic_GIS_方案_v1.0.md` 中的示意名称当作现行接口。
 
-## 已核对的上游基线
+## 已核对基线
 
-- 仓库：`../deepseek-harness`
-- 分支：`master`
-- 提交：`b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`
-- 根包版本：`0.1.1-rc.2`
+- 上游仓库：`../deepseek-harness`，可正常只读访问
+- 分支与提交：`master` / `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`
+- Harness 版本：`0.1.1-rc.2`
 - Cordis 版本：`4.0.1`
-- 验证环境：Node.js `v24.19.0`、pnpm `11.22.0`、Windows
+- 验证环境：Windows、Node.js `v24.19.0`、pnpm `11.22.0`
 - 核对日期：2026-08-27
 
-上游目录可以读取。Phase 0 为验证生产 Web 启动而在上游执行过一次
-`pnpm run build`；构建成功，且没有修改任何已跟踪文件。GeoHarness
-没有复制或修改上游源码。
+核对范围包括上游总体 architecture、CLI profile/plugin 管理、base/web/headless bundles、
+Web client module discovery、Slot runtime、Service Definition/Provider/Consumer 分层、Session
+Connection API 和 ToolRuntime/`defineTool`。主要事实来源为：
 
-## 源码核对范围
-
-| 主题 | 主要事实来源 |
+| 主题 | 当前上游实现 |
 | --- | --- |
-| 总体架构 | `docs/architecture.md`；Cordis Loader 组合而成的插件树是运行时核心 |
-| Profile | `packages/boot/app-boot/src/profile.ts`、`apps/cli/src/profile-boot.ts` |
-| Plugin 管理 | `apps/cli/src/plugin.ts`、`apps/cli/reference/README.md` |
+| Architecture / Loader | `docs/architecture.md`、Cordis Loader 组合树 |
+| Profile / Plugin | `packages/boot/app-boot/src/profile.ts`、`apps/cli/src/profile-boot.ts`、`apps/cli/src/plugin.ts` |
 | Bundle | `packages/bundle/base`、`packages/bundle/web-app`、`packages/bundle/headless` |
-| Web 与客户端发现 | `packages/client/modules`、`packages/client/web`、`packages/bundle/web-app` |
-| Slot | `packages/client/ui-slots`、`packages/client/runtime/src/client/slots.ts`、`packages/client/ui-layout`、`packages/client/ui-conversation` |
-| Service | `docs/user/develop/framework/service.md`，以及 `packages/web/web` 的 Definition/Provider/Consumer 分层 |
-| Tool | `packages/core/tools`、`packages/web/tool-web`、`docs/user/develop/basic/tool.md` |
+| Web client | `packages/client/modules`、`packages/client/web`、`packages/bundle/web-app` |
+| Slot / AppFrame | `packages/client/runtime/src/client/slots.ts`、`packages/client/ui-slots`、`packages/client/ui-layout` |
+| Session API | `packages/client/connection` 的 `sessions.create/models/history/prompt` 实现和测试 |
+| Service | `docs/user/develop/framework/service.md`、`packages/web/web` |
+| Tool | `packages/core/tools`、`packages/web/tool-web`、`packages/client/ui-tool` |
 
-同时核对了 `docs/user/develop/basic` 下的开发、配置、工具和发布说明，
-以及 Web 搜索服务与 provider 的实现。下列结论以这些当前源码为准。
+GeoHarness 没有复制或修改上游已跟踪源码。上游只作为构建产物和 API 事实来源。
 
-## 结论：GeoHarness 是外部 Bundle 层，不是 Harness fork
+## 扩展单元：一个双面外部 Bundle
 
-当前版本的正确扩展单位是一个可安装 npm 包。这个包可以同时具有：
+当前版本的正确扩展单元是可安装 npm 包 `bundle/geoharness-bundle`：
 
-1. Host 插件入口，即包的 `.` 导出；
-2. Bundle 声明，即 `dsh.bundle.patch` 指向一个 Cordis patch；
-3. Web 客户端入口，即 `dsh.client` 声明和 `./client` 导出。
+1. 包导出 `.` 作为 Host Cordis 插件；
+2. `dsh.bundle.patch` 指向 `cordis.patch.yml`，让 profile 将 Host 插件插入组合树；
+3. `dsh.client` 和 `./client` 导出把浏览器模块交给 Harness Web module registry。
 
-CLI 将包安装到 `$DSH_HOME/profiles/<name>` 管理的 profile 中，并把声明
-了 `dsh.bundle` 的依赖自动加入该 profile 的 `dsh.profile.bundles` 有序
-层栈。Bundle patch 中的 Loader 行再把 Host 插件挂入组合树。
+Web 发现链是真实的：
 
-因此 GeoHarness 仓库不应该：
+```text
+profile bundle stack
+  → enabled Cordis Loader row
+  → package.json dsh.client + exports["./client"]
+  → /plugins/<package>/client.js
+  → window.__DSH_BOOT__ dependency graph
+  → window.__ModuleLoader__.load({ id, factory })
+  → Cordis client plugin activation
+```
 
-- 复制 `../deepseek-harness` 的源码；
-- 长期修改上游仓库；
-- 自己提交或手写 `$DSH_HOME/profiles/.../package.json`；
-- 绕过 Harness 另做一套无关的 Chat + Map 应用。
+`dsh.client.inject` 表示客户端 Cordis 激活依赖，并不是源码 import 清单。当前 GeoHarness
+客户端只注入 `@deepseek-ai/dsh-client-connection`；React 由 Harness 的固定 Web module
+seed 提供。
 
-本仓库的 v1.0 集成采用一个双面包：
-`bundle/geoharness-bundle`。包名是
-`@geoharness/harness-plugin`，既是可安装 Bundle，也是 Host/Client
-插件。以后可以按领域拆包，但 v1.0 不额外制造包层级。
+## 为什么正式 UI 接管 `root`
 
-## Profile 与 Bundle 的实际装配
+上游 `packages/client/ui-layout/src/client/index.ts` 把 `AppFrame` 注册到公开的 `root`
+single Slot，并由 AppFrame 声明 `sidebar`、`conversation`、`details`、`shell.overlay` 子 Slot。
+之前接管 `conversation` 只能替换中间内容，左侧会话/项目侧栏仍然存在。
 
-安装到现成 Web profile 的正式命令形态是：
+用户确认 GIS 一切通过底部对话完成后，GeoHarness 改为：
+
+```ts
+ctx.slots.register({ name: 'root', priority: -100 }, GeoHarnessShell)
+```
+
+当前 single Slot 按优先级选取 live entry，GeoHarness 的 `-100` 早于上游默认 `0`，因此打开
+页面直接显示 GeoHarness，AppFrame 及其侧栏不再渲染。GeoHarness 不再注册
+`conversation`、`conversation.view`、标题栏 action 或 `shell.overlay`。这不是修改 Harness
+界面源码，而是使用当前 Slot 组合协议替换根表面。
+
+代价也很明确：AppFrame 提供的会话/项目导航不再可见。GeoHarness 仍直接使用 Connection
+Session API，并以固定 Agent session id 管理当前 GIS 工作台会话；如果未来需要多会话导航，
+应在 GeoHarness 产品需求内设计，而不是重新露出不服务 GIS 流程的完整上游侧栏。
+
+## 正式执行链：Native Harness Agent，不是 Scenario 路由
+
+底部输入提交后，客户端真实调用：
+
+```text
+sessions.create({ sessionId })
+sessions.models({ sessionId })
+sessions.history({ sessionId })
+sessions.prompt({ sessionId, mode: "queue", content })
+```
+
+`sessions.models` 用来检查当前 profile 是否存在可路由模型。没有模型时 UI 返回明确配置
+错误；不会调用旧 `goal/start`，也不会回退到固定 Scenario。
+
+提交前记录 history 最大序号，提交后轮询 `sessions.history`。`agent-session.ts` 只投影本轮
+新事件：
+
+- `tool/call` → 右侧新增 running step，并显示真实 tool 参数；
+- `tool/result` → step success/failed，展示 summary 与输出 Layer ID；
+- `assistant/message` → Agent Result；
+- `turn/end` → 整轮完成或错误状态。
+
+因此“步骤逐渐打勾”来自 Harness Session 事件，不是浏览器定时器模拟，也不是读取
+`expected-result.json`。用户后续修改距离等要求仍发送到同一个 Agent session，由模型结合
+历史与当前 Layer ID 自主决定下一次工具调用。
+
+## 数据发现与 13 个 Geo Tools
+
+Host 通过当前 `@deepseek-ai/dsh-tools` API 注册 13 个 `defineTool` consumer。新增的
+`discover_datasets` 返回部署可用的数据能力；`list_layers(dataset_id)` 激活所选 catalog，
+其他 11 个分析/导出工具只接受返回的 canonical Layer ID。
+
+当前 catalog 为 `examples/datasets/nyc-core-official/dataset.json`，聚合仓库中已审计的 NYC
+Open Data 冻结快照：buildings、roads、rivers、districts 和 Lower Manhattan buildings。
+它没有 Task Graph、预设距离或预期结论。System Prompt 要求 Agent 遵循：
+
+```text
+Goal → Plan → Geo Tools → Layers → Map → Verify → Result
+```
+
+并明确禁止从示例 Scenario 推断 distance、predicate、field、output 或 conclusion。如果数据
+catalog 不支持请求，Agent 必须说明能力缺口，不能伪造数据。
+
+Geo Tool 通过 `ctx.geo` Service 调用 `LocalPythonGeoProvider`。Provider 每次启动一个可取消
+Python runner，使用 GeoPandas/Shapely/PyProj 做真实空间运算，并把 Layer Registry 与
+GeoPackage/GeoJSON 结果隔离到 workspace。Harness 参数 schema、timeout、AbortSignal、
+`ToolResult.output.render` 和 `presentationMeta` 均保留。
+
+## Agent workspace 到地图
+
+GeoHarness Host 在官方 Connection generic RPC 上注册 loopback-only `/geoharness` channel。
+正式 UI 只调用 `agent/workspace`，Host 从 Python Registry 获取 canonical projection，检查：
+
+- metadata `feature_count` 等于 GeoJSON feature 数；
+- 每个 parent Layer 都存在；
+- Layer metadata、GeoJSON 和 workspace key 均来自当前 Registry。
+
+通过后，客户端的 `registerWorkspaceProjection` 合并图层并保留可见性与透明度状态。地图支持
+Layer 显隐、连续透明度拖动、要素检查、pointer pan、fit bounds、工具栏缩放和 0.7×–5×
+鼠标滚轮缩放。正式客户端构建产物不再嵌入七个 Scenario GeoJSON。
+
+## Scenario 仍保留，但仅是确定性回归
+
+七个 `examples/scenarios/*`、`TaskGraphRuntime` 和旧 Scenario/goal RPC 仍保留，因为它们提供：
+
+- 每个需求独立的数据、测试、oracle 和 Demo；
+- 不依赖模型措辞的空间正确性验证；
+- 500 m → 200 m 局部修订、非预设 275 m、lineage 和 Map Verification 回归。
+
+这些 endpoint 不再由正式浏览器调用，Scenario ID 和 fixture GeoJSON 也不进入客户端产物。
+它们是测试夹具，不是生产 Agent 的 planner。
+
+## Profile 装配与启动
 
 ```sh
 dsh plugin --profile web add ./bundle/geoharness-bundle
@@ -68,290 +154,21 @@ dsh --profile web --dump-config
 dsh --profile web --no-open
 ```
 
-`dsh plugin` 实际是在 profile 目录中转发 pnpm 命令，然后依据已安装包
-的 `dsh.bundle` 声明重算 `dsh.profile.bundles`。相对文件路径会先锚定到
-调用 `dsh` 的目录。新增或移除 Bundle 后必须重启 profile；普通 profile
-patch 修改支持热重载。
+当前 Windows + Node 24 环境中，上游源码 CLI 入口会遇到 `FiberState` const-enum 运行时导入
+问题；同一提交已构建的 `../deepseek-harness/apps/cli/lib/bin.js` 可正常安装、dump 和启动，
+本仓库不修改上游规避此问题。
 
-当前骨架的关键 manifest 是：
+## 已验证与外部边界
 
-```json
-{
-  "exports": {
-    ".": { "default": "./index.js" },
-    "./client": { "default": "./client.js" }
-  },
-  "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-layout"
-      ]
-    }
-  }
-}
-```
+已通过 TypeScript、client build、50 项 Node 测试和 9 项 Python/GeoPandas 测试。真实 provider
+已从 `nyc-core-official` 发现并加载官方数据，500 m 河流缓冲测试返回 132/360；Native
+Session 事件投影和 Agent workspace RPC 也均有回归。
 
-其 patch 只插入一个启用的 Loader 行：
+当前进程环境没有 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`。预览 profile 虽然从
+`sessions.models` 列出 `ustc / deepseek-v4-flash-ascend1`，两次实际 Prompt 却都在任何
+Tool Call 之前以 `Connection error` 结束。因此不能声称“外部模型实际完成自主规划并调用
+工具”的 E2E 已通过。该外部条件不允许用 Scenario fallback 掩盖；UI 会明确提示检查
+Provider、网络和 API Key，并需要在模型连接可用后补做 planning smoke test。
 
-```yaml
-- insert:
-    - id: geoharness-plugin
-      name: '@geoharness/harness-plugin'
-```
-
-Profile 的 Bundle 按声明顺序叠加；后层可按行 id 覆盖前层。上游明确规定
-patch 替换目标行的完整 `config`，不是深合并。后续写 profile override
-时必须重述需要保留的配置字段。
-
-## Web 客户端插件的真实发现链
-
-Web 客户端不会扫描 GeoHarness 仓库，也不会因为存在一个前端文件就自动
-加载。当前链路是：
-
-```text
-启用的 Host Loader 行
-  → 解析该行的 npm 包
-  → 读取 package.json 的 dsh.client
-  → 解析 exports["./client"]
-  → 将 client.js 暴露为 /plugins/<package>/client.js
-  → 写入 window.__DSH_BOOT__ 依赖图
-  → 浏览器 ClientModuleSystem 加载 lazy-CJS factory
-  → Cordis Client Loader 激活插件
-```
-
-`dsh.client.inject` 是客户端 Cordis 插件之间的激活依赖，不等同于 JavaScript
-源码的 import 列表。当前客户端产物格式通过
-`window.__ModuleLoader__.load({ id, factory })` 交接。React、Cordis、Slot
-基础包等由 Web 的固定 module seed 提供；动态包依赖则需要
-`dsh.client.external`。
-
-Phase 0 曾用最小 factory 证实发现链和 Slot 注册。Phase 1 起已在 GeoHarness
-仓库内建立独立、类型化、可复现的客户端构建流程；当前 `client.js` 由正式源码、
-样式和七个 Scenario 数据生成，仍遵循同一 lazy-CJS 协议，且不依赖上游仓库内部的
-`packages/client/tsdown.client.ts`。
-
-## Slot 选择
-
-Slot 是当前 Web UI 的公开组合边界。插件注册顺序与 Slot 声明顺序互不保证，
-所以外部插件必须等待声明生命周期：
-
-```js
-ctx.slots.inject('conversation', () =>
-  ctx.slots.register({
-    name: 'conversation',
-    priority: -100,
-  }, GeoHarnessShell),
-)
-```
-
-`conversation` 是 `ui-layout` 声明的 `single + session-maybe` 公共 Slot；上游
-`ui-conversation` 以默认优先级 `0` 注册 `ConversationRoot`。`ui-slots` 当前实现按优先级
-升序选取 single cell 的第一个 live entry，并明确允许不同优先级 shadow。因此
-GeoHarness 使用 `-100` 成为该 Slot 的 winner，直接替换整个中心对话表面；Harness
-AppFrame、左侧栏、profile、session、Connection 与主题系统仍由上游提供。
-
-GeoHarness 不注册 `conversation.view`、`conversation.session.header.actions` 或
-`shell.overlay`，所以没有新标签、标题栏入口或抽屉。页面启动后中心区域立即是
-GeoHarness。工作区继续使用 DSW theme tokens，跟随原页面背景、文字、边框、交互和
-业务蓝色，不复制或长期修改上游 UI 源码。
-
-不能注册到 `root`。当前 `SlotRegistry` 源码明确警告：`root` 是 single slot，
-由 `ui-layout` 的完整 AppFrame 占用；动态注册的新条目会遮蔽整个应用框架，
-同时让框架声明的所有子 Slot 消失。
-
-当前真实 Web 验证确认，刷新 `http://127.0.0.1:31994/` 后只有一个
-`main[data-geoharness-plugin="loaded"]` 作为中心表面，旧 GIS action 数量为 0；三栏
-GIS Workspace、SVG 矢量地图、Layer Panel、Task 状态与 Prompt composer 均在
-`conversation` 内正常适配 1280×720。因此 v1.0 不需要独立标签、抽屉或平行 Web
-surface，更没有修改上游源码或另做无关站点。
-
-## Service 与 Tool 的实际接入（Phase 5）
-
-GeoHarness 没有把 provider 实现直接塞入 model-facing Tool。当前实现沿用
-`web` 能力展示的三角色结构：
-
-1. **Service Definition**：定义 `ctx.geo` 服务、请求/结果词汇、provider
-   registry、选择策略和结构化错误；
-2. **Provider**：实现本地/远端 GIS 引擎能力并注册到 `ctx.geo`；
-3. **Consumer**：Geo Tool 只通过 `ctx.geo` 执行，拥有模型可见的名称、描述、
-   schema、提示和展示。
-
-Host 包的 `index.js` 先实例化 `GeoRuntime extends Service`，再注册
-`LocalPythonGeoProvider`，最后注册 Tool consumers。插件声明
-`inject = ['tools', 'systemPrompt']`，因此只有官方 Tool 与 system-prompt 服务就绪后
-才激活。默认 provider 每次请求启动一个可取消的 Python runner；workspace 按
-Harness session id 和 Scenario id 隔离，派生层以 GeoPackage 和 registry metadata
-持久化在 `.geoharness/workspaces` 下。
-
-全部 12 个工具都以当前 `@deepseek-ai/dsh-tools` API 注册：
-
-```ts
-ctx.tools.register(defineTool({
-  // name, description, parameters, execute, output ...
-}))
-```
-
-工具返回的统一 `ToolResult` 是 canonical result；`output.render` 生成给模型阅读的
-有界文本，`output.presentationMeta` 保留 tool、success、outputs 和 summary。参数由
-Harness schema 校验，调用使用 Harness timeout/cancellation pipeline。`list_layers`
-是 Scenario 入口：首次调用时先通过 Service 加载该 Scenario 自有数据，后续工具只
-接受 canonical Layer ID。模型 guidance 明确规定
-`Goal → Plan → Geo Tools → Layers → Map → Verify → Result`。
-
-当前本地 provider 的请求协议不是 Harness API，而是 GeoHarness 内部边界：Host
-以单个 JSON stdin 调用 `python -m geoharness_geo.runner`，runner 只返回单个 JSON
-stdout。支持 `load_scenario`、`tool`、`layers`、`geojson` 四种动作。这个边界允许
-以后增加远端 provider，而不改变模型可见 Tool schema。
-
-Phase 5 通过两层真实验证：
-
-- `Context + SystemPrompt + ToolRuntime` 注册全部 12 个 Tool schema，并执行
-  `list_layers → transform_crs → create_buffer → spatial_filter`；Python provider
-  对 Scenario 02 返回固定空间结果 132。
-- 隔离 profile 启动完整官方 Harness Web，Host 插件无激活错误，浏览器同时发现
-  DSH Web surface 与 GeoHarness client 标记。验证环境没有外部模型 API Key，故
-  不伪造端到端模型生成；ToolRuntime 入口之后的真实执行链已经覆盖。
-
-## Host ↔ Client 地图验证通道（Phase 7）
-
-当前上游的正式双端扩展点是 `@deepseek-ai/dsh-client-connection` 的 generic RPC。
-GeoHarness Host 通过 `ctx.connection.rpc.handle('/geoharness', ...)` 注册 loopback-only
-channel，客户端把 `connection` 加入 Cordis inject 后通过
-`ctx.connection.rpc.call(...)` 调用。没有新增第二个 Web 服务，也没有绕过 Harness
-transport/trust fence。
-
-前端主路径使用三个异步 bounded endpoint：`goal/start` 从输入文本选择现有 v1.0 工作流、
-解析明确距离并创建 workspace-scoped 后台 job；`scenario/progress` 返回当前真实 Task Graph
-snapshot、已验证的 partial map projection 与 job 状态；`scenario/revise/start` 以同样方式
-启动 Scenario 05 局部修订。为回归和直接调用保留同步兼容 endpoint：`goal/run`、
-`scenario/run`、`scenario/latest`、`scenario/revise`。请求只接受七个
-官方数据 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
-0–100 km 的正距离。成功执行后 Host 会核对 Registry
-`generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
-全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
-
-后台 job 不复用已经返回的 start RPC `AbortSignal`。每次真实 step transition 都更新 snapshot；
-success transition 后 Host 从 Python Registry 构建 canonical partial projection，只有
-feature count、parents、lineage 和 output binding 全部通过才会进入浏览器地图。客户端约每
-280 ms 轮询，因此右侧 Plan 和左侧 Task outputs 的 pending/running/success 来自执行真相源，
-不是定时器模拟；Agent Result 读取实际 `ToolResult.summary/data`。初次 start 响应中的归一化
-距离会立即更新计划预览，避免官方数据加载期间短暂显示 Scenario 默认距离。
-
-修订没有重新创建整张 Task Graph：Host 在原 execution 上计算被修改 step 的下游闭包，
-只把这些 step 从 `success/failed` 退回 `pending`，清除其当前 alias 绑定并重跑；未受影响的
-上游 step、结果和 Layer ID 保持不变。每轮在 `run_history` 中记录参数变化、executed steps、
-reused steps 与用户原始理由。Registry 中被替代的派生 Layer 不删除，而是投影为
-`active=false` 并用历史 success transition 验证 lineage；客户端地图只合并 active Layers。
-这是建立在 Harness Connection RPC、Geo Service、Task Graph 与 Layer Registry 之上的局部
-修订，不是浏览器端伪造新结果。
-
-Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返回 Task Graph
-`success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 132 个要素；
-浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
-
-Phase 9 又通过真实 Connection RPC、TaskGraphRuntime 和 Python/GeoPandas provider 执行
-`goal/start` + `scenario/progress`：输入“Broadway 275 米以内”后只产生一轮 initial history，首轮 buffer 参数与
-计划标题均为 275 m，得到 241 个候选；独立 UTM 18N oracle 确认全部候选距离不超过
-275.5 m，没有隐藏的 500 m 运行。随后通过 `scenario/run` 与 `scenario/revise` 验证
-Scenario 05 从 500 m / 329 个候选更新为
-200 m / 205 个候选，history 为 2 轮；仅
-`buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
-Map Verification 仍为 `ready`。
-
-真实进度回归在 job 完成前观察到至少三个不同的 step success 计数，并在后续工具仍运行时
-观察到已通过 Map Verification 的派生 Layer；完整 Web 还确认页面只有底部一个执行入口，
-Agent Result 报告 275 m 的 241 个候选与 333 m 的 260 个候选，鼠标滚轮把地图从 1.0×
-缩放到 2.5×。
-
-## 七个官方数据 Scenario 的真实 Web 验证
-
-Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 Web profile
-中分别运行七个独立 Scenario，不使用另建的 Chat + Map 页面。浏览器显示的 Plan 来自
-各自 `task-graph.json`，Tools 通过 Host Service 调用 Python GIS provider，派生 Layers
-通过官方 Connection RPC 投影到直接占用 `conversation` 的 GeoHarness 主界面。真实结果为：
-
-| Scenario | Harness UI 中确认的结果 |
-| --- | --- |
-| 01 Building Data Inspection | 360 个有效 MultiPolygon，height_m 缺失 0 |
-| 02 River Building Query | 132 个河流 500 m 邻近建筑 |
-| 03 Statistics by District | 360 个建筑按 MN-101/102/103 分为 162 / 40 / 158 |
-| 04 Broadway Accessibility | 249 个 Broadway 300 m 可达建筑，分区为 130 / 8 / 111 |
-| 05 Parameter Revision | 500 m 为 329，修订 200 m 后为 205；2 rerun、3 reused、history 2 |
-| 06 Multi-Constraint Selection | 27 个多约束候选 |
-| 07 Official NYC Building Inspection | 133 个有效 MultiPolygon，建成年份缺失 2 |
-
-每个 Scenario 目录保存初始与结果两类 1280×720 Harness 截图、由这些真实截图生成的
-960×540 Demo GIF、视频脚本、README、独立数据与独立回归。`build-demo-media.py --check`
-验证 GIF 可复现；Phase 10 的 7 项测试直接解析 JPEG/GIF 文件格式、尺寸、帧数和目录
-契约。最终 `pnpm run verify:phase10`、Node 41 项、Python 7 项和 `pnpm peers check`
-全部通过。这证明 v1.0 的展示层仍走已确认的 Bundle/Slot/Connection 集成链，而不是
-在文档收尾阶段引入平行应用。
-
-## Scenario 07 聚焦快照
-
-Scenario 07 沿用上述同一 Bundle、`conversation` 主槽替换、Connection RPC、TaskGraphRuntime、
-Python provider、Layer Registry 与 Map Verification 链路。输入是独立的
-NYC Open Data `BUILDING`（`5zhs-2jue`）在固定 Lower Manhattan bbox 内的 2026-08-27
-审计快照：133 个 MultiPolygon。官方来源、Socrata 查询、publisher、source update、
-Terms of Use、空间范围与字段规范化均记录在 GeoJSON metadata 和 Scenario README。
-
-完整 Harness Web 实测两次执行均为 3/3 success、Map `ready`；输入和面积派生 Layer 均为
-133 个要素，点击 `calculate_geometry` step 只高亮 `buildings_with_geometry`。真实日期属性
-在 canonical GeoJSON 边界序列化为字符串；完整重跑会先清理该已解析 workspace 的旧派生
-文件，避免重复运行产生 stale Layers。官方数据截图和由截图生成的 GIF 保存在 Scenario
-自己的目录，并由独立资产测试验证。
-
-## Phase 0 真实验证
-
-隔离验证使用 GeoHarness 工作区下、被 `.gitignore` 忽略的临时 `DSH_HOME`，
-没有污染用户现有 profile：
-
-```powershell
-$env:DSH_HOME = '<GeoHarness>/.tmp/dsh-home-phase0-runtime'
-node ../deepseek-harness/apps/cli/lib/bin.js plugin --profile web add `
-  '<GeoHarness>/bundle/geoharness-bundle'
-node ../deepseek-harness/apps/cli/lib/bin.js --profile web --dump-config
-node ../deepseek-harness/apps/cli/lib/bin.js web --no-open --port 31987
-```
-
-确认结果：
-
-- profile manifest 的层栈为 `dsh-base`、`dsh-web-app`、
-  `@geoharness/harness-plugin`；
-- `--dump-config` 返回 0，组合配置包含 `geoharness-plugin` 行；
-- Web 启动并监听 `http://127.0.0.1:31987`；
-- `/` 返回 200，注入的 `window.__DSH_BOOT__` 含 GeoHarness 节点以及当时三个
-  声明的 client inject；
-- `/plugins/@geoharness/harness-plugin/client.js` 返回 200；
-- 本仓库测试在 VM 中执行该 factory，并确认两个 Slot 注册及诊断组件标记；
-- 上游仓库最终没有已跟踪改动。
-
-本仓库的可重复静态验证命令是：
-
-```sh
-pnpm test
-pnpm run verify:phase0
-```
-
-## 当前版本限制
-
-- v1.0 精确对齐 Harness `0.1.1-rc.2`、Cordis `4.0.1`。升级时必须重新核对
-  Bundle manifest、lazy-CJS 客户端协议、Slot、Connection、Service 与 Tool API。
-- 在本次 Windows + Node 24.19.0 环境中，上游源码入口
-  `node --import tsx/esm apps/cli/src/bin.ts ...` 会因
-  `profile-boot.ts` 运行时导入 Cordis 的 `const enum FiberState` 而失败；同一
-  提交构建后的 `apps/cli/lib/bin.js` 可正常安装、dump 和启动 Web。GeoHarness
-  不应在上游仓库内修补此问题。
-- 七个 Scenario 都使用带固定查询与日期的 NYC Open Data 快照。Scenarios 01–06 的未改动
-  下载响应统一保存在 `data/official-sources/nyc/`，派生脚本校验 SHA256 与 feature count；
-  每个 Scenario 仍保存自己的独立数据副本。刷新快照必须显式审查统计变化。
-- 当前环境没有外部模型 API Key，因此最终验收不依赖付费模型请求。Harness
-  `SystemPrompt + ToolRuntime` 边界、全部 Tool schema、真实 GIS 执行、Task Graph、
-  Connection RPC 与 Web UI 已分别做确定性验证。
-- v1.0 的自然语言局部修订只承诺 Scenario 05 的有界距离修改；通用自由文本规划、
-  任意 DAG 重写、栅格/3D/时空分析和远端生产 provider 均不在当前范围内。
+上游升级时必须重新核对 Bundle patch、lazy-CJS 协议、root Slot 优先级、Connection Session
+API、generic RPC、Service 与 Tool contract，不能只修改版本号。

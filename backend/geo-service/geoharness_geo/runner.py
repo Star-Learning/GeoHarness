@@ -38,6 +38,36 @@ def _load_scenario(
     }
 
 
+def _load_dataset(
+    registry: LayerRegistry,
+    dataset_root: Path,
+    dataset_id: str,
+    *,
+    reset: bool = False,
+) -> dict[str, Any]:
+    dataset_path = (dataset_root / dataset_id).resolve()
+    examples_root = dataset_root.parent.resolve()
+    if not dataset_path.is_relative_to(dataset_root) or not dataset_path.is_dir():
+        raise ValueError(f"Unknown or unsafe Dataset id: {dataset_id}")
+    manifest = json.loads((dataset_path / "dataset.json").read_text(encoding="utf-8"))
+    if manifest.get("id") != dataset_id:
+        raise ValueError(f"Dataset manifest id mismatch: {dataset_id}")
+    if reset:
+        registry.clear()
+    if not registry.list_layers():
+        for layer in manifest["layers"]:
+            source_path = (dataset_path / str(layer["path"])).resolve()
+            if not source_path.is_relative_to(examples_root):
+                raise ValueError(f"Unsafe Dataset layer path: {layer['path']}")
+            registry.register_file(source_path, name=str(layer["name"]), source="scenario")
+    return {
+        "dataset_id": dataset_id,
+        "title": manifest["title"],
+        "description": manifest["description"],
+        "layers": [item.model_dump(mode="json") for item in registry.list_layers()],
+    }
+
+
 def dispatch(payload: dict[str, Any]) -> Any:
     workspace_root = Path(payload["workspace_root"]).resolve()
     registry = LayerRegistry(workspace_root)
@@ -47,6 +77,13 @@ def dispatch(payload: dict[str, Any]) -> Any:
             registry,
             Path(payload["scenario_root"]).resolve(),
             str(payload["scenario_id"]),
+            reset=bool(payload.get("reset", False)),
+        )
+    if action == "load_dataset":
+        return _load_dataset(
+            registry,
+            Path(payload["dataset_root"]).resolve(),
+            str(payload["dataset_id"]),
             reset=bool(payload.get("reset", False)),
         )
     if action == "tool":

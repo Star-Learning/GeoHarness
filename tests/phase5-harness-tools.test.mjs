@@ -41,26 +41,21 @@ async function execute(ctx, name, args, callId) {
   })
 }
 
-test('the GeoHarness host plugin registers the 12 current Harness Tool schemas', async () => {
+test('the GeoHarness host plugin registers dataset discovery plus the 12 GIS Tool schemas', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase5-schemas-'))
   try {
     const ctx = await setup(temporary)
     const schemas = ctx.tools.schemas()
     const names = schemas.map(schema => schema.name)
-    assert.equal(names.length, 12)
+    assert.equal(names.length, 13)
     const expectedNames = [
-      'inspect_dataset', 'list_layers', 'transform_crs', 'create_buffer',
+      'discover_datasets', 'inspect_dataset', 'list_layers', 'transform_crs', 'create_buffer',
       'spatial_filter', 'spatial_join', 'clip_layer', 'aggregate_by_region',
       'calculate_geometry', 'nearest_features', 'analyze_distribution', 'export_layer',
     ]
     assert.deepEqual(names, expectedNames)
     const listSchema = schemas.find(schema => schema.name === 'list_layers')
-    assert.deepEqual(listSchema.parameters.properties.scenario_id.enum, [
-      '01-building-data-inspection', '02-river-building-query',
-      '03-building-statistics-by-district', '04-road-accessibility',
-      '05-parameter-revision', '06-multi-constraint-selection',
-      '07-official-nyc-building-inspection',
-    ])
+    assert.deepEqual(listSchema.parameters.properties.dataset_id.enum, ['nyc-core-official'])
     const assembly = await ctx.systemPrompt.assemble()
     assert.deepEqual(assembly.tools.map(tool => tool.name), [...names].sort())
   } finally {
@@ -72,11 +67,16 @@ test('Harness ToolRuntime executes a complete river-buffer workflow through the 
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase5-exec-'))
   try {
     const ctx = await setup(temporary)
-    const listed = await execute(ctx, 'list_layers', { scenario_id: '02-river-building-query' }, 'phase5-list')
+    const discovered = await execute(ctx, 'discover_datasets', {}, 'phase5-discover')
+    assert.equal(discovered.isError, false)
+    assert.equal(discovered.value.success, true)
+    assert.deepEqual(discovered.value.data.datasets.map(dataset => dataset.id), ['nyc-core-official'])
+
+    const listed = await execute(ctx, 'list_layers', { dataset_id: 'nyc-core-official' }, 'phase5-list')
     assert.equal(listed.isError, false)
     assert.equal(listed.value.success, true)
     const byName = Object.fromEntries(listed.value.data.layers.map(layer => [layer.name, layer.layer_id]))
-    assert.deepEqual(Object.keys(byName), ['buildings', 'rivers'])
+    assert.deepEqual(Object.keys(byName), ['buildings', 'roads', 'rivers', 'districts', 'lower_manhattan_buildings'])
 
     const transformed = await execute(ctx, 'transform_crs', {
       input_layer: byName.rivers,
@@ -119,9 +119,9 @@ test('schema rejection and backend failure remain structured at the Harness boun
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase5-errors-'))
   try {
     const ctx = await setup(temporary)
-    const invalidScenario = await execute(ctx, 'list_layers', { scenario_id: 'not-a-scenario' }, 'phase5-invalid')
-    assert.equal(invalidScenario.isError, true)
-    assert.match(invalidScenario.content[0].text, /INVALID_ARGS|invalid arguments/)
+    const invalidDataset = await execute(ctx, 'list_layers', { dataset_id: 'not-a-dataset' }, 'phase5-invalid')
+    assert.equal(invalidDataset.isError, true)
+    assert.match(invalidDataset.content[0].text, /INVALID_ARGS|invalid arguments/)
 
     const failedBuffer = await execute(ctx, 'create_buffer', {
       input_layer: 'layer_missing',

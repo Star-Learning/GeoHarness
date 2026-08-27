@@ -76,6 +76,23 @@ export interface LayerRecord {
   data: GeoJsonFeatureCollection
 }
 
+export interface WorkspaceProjectionItem {
+  metadata: {
+    layer_id: string
+    name: string
+    geometry: string
+    crs: string
+    feature_count: number
+    source: 'scenario' | 'upload' | 'derived'
+    generated_by: string | null
+    parents: string[]
+    parameters: Record<string, unknown> | null
+    storage_path: string
+    created_at: string
+  }
+  geojson: GeoJsonFeatureCollection
+}
+
 const STYLE_BY_NAME: Record<string, LayerStyle> = {
   buildings: { color: '#d76945', fillOpacity: 0.64, lineWidth: 1.2 },
   roads: { color: '#26383d', fillOpacity: 0, lineWidth: 3.2 },
@@ -162,6 +179,40 @@ export function registerUploadedLayer(fileName: string, value: unknown): LayerRe
     style: styleForLayer(name),
     data: value,
   }
+}
+
+/** Project the live Agent workspace Registry into browser layers without losing UI controls. */
+export function registerWorkspaceProjection(
+  previous: readonly LayerRecord[],
+  value: readonly WorkspaceProjectionItem[],
+): LayerRecord[] {
+  const previousById = new Map(previous.map(layer => [layer.id, layer]))
+  return value.map(({ metadata, geojson }) => {
+    if (!isFeatureCollection(geojson)) throw new Error(`Layer ${metadata.layer_id} has invalid GeoJSON.`)
+    if (geojson.features.length !== metadata.feature_count) {
+      throw new Error(`Layer ${metadata.layer_id} feature count does not match its Registry metadata.`)
+    }
+    const current = previousById.get(metadata.layer_id)
+    return {
+      id: metadata.layer_id,
+      name: metadata.name,
+      type: 'vector',
+      geometry: metadata.geometry || geometrySummary(geojson),
+      crs: metadata.crs || crsName(geojson),
+      featureCount: metadata.feature_count,
+      source: metadata.source,
+      scenarioId: null,
+      generatedBy: metadata.generated_by,
+      parents: [...metadata.parents],
+      parameters: metadata.parameters,
+      storagePath: metadata.storage_path,
+      createdAt: metadata.created_at,
+      visible: current?.visible ?? true,
+      opacity: current?.opacity ?? 1,
+      style: current?.style ?? styleForLayer(metadata.name),
+      data: geojson,
+    }
+  })
 }
 
 export function toggleLayerVisibility(layers: readonly LayerRecord[], layerId: string): LayerRecord[] {

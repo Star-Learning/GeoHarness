@@ -82,33 +82,35 @@ test('uploaded GeoJSON is validated before registration', async () => {
   assert.throws(() => registry.registerUploadedLayer('bad.json', { type: 'FeatureCollection' }), /valid GeoJSON/)
 })
 
-test('the Phase 3 client embeds all Scenario data and implements map interaction surfaces', async () => {
+test('the production client renders live Agent workspace layers without embedding Scenario fixtures', async () => {
   const [source, output] = await Promise.all([
     readFile(join(bundleRoot, 'src', 'client.tsx'), 'utf8'),
     renderClientBundle(),
   ])
-  assert.match(source, /registerScenarioLayers/)
+  assert.match(source, /registerWorkspaceProjection/)
   assert.match(source, /toggleLayerVisibility/)
   assert.match(source, /Feature inspection/i)
   assert.match(source, /onPointerMove/)
   assert.match(source, /onWheel/)
   assert.match(source, /Math\.exp\(-event\.deltaY/)
   assert.match(source, /Fit bounds/)
-  assert.match(source, /NYC OPEN DATA/)
-  assert.match(source, /Official NYC Open Data/)
+  assert.match(source, /Native Harness Agent/)
   assert.match(source, /type="range"/)
   assert.match(source, /const opacity = Number\(event\.currentTarget\.value\)/)
   assert.doesNotMatch(source, /setLayerOpacity\(current, layer\.id, Number\(event\.currentTarget\.value\)\)/)
-  assert.match(source, /Task outputs/)
-  assert.match(source, /data-output-status/)
-  assert.match(source, /name: 'conversation'/)
+  assert.match(source, /Agent workspace/)
+  assert.match(source, /data-step-status/)
+  assert.match(source, /name: 'root'/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /name: 'conversation\.view'/)
-  assert.match(output, /__GEOHARNESS_SCENARIOS__/)
+  assert.doesNotMatch(output, /__GEOHARNESS_SCENARIOS__/)
   for (const id of [
     '01-building-data-inspection', '02-river-building-query',
     '03-building-statistics-by-district', '04-road-accessibility',
     '05-parameter-revision', '06-multi-constraint-selection',
     '07-official-nyc-building-inspection',
-  ]) assert.match(output, new RegExp(id))
+  ]) assert.doesNotMatch(output, new RegExp(id))
+  assert.match(source, /connection\.api\.sessions\.prompt/)
+  assert.match(source, /agent\/workspace/)
+  assert.doesNotMatch(source, /Examples|goal\/start|scenario\/progress/)
 })

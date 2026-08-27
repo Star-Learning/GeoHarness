@@ -1,16 +1,15 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
-import { basename, dirname, resolve } from 'node:path'
+import { readFile, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const repositoryRoot = resolve(packageRoot, '..', '..')
 const sourcePath = resolve(packageRoot, 'src', 'client.tsx')
+const agentSessionPath = resolve(packageRoot, 'src', 'agent-session.ts')
 const layerRegistryPath = resolve(packageRoot, 'src', 'layer-registry.ts')
 const verificationMapPath = resolve(packageRoot, 'src', 'verification-map.ts')
 const stylePath = resolve(packageRoot, 'src', 'styles.css')
 const outputPath = resolve(packageRoot, 'client.js')
-const scenariosRoot = resolve(repositoryRoot, 'examples', 'scenarios')
 const packageName = '@geoharness/harness-plugin'
 
 function transpile(source, fileName) {
@@ -42,41 +41,16 @@ function indent(source, spaces) {
   return source.split('\n').map(line => line.length > 0 ? `${prefix}${line}` : '').join('\n')
 }
 
-async function loadEmbeddedScenarios() {
-  const entries = await readdir(scenariosRoot, { withFileTypes: true })
-  const scenarios = []
-  for (const entry of entries.filter(item => item.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
-    const root = resolve(scenariosRoot, entry.name)
-    const manifest = JSON.parse(await readFile(resolve(root, 'scenario.json'), 'utf8'))
-    const data = {}
-    for (const relativePath of manifest.data) {
-      const name = basename(relativePath, '.geojson')
-      data[name] = JSON.parse(await readFile(resolve(root, ...relativePath.split('/')), 'utf8'))
-    }
-    scenarios.push({
-      manifest,
-      prompt: (await readFile(resolve(root, manifest.prompt), 'utf8')).trim(),
-      revisionPrompt: manifest.revision_prompt === null
-        ? null
-        : (await readFile(resolve(root, manifest.revision_prompt), 'utf8')).trim(),
-      expectedPlan: JSON.parse(await readFile(resolve(root, manifest.expected_plan), 'utf8')),
-      expectedResult: JSON.parse(await readFile(resolve(root, manifest.expected_result), 'utf8')),
-      taskGraph: JSON.parse(await readFile(resolve(root, manifest.task_graph), 'utf8')),
-      data,
-    })
-  }
-  return scenarios
-}
-
 export async function renderClientBundle() {
-  const [source, registrySource, verificationMapSource, css, scenarios] = await Promise.all([
+  const [source, agentSessionSource, registrySource, verificationMapSource, css] = await Promise.all([
     readFile(sourcePath, 'utf8'),
+    readFile(agentSessionPath, 'utf8'),
     readFile(layerRegistryPath, 'utf8'),
     readFile(verificationMapPath, 'utf8'),
     readFile(stylePath, 'utf8'),
-    loadEmbeddedScenarios(),
   ])
   const transpiled = transpile(source, sourcePath)
+  const transpiledAgentSession = transpile(agentSessionSource, agentSessionPath)
   const transpiledRegistry = transpile(registrySource, layerRegistryPath)
   const transpiledVerificationMap = transpile(verificationMapSource, verificationMapPath)
 
@@ -85,6 +59,9 @@ window.__ModuleLoader__.load({
   id: ${JSON.stringify(packageName)},
   factory: (externalRequire) => {
     const __localFactories = {
+      './agent-session': (module, exports, require) => {
+${indent(transpiledAgentSession, 8)}
+      },
       './layer-registry': (module, exports, require) => {
 ${indent(transpiledRegistry, 8)}
       },
@@ -105,7 +82,6 @@ ${indent(transpiledVerificationMap, 8)}
     const module = { exports: {} };
     const exports = module.exports;
     const __GE0HARNESS_CSS__ = ${JSON.stringify(css)};
-    const __GEOHARNESS_SCENARIOS__ = ${JSON.stringify(scenarios)};
 ${indent(transpiled, 4)}
     return module.exports;
   },

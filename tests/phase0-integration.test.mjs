@@ -85,9 +85,6 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.deepEqual(manifest.peerDependencies, {
     '@deepseek-ai/cordis': '4.0.1',
     '@deepseek-ai/dsh-client-connection': '0.1.1-rc.2',
-    '@deepseek-ai/dsh-client-runtime': '0.1.1-rc.2',
-    '@deepseek-ai/dsh-client-ui-conversation': '0.1.1-rc.2',
-    '@deepseek-ai/dsh-client-ui-layout': '0.1.1-rc.2',
     '@deepseek-ai/dsh-system-prompt': '0.1.1-rc.2',
     '@deepseek-ai/dsh-tools': '0.1.1-rc.2',
   })
@@ -108,7 +105,7 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.equal(typeof hostPlugin.registerGeoTools, 'function')
 })
 
-test('the browser artifact replaces the declared conversation surface through its public Slot', async () => {
+test('the browser artifact replaces the public root surface without the Harness sidebar shell', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let handoff
   const appendedStyles = []
@@ -139,33 +136,30 @@ test('the browser artifact replaces the declared conversation surface through it
   })
   assert.deepEqual([...plugin.inject], ['slots', 'connection'])
 
-  const awaited = []
   const registrations = []
   const ctx = {
     slots: {
-      inject: (slot, setup) => {
-        awaited.push(slot)
-        return setup()
-      },
       register: (options, component) => {
         registrations.push({ options, component })
         return () => {}
       },
     },
+    connection: { api: { sessions: {} }, rpc: {} },
   }
   plugin.apply(ctx)
 
   assert.equal(appendedStyles.length, 1)
   assert.equal(appendedStyles[0].dataset.plugin, packageName)
-  assert.deepEqual(awaited, ['conversation'])
   assert.deepEqual(
     registrations.map(({ options }) => ({ name: options.name, priority: options.priority })),
     [
-      { name: 'conversation', priority: -100 },
+      { name: 'root', priority: -100 },
     ],
   )
-  assert.equal(registrations[0].component().props['data-geoharness-plugin'], 'loaded')
-  assert.equal(registrations[0].component().props['data-geoharness-phase'], '10')
+  const shell = registrations[0].component(registrations[0].options.inject())
+  assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
+  assert.equal(shell.props['data-geoharness-phase'], '10')
+  assert.equal(shell.props['data-geoharness-agent'], 'native')
 })
 
 test('the repository does not vendor DeepSeek Harness source', async () => {

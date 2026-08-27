@@ -10,6 +10,7 @@ export const name = 'geoharness'
 export const inject = ['tools', 'systemPrompt']
 
 const packagedBackendRoot = fileURLToPath(new URL('../../backend/geo-service/', import.meta.url))
+const packagedDatasetRoot = fileURLToPath(new URL('../../examples/datasets/', import.meta.url))
 
 /** Compose the Geo Service Definition, local Python Provider and model-facing Tool consumers. */
 export function apply(ctx, config = {}) {
@@ -20,6 +21,7 @@ export function apply(ctx, config = {}) {
     python: config.python ?? process.env.GEOHARNESS_PYTHON ?? 'python',
     backendRoot: resolve(config.backendRoot ?? packagedBackendRoot),
     scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')),
+    datasetRoot: resolve(config.datasetRoot ?? packagedDatasetRoot),
     workspaceRoot: resolve(config.workspaceRoot ?? resolve(process.cwd(), '.geoharness/workspaces')),
   }))
   new TaskGraphRuntime(ctx, { scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')) })

@@ -20,17 +20,19 @@ export class LocalPythonGeoProvider {
     this.python = options.python ?? 'python'
     this.backendRoot = resolve(options.backendRoot)
     this.scenarioRoot = resolve(options.scenarioRoot)
+    this.datasetRoot = resolve(options.datasetRoot)
     this.workspaceRoot = resolve(options.workspaceRoot)
-    this.activeScenarios = new Map()
+    this.activePackages = new Map()
   }
 
   available() {
     return existsSync(resolve(this.backendRoot, 'geoharness_geo', 'runner.py'))
       && existsSync(this.scenarioRoot)
+      && existsSync(this.datasetRoot)
   }
 
-  workspaceFor(workspaceKey, scenarioId) {
-    const workspace = resolve(this.workspaceRoot, safeSegment(workspaceKey), safeSegment(scenarioId ?? 'manual'))
+  workspaceFor(workspaceKey, packageId) {
+    const workspace = resolve(this.workspaceRoot, safeSegment(workspaceKey), safeSegment(packageId ?? 'manual'))
     if (workspace !== this.workspaceRoot && !workspace.startsWith(`${this.workspaceRoot}${sep}`)) {
       throw new Error(`Unsafe Geo workspace path: ${workspace}`)
     }
@@ -39,19 +41,26 @@ export class LocalPythonGeoProvider {
 
   async execute(request, signal) {
     const workspaceKey = safeSegment(request.workspaceKey ?? 'direct')
-    let scenarioId = this.activeScenarios.get(workspaceKey)
+    let packageId = this.activePackages.get(workspaceKey)
     if (request.action === 'load_scenario') {
-      scenarioId = safeSegment(request.scenarioId)
-      this.activeScenarios.set(workspaceKey, scenarioId)
+      packageId = safeSegment(request.scenarioId)
+      this.activePackages.set(workspaceKey, packageId)
+    }
+    if (request.action === 'load_dataset') {
+      packageId = safeSegment(request.datasetId)
+      this.activePackages.set(workspaceKey, packageId)
     }
     const payload = {
       ...request,
-      workspace_root: this.workspaceFor(workspaceKey, scenarioId),
+      workspace_root: this.workspaceFor(workspaceKey, packageId),
       scenario_root: this.scenarioRoot,
+      dataset_root: this.datasetRoot,
     }
     delete payload.workspaceKey
     delete payload.scenarioId
-    if (request.action === 'load_scenario') payload.scenario_id = scenarioId
+    delete payload.datasetId
+    if (request.action === 'load_scenario') payload.scenario_id = packageId
+    if (request.action === 'load_dataset') payload.dataset_id = packageId
     return this.run(payload, signal)
   }
 

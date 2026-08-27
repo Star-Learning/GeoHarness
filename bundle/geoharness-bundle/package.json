@@ -32,19 +32,13 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-connection",
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-conversation",
-        "@deepseek-ai/dsh-client-ui-layout"
+        "@deepseek-ai/dsh-client-connection"
       ]
     }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh-client-connection": "0.1.1-rc.2",
-    "@deepseek-ai/dsh-client-runtime": "0.1.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.1.1-rc.2",
-    "@deepseek-ai/dsh-client-ui-layout": "0.1.1-rc.2",
     "@deepseek-ai/dsh-system-prompt": "0.1.1-rc.2",
     "@deepseek-ai/dsh-tools": "0.1.1-rc.2"
   },

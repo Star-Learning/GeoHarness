@@ -1,9 +1,9 @@
 # GeoHarness v1.0
 
 GeoHarness is an Agentic GIS workspace built as a real extension of DeepSeek Harness. A user states
-a spatial goal; GeoHarness turns it into an executable Task Graph, runs structured Geo Tools,
-registers every derived Layer, verifies the result on the map, and supports a bounded human
-revision without hiding the GIS work behind chat prose.
+a spatial goal; the Native Harness Agent discovers available real datasets, chooses and sequences
+Geo Tools, registers every derived Layer, and returns a map plus a textual result. The production UI
+does not select a predefined Scenario or keyword-route the prompt to a fixed DAG.
 
 > 你只需要告诉 GeoHarness 想解决什么空间问题；它会规划 GIS 工作流、执行分析，并把每一步结果展示在地图上供人验证。
 
@@ -17,20 +17,23 @@ source, and it is not a separate Chat + Map website.
 
 - A dual-face Harness plugin/bundle: Host plugin plus browser module, composed through current
   `dsh.bundle`, `dsh.client`, Cordis Service and Harness Slot contracts.
-- A three-column GIS workspace that directly replaces the official `conversation` single Slot:
-  opening Harness immediately shows GeoHarness while retaining the upstream AppFrame, sidebar,
-  DSW theme tokens and session infrastructure.
-- Twelve model-facing Geo Tools with Harness schema validation, timeout/cancellation, structured
-  `ToolResult` and prompt guidance.
+- A three-column GIS workspace that takes over the official `root` single Slot at priority `-100`:
+  opening Harness immediately shows GeoHarness without the upstream session/project sidebar. The
+  workspace still uses upstream Connection, Session APIs and DSW theme tokens.
+- 13 Harness defineTool consumers, including `discover_datasets`, with schema validation,
+  timeout/cancellation, structured `ToolResult` and Agent planning guidance.
 - A cancellable local Python provider using GeoPandas, Shapely, PyProj and persistent GeoPackage
   workspaces.
-- An executable DAG runtime with dependency resolution, state transitions, Layer aliases and run
-  history.
-- Verified `Task Step ↔ Layer ↔ Map` projection over the official loopback Connection RPC.
-- Goal-driven routing from the user's prompt into the bounded v1.0 workflows. Explicit distances
-  are patched into the initial Task Graph before execution; a real 275 m Broadway goal runs once
-  at 275 m and returns 241 official buildings, without a hidden 500 m pass.
-- Conversational Scenario 05 revision to 200 m with downstream-only rerun and retained lineage.
+- Native Harness Session integration through `sessions.create/models/history/prompt`; real
+  `tool/call`, `tool/result`, `assistant/message` and `turn/end` events progressively drive the
+  right-hand execution steps and final Agent result.
+- Verified live `Agent workspace → Layer Registry → Map` projection over the official loopback
+  Connection RPC, including feature-count and parent-lineage checks.
+- A reusable `nyc-core-official` data catalog containing dated official NYC buildings, roads,
+  rivers, districts and Lower Manhattan buildings. The catalog supplies data capabilities, not a
+  prescribed workflow.
+- An executable deterministic Scenario DAG runtime retained for spatial correctness regressions,
+  including a real nonpreset 275 m run and 500 m → 200 m revision. It is not called by the formal UI.
 - Seven independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
   test, README, screenshots, animated Demo and video script.
 - Every Scenario is backed by a dated, audited NYC Open Data snapshot and uses the same Tool,
@@ -40,18 +43,19 @@ source, and it is not a separate Chat + Map website.
 
 ```text
 DeepSeek Harness Web
-  └─ conversation single Slot (priority -100 takeover)
-       └─ GeoHarness primary GIS workspace
-            └─ official Connection RPC (/geoharness/goal/run)
-                 └─ TaskGraphRuntime + Map Verification
-                      └─ 12 Harness defineTool consumers
-                           └─ cancellable local Python provider
-                                └─ GeoPandas / Shapely / PyProj / GeoPackage
+  └─ root single Slot (priority -100 takeover)
+       └─ GeoHarness primary GIS workspace (no Harness sidebar)
+            ├─ Harness Session API → Native Harness Agent
+            │    └─ SystemPrompt + ToolRuntime → 13 Harness defineTool consumers
+            │         └─ Geo Service → cancellable local Python provider
+            │              └─ GeoPandas / Shapely / PyProj / GeoPackage
+            └─ Connection RPC (/geoharness/agent/workspace)
+                 └─ verified Layer Registry projection → interactive map
 ```
 
-The Registry is the Layer truth source. Agent text never invents Layer IDs or map state. A run is
-reported ready only when step outputs, feature counts, parents and lineage all match the canonical
-backend projection.
+The Registry is the Layer truth source. Agent text never invents Layer IDs or map state. The map
+accepts a workspace projection only when feature counts and parent references match the canonical
+backend Registry.
 
 ## Requirements
 
@@ -86,16 +90,22 @@ dsh plugin --profile web add ./bundle/geoharness-bundle
 dsh --profile web --no-open
 ```
 
-Open Harness and the center surface is already GeoHarness. Enter a spatial requirement in the
-bottom input and press **执行 GIS 任务**. The Example selector only loads sample prompts; the Host
-resolves the actual workflow and parameters from the submitted text. GeoHarness does not add a
-separate tab or drawer. While the real GIS tools run, the Plan and Task output rows advance from
-pending to running to success, verified derived layers appear on the map, and the Agent Result
-panel reports the tools' actual structured summaries and counts. The composer is the only run
-entry. Pan with pointer drag and zoom with the mouse wheel or map controls. The frozen
-official-data workflows do not require a model API key.
+Open Harness and the whole surface is already GeoHarness. There is no Harness session/project
+sidebar, separate GIS tab, drawer or Examples selector. Enter any supported spatial requirement in
+the bottom composer and press **执行 GIS 任务**. The Agent discovers the available data catalog,
+plans from the submitted text and chooses its tools; explicit values such as 200 m or 275 m remain
+the values supplied to the GIS operation. Real Session events advance the right-hand steps,
+verified workspace Layers appear on the map, and the Agent Result panel shows the final answer.
+Pan with pointer drag and zoom with the mouse wheel or map controls.
 
-## Seven official-data v1.0 Demos
+A configured Harness model provider is required for this production path. When no routable model
+exists, GeoHarness shows an explicit configuration error and does not silently fall back to a
+Scenario. No API key is stored in this repository.
+
+## Seven official-data v1.0 deterministic regressions
+
+These packages remain executable acceptance fixtures and media records for GIS correctness. They
+are not Examples in the production UI and do not constrain the Native Agent to one demand type.
 
 | Scenario | Verified result | Package | Demo |
 | --- | --- | --- | --- |
@@ -155,12 +165,13 @@ pnpm peers check             # confirm exact Harness peer compatibility
 - All seven regression Scenarios use committed, dated NYC Open Data snapshots. Refreshes must be
   explicit: download, hash validation, derivative rebuild, independent oracle and reviewed expected
   statistics must all pass before a source update is accepted.
-- Natural-language routing is deliberately bounded to the seven v1.0 workflows. Explicit road
-  and river distances are accepted in metres or kilometres and injected before the initial run;
-  Scenario 05 also supports distance-only follow-up revisions. Arbitrary replanning is not claimed.
-- No external model credential is stored in this repository. Tool schemas and deterministic GIS
-  execution are tested through the real Harness runtime; model wording is not an acceptance
-  oracle.
+- Agent planning is bounded by the 13 implemented vector tools and the datasets discoverable in the
+  deployment. The committed catalog currently covers Manhattan/NYC; requests needing unavailable
+  data must be reported as unsupported rather than fabricated.
+- No external model credential is stored in this repository. Tool schemas, real official data,
+  native Session event projection and deterministic GIS execution are tested through the real
+  Harness runtime. This environment cannot run a paid-model planning E2E without a configured key;
+  model wording is never a spatial-correctness oracle.
 - Upstream version changes require rechecking bundle, client, Slot, Connection, Service and Tool
   contracts before upgrading the exact peers.
 
