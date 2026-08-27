@@ -59,6 +59,7 @@ test('the GeoHarness host plugin registers the 12 current Harness Tool schemas',
       '01-building-data-inspection', '02-river-building-query',
       '03-building-statistics-by-district', '04-road-accessibility',
       '05-parameter-revision', '06-multi-constraint-selection',
+      '07-official-nyc-building-inspection',
     ])
     const assembly = await ctx.systemPrompt.assemble()
     assert.deepEqual(assembly.tools.map(tool => tool.name), [...names].sort())

@@ -306,7 +306,12 @@ export class TaskGraphRuntime extends Service {
 
   async runScenario({ scenarioId, workspaceKey = 'direct', signal, onTransition }) {
     const definition = await this.loadDefinition(scenarioId)
-    const loaded = await this.ctx.geo.execute({ action: 'load_scenario', scenarioId, workspaceKey }, signal)
+    const loaded = await this.ctx.geo.execute({
+      action: 'load_scenario',
+      scenarioId,
+      workspaceKey,
+      reset: true,
+    }, signal)
     const initialLayers = Object.fromEntries(loaded.layers.map(layer => [layer.name, layer.layer_id]))
     const execution = new TaskGraphExecution(definition, {
       initialLayers,

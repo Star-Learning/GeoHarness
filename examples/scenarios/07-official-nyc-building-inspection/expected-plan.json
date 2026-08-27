@@ -1,0 +1,19 @@
+{
+  "required_capabilities": [
+    "inspect_dataset",
+    "calculate_geometry",
+    "analyze_distribution"
+  ],
+  "constraints": {
+    "publisher": "NYC Office of Technology and Innovation (OTI)",
+    "dataset_id": "5zhs-2jue",
+    "input_layer": "buildings",
+    "metric_crs": "EPSG:32618",
+    "spatial_filter": {
+      "north": 40.711,
+      "west": -74.013,
+      "south": 40.706,
+      "east": -74.007
+    }
+  }
+}

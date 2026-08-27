@@ -73,6 +73,7 @@ const SCENARIO_LABELS: Record<string, string> = {
   '04-road-accessibility': 'Road Accessibility',
   '05-parameter-revision': 'Revise a Spatial Query',
   '06-multi-constraint-selection': 'Multi-Constraint Selection',
+  '07-official-nyc-building-inspection': 'Official NYC Building Data',
 }
 
 const SCENARIOS: readonly ScenarioPreview[] = __GEOHARNESS_SCENARIOS__.map(payload => ({
@@ -176,11 +177,13 @@ function GeoMap({
   layers,
   selected,
   highlightedLayerIds,
+  officialData,
   onSelect,
 }: {
   layers: readonly LayerRecord[]
   selected: SelectedFeature | null
   highlightedLayerIds: ReadonlySet<string>
+  officialData: boolean
   onSelect: (value: SelectedFeature | null) => void
 }) {
   const [zoom, setZoom] = React.useState(1)
@@ -219,7 +222,7 @@ function GeoMap({
         <button type="button" onClick={() => setZoom(value => Math.max(0.7, value / 1.35))} aria-label="Zoom out">−</button>
         <button type="button" onClick={fitBounds} aria-label="Fit bounds">⌖</button>
       </div>
-      <div className="gh-map-label"><span>MANHATTAN FIXTURE</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
+      <div className="gh-map-label"><span>{officialData ? 'NYC OPEN DATA' : 'MANHATTAN FIXTURE'}</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
       <svg
         className="gh-map-canvas"
         viewBox="0 0 1000 700"
@@ -295,7 +298,7 @@ function GeoMap({
         <p>Choose a Scenario or upload a GeoJSON FeatureCollection.</p>
       </div>}
       <div className="gh-map-scale"><span /> {zoom.toFixed(1)}×</div>
-      <div className="gh-map-attribution">Deterministic demo fixture · OGC:CRS84</div>
+      <div className="gh-map-attribution">{officialData ? 'Official NYC Open Data' : 'Deterministic demo fixture'} · OGC:CRS84</div>
       {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
         <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
         <span className="gh-eyebrow">FEATURE INSPECTION</span>
@@ -398,6 +401,9 @@ function GeoHarnessShell() {
       }
       const result = response.value as { map_verification?: MapVerification, run_history?: unknown[] }
       if (result.map_verification === undefined) throw new Error('Task Graph result has no map verification')
+      if (result.map_verification.status !== 'ready' || !Object.values(result.map_verification.checks).every(Boolean)) {
+        throw new Error(result.map_verification.issues.join('; ') || 'Map verification failed')
+      }
       setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
       setVerification(result.map_verification)
       setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
@@ -433,6 +439,9 @@ function GeoHarnessShell() {
         run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
       }
       if (result.map_verification === undefined) throw new Error('Revised Task Graph has no map verification')
+      if (result.map_verification.status !== 'ready' || !Object.values(result.map_verification.checks).every(Boolean)) {
+        throw new Error(result.map_verification.issues.join('; ') || 'Revised map verification failed')
+      }
       setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
       setVerification(result.map_verification)
       setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
@@ -531,6 +540,7 @@ function GeoHarnessShell() {
           layers={layers}
           selected={selectedFeature}
           highlightedLayerIds={highlightedLayerIds}
+          officialData={selected.payload.manifest.fixture_profile.startsWith('official-')}
           onSelect={setSelectedFeature}
         />
 

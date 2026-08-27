@@ -281,3 +281,27 @@ Phase 0–10 已按顺序实际实现、测试并分别提交。六个 Scenario 
 独立文件夹 = 一套数据 = 一个测试 = 一个 Demo”，并在真实 Harness UI 中完成
 `Goal → Plan → Tools → Layers → Map → Verify → Revise → Result` 链路验证。当前没有阻止
 v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和合成数据边界记录在 `BLOCKERS.md`。
+
+## Supplemental official real-data Demo
+
+状态：完成（2026-08-27）
+
+- [x] 保持六个 v1.0 确定性 Scenario 不变，新增独立
+  `07-official-nyc-building-inspection`，避免以外部变化数据静默破坏原回归契约。
+- [x] 从 NYC Open Data `BUILDING`（`5zhs-2jue`）按固定 Lower Manhattan bbox 获取并
+  审计 133 个真实 MultiPolygon；GeoJSON metadata 记录 publisher、查询 URL、source
+  update、snapshot date、Terms of Use、空间范围和处理说明。
+- [x] 提供可重复下载/规范化脚本；直接 Node 请求遇到 Socrata 403 后，最终采用
+  PowerShell 下载原始响应、Node 规范化的工作流，未手工改画几何。
+- [x] 新增自己的 Prompt、Task Graph、预期结果、数据、README、独立包测试、独立
+  GeoPandas 回归、Harness 截图、Demo GIF、视频脚本与资产测试。
+- [x] 独立 oracle 确认 133 个要素、0 invalid、屋顶高度缺失 0、建成年份缺失 2、
+  已知年份 1830–2021、投影后总面积约 116,198.58 m²。
+- [x] 修复真实日期字段的 canonical GeoJSON 序列化，并使同一 Scenario 的完整重跑在
+  已解析 workspace 内安全清除 stale Layers；相关 Python 与 Task Graph 测试覆盖。
+- [x] 完整 Harness Web 连续运行两次均为 3/3 success、Map ready；输入 Layer 与
+  `buildings_with_geometry` 均为 133 个要素，Task step ↔ Layer ↔ Map 高亮通过。
+- [x] Python pytest cache 路径按其 `backend/geo-service` rootdir 修正为仓库根 `.tmp`，
+  避免 Windows 上误落入 backend 子目录并产生 ACL 警告。
+- [x] 最终验证通过：build、typecheck、media check、peer check、Node 45/45、Python 9/9、
+  `git diff --check`；预览服务保留在 `http://127.0.0.1:31994/` 供人工检查。

@@ -28,6 +28,7 @@ export interface EmbeddedScenario {
     data: string[]
     supports_revision: boolean
     task_graph: string
+    fixture_profile: string
   }
   prompt: string
   revisionPrompt: string | null

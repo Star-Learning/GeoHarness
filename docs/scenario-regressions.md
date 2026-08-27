@@ -1,4 +1,4 @@
-# Six-Scenario regression gates
+# Six deterministic Scenario regression gates
 
 Phase 8 executes every Scenario from its own folder and its own temporary workspace. Each test
 loads that folder's `expected-plan.json`, `expected-result.json` and executable Task Graph, then
@@ -22,4 +22,12 @@ Run all six independent suites with:
 
 ```sh
 pnpm run verify:phase8
+```
+
+Scenario 07 is a supplemental official-data package rather than a replacement for these frozen
+v1.0 fixtures. Its independent test runs the same four gates against the audited NYC Open Data
+snapshot and is included in `pnpm test`; it can also be run directly with:
+
+```sh
+node --test tests/regression/07-official-nyc-building-inspection.regression.test.mjs
 ```

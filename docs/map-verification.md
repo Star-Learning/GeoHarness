@@ -25,9 +25,9 @@ POST /geoharness/scenario/latest
 ```
 
 The Host registers the channel through `ctx.connection.rpc.handle(...)`; the client calls it with
-`ctx.connection.rpc.call(...)`. Payloads accept only the six official Scenario ids and bounded
-workspace keys. This is the current DeepSeek Harness API confirmed from source, not a custom
-parallel web server.
+`ctx.connection.rpc.call(...)`. Payloads accept only the six deterministic v1.0 Scenario ids plus
+the audited official-data Scenario 07, and bounded workspace keys. This is the current DeepSeek
+Harness API confirmed from source, not a custom parallel web server.
 
 When the response is ready, the browser merges only derived Layers into its existing Scenario
 inputs. Clicking a Task step resolves its output Layer ids, highlights those rows in Layer Registry

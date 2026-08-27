@@ -33,12 +33,12 @@ async function setup(workspaceRoot) {
   return ctx
 }
 
-test('all six independent Scenario DAGs validate with pending steps, dependencies and declared outputs', async () => {
+test('all supported independent Scenario DAGs validate with pending steps, dependencies and declared outputs', async () => {
   const { TaskGraphExecution } = await import('../bundle/geoharness-bundle/host/task-graph.js')
   const entries = (await readdir(scenarioRoot, { withFileTypes: true }))
     .filter(entry => entry.isDirectory())
     .sort((left, right) => left.name.localeCompare(right.name))
-  assert.equal(entries.length, 6)
+  assert.equal(entries.length, 7)
   for (const entry of entries) {
     const definition = JSON.parse(await readFile(join(scenarioRoot, entry.name, 'task-graph.json'), 'utf8'))
     const execution = new TaskGraphExecution(definition, {

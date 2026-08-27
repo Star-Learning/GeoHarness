@@ -23,12 +23,16 @@ export async function validateScenarioPackage(id) {
 
   assert.equal(manifest.id, id)
   assert.equal(manifest.schema_version, '1.0')
-  assert.equal(manifest.region, 'Manhattan, New York City')
+  assert.match(manifest.region, /Manhattan, New York City$/)
   assert.equal(manifest.prompt, 'prompt.txt')
   assert.equal(manifest.expected_plan, 'expected-plan.json')
   assert.equal(manifest.expected_result, 'expected-result.json')
   assert.equal(manifest.task_graph, 'task-graph.json')
-  assert.equal(manifest.fixture_profile, 'deterministic-manhattan-scale-v1')
+  if (id === '07-official-nyc-building-inspection') {
+    assert.equal(manifest.fixture_profile, 'official-nyc-open-data-5zhs-2jue-2026-08-27')
+  } else {
+    assert.equal(manifest.fixture_profile, 'deterministic-manhattan-scale-v1')
+  }
   assert.ok(prompt.trim().length > 0)
   assert.ok(Array.isArray(manifest.data) && manifest.data.length > 0)
   assert.ok(Array.isArray(plan.required_capabilities) && plan.required_capabilities.length > 0)
@@ -69,8 +73,15 @@ export async function validateScenarioPackage(id) {
     assert.equal(collection.type, 'FeatureCollection')
     assert.equal(collection.name, basename(dataReference, '.geojson'))
     assert.equal(collection.crs?.properties?.name, 'urn:ogc:def:crs:OGC:1.3:CRS84')
-    assert.equal(collection.metadata?.fixture, true)
-    assert.equal(collection.metadata?.license, 'CC0-1.0')
+    if (id === '07-official-nyc-building-inspection') {
+      assert.equal(collection.metadata?.fixture, false)
+      assert.equal(collection.metadata?.official_data, true)
+      assert.equal(collection.metadata?.dataset_id, '5zhs-2jue')
+      assert.equal(collection.metadata?.terms, 'NYC Open Data Terms of Use')
+    } else {
+      assert.equal(collection.metadata?.fixture, true)
+      assert.equal(collection.metadata?.license, 'CC0-1.0')
+    }
     assert.ok(Array.isArray(collection.features) && collection.features.length > 0)
     for (const feature of collection.features) {
       assert.equal(feature.type, 'Feature')

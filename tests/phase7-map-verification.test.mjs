@@ -79,6 +79,31 @@ test('successful Task steps resolve to registry lineage and canonical map GeoJSO
   }
 })
 
+test('repeating a full Scenario run resets stale derived layers before map verification', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase7-repeat-'))
+  try {
+    const ctx = await setup(temporary)
+    const request = {
+      scenarioId: '07-official-nyc-building-inspection',
+      workspaceKey: 'phase7-repeat-official',
+    }
+    const first = await ctx.taskGraph.runScenario(request)
+    const second = await ctx.taskGraph.runScenario(request)
+    for (const result of [first, second]) {
+      assert.equal(result.status, 'success')
+      assert.equal(result.map_verification.status, 'ready')
+      assert.deepEqual(result.map_verification.issues, [])
+      assert.equal(result.map_verification.map_layers.length, 2)
+      assert.deepEqual(
+        result.map_verification.map_layers.map(layer => layer.layer_id),
+        ['layer_0001', 'layer_0002'],
+      )
+    }
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
+
 test('the browser projection adds derived layers and selects map layers by Task step', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase7-client-'))
   try {

@@ -30,6 +30,8 @@ source, and it is not a separate Chat + Map website.
   lineage.
 - Six independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
   test, README, screenshots, animated Demo and video script.
+- One supplemental official real-data Scenario backed by an audited NYC Open Data snapshot and
+  the same Tool, Layer Registry, Task Graph and map-verification path.
 
 ## Architecture
 
@@ -84,7 +86,7 @@ dsh --profile web --no-open
 In Harness, open a session for this repository, choose the `GeoHarness` tab, select a Scenario and
 press **Run + verify on map**. The deterministic GIS workflows do not require a model API key.
 
-## Six independent Demos
+## Six deterministic v1.0 Demos
 
 | Scenario | Verified result | Package | Demo |
 | --- | --- | --- | --- |
@@ -105,9 +107,21 @@ The committed Manhattan-scale fixtures are small, deterministic CC0-1.0 project 
 not represented as official NYC datasets; provenance and processing are recorded in every
 Scenario README.
 
+## Official real-data Demo
+
+Scenario 07 uses 133 real Lower Manhattan building MultiPolygons from the NYC Open Data
+`BUILDING` dataset (`5zhs-2jue`). Its fixed-bounds snapshot, publisher, query URL, source update,
+processing, terms and independent GeoPandas oracle are committed with the Scenario. It does not
+replace the six deterministic v1.0 regression packages.
+
+| Scenario | Verified result | Package | Demo |
+| --- | --- | --- | --- |
+| 07 Official NYC Building Inspection | 133 valid MultiPolygons; 2 missing construction years; 1830–2021 | [README](examples/scenarios/07-official-nyc-building-inspection/README.md) | [GIF](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif) |
+
 ## Verification
 
-Run the complete build, six Scenario regressions and Python backend suite:
+Run the complete build, six deterministic regressions, the official real-data regression and the
+Python backend suite:
 
 ```sh
 pnpm test
@@ -131,7 +145,8 @@ pnpm peers check             # confirm exact Harness peer compatibility
 ## v1.0 boundaries
 
 - Vector data only: GeoJSON/GeoPackage/CSV export; no raster, point cloud or GEE pipeline.
-- Scenario data is deterministic project-created fixture data, not production NYC data.
+- The six v1.0 regression Scenarios use deterministic project-created fixtures. Scenario 07 is a
+  separate, dated NYC Open Data snapshot and records the exact source query and terms.
 - Natural-language revision is deliberately bounded to Scenario 05 distance changes with an
   explicit number and unit; arbitrary replanning is not claimed.
 - No external model credential is stored in this repository. Tool schemas and deterministic GIS

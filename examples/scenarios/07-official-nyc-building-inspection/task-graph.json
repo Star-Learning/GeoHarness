@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "scenario_id": "07-official-nyc-building-inspection",
+  "goal": "请检查这份纽约市官方 Lower Manhattan 建筑轮廓数据，计算每栋建筑的面积，并总结建筑数量、屋顶高度和建成年份分布。",
+  "steps": [
+    {
+      "id": "inspect_official_buildings",
+      "title": "Inspect official NYC building footprints",
+      "tool": "inspect_dataset",
+      "dependencies": [],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        }
+      },
+      "outputs": []
+    },
+    {
+      "id": "calculate_official_building_geometry",
+      "title": "Calculate metric building area",
+      "tool": "calculate_geometry",
+      "dependencies": [
+        "inspect_official_buildings"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings"
+        },
+        "metric_crs": "EPSG:32618",
+        "output_name": "buildings_with_geometry"
+      },
+      "outputs": [
+        "buildings_with_geometry"
+      ]
+    },
+    {
+      "id": "summarize_official_buildings",
+      "title": "Summarize height and construction year",
+      "tool": "analyze_distribution",
+      "dependencies": [
+        "calculate_official_building_geometry"
+      ],
+      "parameters": {
+        "input_layer": {
+          "$layer": "buildings_with_geometry"
+        },
+        "fields": [
+          "height_roof_ft",
+          "construction_year",
+          "area_m2"
+        ]
+      },
+      "outputs": []
+    }
+  ]
+}

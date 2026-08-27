@@ -29,6 +29,7 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
     '01-building-data-inspection', '02-river-building-query',
     '03-building-statistics-by-district', '04-road-accessibility',
     '05-parameter-revision', '06-multi-constraint-selection',
+    '07-official-nyc-building-inspection',
   ]) assert.match(source, new RegExp(id))
   assert.match(styles, /grid-template-columns: 228px minmax\(340px, 1fr\) 286px/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)

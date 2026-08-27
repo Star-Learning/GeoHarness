@@ -1,4 +1,4 @@
-"""Build the six Phase 10 demo GIFs from real Harness Web screenshots."""
+"""Build Demo GIFs from real Harness Web screenshots."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ SCENARIOS: dict[str, tuple[list[str], list[int]]] = {
         [1100, 1900, 2800],
     ),
     "06-multi-constraint-selection": (["initial.jpg", "result.jpg"], [1300, 2800]),
+    "07-official-nyc-building-inspection": (["initial.jpg", "result.jpg"], [1300, 2800]),
 }
 GIF_SIZE = (960, 540)
 

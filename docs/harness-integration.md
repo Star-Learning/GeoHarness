@@ -221,7 +221,7 @@ transport/trust fence。
 公开三个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
 projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
 `scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受六个
-官方 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
+确定性 v1.0 Scenario id、补充的官方数据 Scenario 07 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
 0–100 km 的正距离。成功执行后 Host 会核对 Registry
 `generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
 全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
@@ -266,6 +266,20 @@ Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 W
 全部通过。这证明 v1.0 的展示层仍走已确认的 Bundle/Slot/Connection 集成链，而不是
 在文档收尾阶段引入平行应用。
 
+## 官方真实数据 Web 验证（补充 Demo）
+
+Scenario 07 沿用上述同一 Bundle、`conversation.view`、Connection RPC、TaskGraphRuntime、
+Python provider、Layer Registry 与 Map Verification 链路。输入不是合成 fixture，而是
+NYC Open Data `BUILDING`（`5zhs-2jue`）在固定 Lower Manhattan bbox 内的 2026-08-27
+审计快照：133 个 MultiPolygon。官方来源、Socrata 查询、publisher、source update、
+Terms of Use、空间范围与字段规范化均记录在 GeoJSON metadata 和 Scenario README。
+
+完整 Harness Web 实测两次执行均为 3/3 success、Map `ready`；输入和面积派生 Layer 均为
+133 个要素，点击 `calculate_geometry` step 只高亮 `buildings_with_geometry`。真实日期属性
+在 canonical GeoJSON 边界序列化为字符串；完整重跑会先清理该已解析 workspace 的旧派生
+文件，避免重复运行产生 stale Layers。官方数据截图和由截图生成的 GIF 保存在 Scenario
+自己的目录，并由独立资产测试验证。
+
 ## Phase 0 真实验证
 
 隔离验证使用 GeoHarness 工作区下、被 `.gitignore` 忽略的临时 `DSH_HOME`，
@@ -307,8 +321,8 @@ pnpm run verify:phase0
   `profile-boot.ts` 运行时导入 Cordis 的 `const enum FiberState` 而失败；同一
   提交构建后的 `apps/cli/lib/bin.js` 可正常安装、dump 和启动 Web。GeoHarness
   不应在上游仓库内修补此问题。
-- 六个离线 fixture 是项目自有 CC0-1.0 合成数据，不是 NYC 官方生产数据；它们用于
-  确定性空间回归，数据性质已在每个 Scenario README 披露。
+- 六个离线 fixture 是项目自有 CC0-1.0 合成数据，用于确定性空间回归；补充的 Scenario
+  07 才是带固定查询与日期的 NYC Open Data 快照。两类数据不会互相冒充或静默替换。
 - 当前环境没有外部模型 API Key，因此最终验收不依赖付费模型请求。Harness
   `SystemPrompt + ToolRuntime` 边界、全部 Tool schema、真实 GIS 执行、Task Graph、
   Connection RPC 与 Web UI 已分别做确定性验证。

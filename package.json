@@ -15,7 +15,7 @@
     "check:scenarios": "node scripts/build_scenarios/build-fixtures.mjs --check",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "pnpm run build && pnpm run check:scenarios && node --test tests/*.test.mjs tests/scenarios/*.test.mjs tests/regression/*.test.mjs && pnpm run test:python",
-    "test:python": "python -m pytest backend/geo-service/tests -q --basetemp=.tmp/pytest -o cache_dir=.tmp/pytest-cache",
+    "test:python": "python -m pytest backend/geo-service/tests -q --basetemp=.tmp/pytest -o cache_dir=../../.tmp/pytest-cache",
     "test:phase0": "node --test tests/phase0-integration.test.mjs",
     "test:phase1": "pnpm run build && node --test tests/phase1-ui-shell.test.mjs",
     "test:phase2": "pnpm run check:scenarios && node --test tests/scenarios/*.test.mjs",

@@ -1,0 +1,24 @@
+{
+  "required_output_layers": [
+    "buildings",
+    "buildings_with_geometry"
+  ],
+  "expected": {
+    "feature_count": 133,
+    "geometry_type": "MultiPolygon",
+    "crs": "OGC:CRS84",
+    "invalid_geometry_count": 0,
+    "missing_height_roof_ft_count": 0,
+    "missing_construction_year_count": 2,
+    "construction_year_min": 1830,
+    "construction_year_max": 2021
+  },
+  "checks": [
+    "feature_count == 133",
+    "geometry_type == MultiPolygon",
+    "invalid_geometry_count == 0",
+    "total_building_area_m2 > 0",
+    "construction_year_min == 1830",
+    "construction_year_max == 2021"
+  ]
+}

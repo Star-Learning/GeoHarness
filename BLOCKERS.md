@@ -53,6 +53,13 @@ Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run
 的 GIF、视频脚本、独立 README 和资产测试均已完成。最终素材测试 7/7 通过，不再有
 Demo/文档收尾阻塞。
 
+### 官方真实数据 Demo
+
+补充 Scenario 07 已使用 NYC Open Data 的 133 个 Lower Manhattan 官方建筑轮廓完成
+独立 GeoPandas oracle、完整 Harness Web 双次运行、Map Verification 和展示资产验证。
+Socrata 对当前 Node fetch 返回 403 的问题通过受约束的 PowerShell 下载器加 Node
+规范化流程解决；不是当前阻塞。官方数据会更新，因此刷新快照仍需人工审查统计变化。
+
 ### Windows pnpm / pytest 运行目录
 
 Phase 10 收尾期间，沙箱内 pnpm 因 store 与 ACL 不一致进入高 CPU 忙循环。终止遗留进程
@@ -61,7 +68,8 @@ Phase 10 收尾期间，沙箱内 pnpm 因 store 与 ACL 不一致进入高 CPU 
 
 pytest 默认用户临时目录及旧 `.pytest_cache` 也曾因 Windows ACL 导致 7 项测试在 setup
 阶段失败。`test:python` 现显式使用仓库内、被忽略的 `.tmp/pytest` 与
-`.tmp/pytest-cache`；修复后 Python 7/7、全量 Node 41/41 均通过。
+根级 `.tmp/pytest-cache`；修复后旧版 Python 7/7、Node 41/41 以及官方数据扩展后的
+Python 9/9、Node 45/45 均通过。
 
 ## 非阻塞限制与后续门禁
 
@@ -83,10 +91,10 @@ Service/Tool API，并重跑隔离 profile 验证。
 
 ### 3. Demo 数据性质
 
-Phase 2 采用项目自有、CC0-1.0 的确定性 Manhattan-scale 合成 fixture，以保证
-离线、快速、可精确回归。它们不是 NYC 官方地籍、道路或水系数据，README 已明确
-披露。该选择不阻塞 v1.0 的工作流实现与空间正确性测试；如未来替换为生产级官方
-数据，必须重新生成固定统计并更新 Scenario 期望，不能静默替换。
+Phase 2 的六个 v1.0 Scenario 采用项目自有、CC0-1.0 的确定性 Manhattan-scale 合成
+fixture，以保证离线、快速、可精确回归。它们不是 NYC 官方地籍、道路或水系数据，
+README 已明确披露。补充 Scenario 07 提供独立的 NYC Open Data 日期快照，不替换这些
+fixture；刷新官方快照时必须重新生成固定统计并更新 Scenario 期望，不能静默接受变化。
 
 ### 4. Python Geo runtime 门禁
 

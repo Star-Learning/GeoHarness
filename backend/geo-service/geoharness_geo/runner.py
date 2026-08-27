@@ -10,13 +10,21 @@ from .regression import ScenarioRegression
 from .registry import LayerRegistry
 
 
-def _load_scenario(registry: LayerRegistry, scenario_root: Path, scenario_id: str) -> dict[str, Any]:
+def _load_scenario(
+    registry: LayerRegistry,
+    scenario_root: Path,
+    scenario_id: str,
+    *,
+    reset: bool = False,
+) -> dict[str, Any]:
     scenario_path = (scenario_root / scenario_id).resolve()
     if not scenario_path.is_relative_to(scenario_root) or not scenario_path.is_dir():
         raise ValueError(f"Unknown or unsafe Scenario id: {scenario_id}")
     manifest = json.loads((scenario_path / "scenario.json").read_text(encoding="utf-8"))
     if manifest.get("id") != scenario_id:
         raise ValueError(f"Scenario manifest id mismatch: {scenario_id}")
+    if reset:
+        registry.clear()
     if not registry.list_layers():
         for relative_path in manifest["data"]:
             source_path = (scenario_path / relative_path).resolve()
@@ -39,6 +47,7 @@ def dispatch(payload: dict[str, Any]) -> Any:
             registry,
             Path(payload["scenario_root"]).resolve(),
             str(payload["scenario_id"]),
+            reset=bool(payload.get("reset", False)),
         )
     if action == "tool":
         result = GeoTools(registry).execute(

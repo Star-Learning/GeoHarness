@@ -7,6 +7,7 @@ const SCENARIO_IDS = [
   '04-road-accessibility',
   '05-parameter-revision',
   '06-multi-constraint-selection',
+  '07-official-nyc-building-inspection',
 ]
 
 const STEP_ID = {
@@ -202,7 +203,7 @@ export function registerGeoTools(ctx) {
   ctx.systemPrompt.section({
     name: 'tool:geoharness',
     order: 118,
-    text: `For a spatial request, follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. First call list_layers with the matching official scenario_id so its independent data package is loaded for this session: 01-building-data-inspection for understanding building data; 02-river-building-query for buildings within 500 m of Hudson/East River; 03-building-statistics-by-district for Community District statistics; 04-road-accessibility for buildings within 300 m of major roads by district; 05-parameter-revision for the 500 m major-road query; 06-multi-constraint-selection for road-near and river-far constraints. Use only returned Layer IDs, create metric CRS layers before distance operations, keep important intermediate output layers, inspect structured success fields, and never claim completion from prose alone.`,
+    text: `For a spatial request, follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. First call list_layers with the matching scenario_id so its independent data package is loaded for this session: 01-building-data-inspection for understanding deterministic building data; 02-river-building-query for buildings within 500 m of Hudson/East River; 03-building-statistics-by-district for Community District statistics; 04-road-accessibility for buildings within 300 m of major roads by district; 05-parameter-revision for the 500 m major-road query; 06-multi-constraint-selection for road-near and river-far constraints; 07-official-nyc-building-inspection for the audited NYC Open Data building snapshot. Use only returned Layer IDs, create metric CRS layers before distance operations, keep important intermediate output layers, inspect structured success fields, and never claim completion from prose alone.`,
   })
 
   for (const spec of TOOL_SPECS) {

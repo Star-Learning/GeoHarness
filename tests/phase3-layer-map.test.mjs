@@ -92,11 +92,14 @@ test('the Phase 3 client embeds all Scenario data and implements map interaction
   assert.match(source, /Feature inspection/i)
   assert.match(source, /onPointerMove/)
   assert.match(source, /Fit bounds/)
+  assert.match(source, /NYC OPEN DATA/)
+  assert.match(source, /Official NYC Open Data/)
   assert.match(source, /type="range"/)
   assert.match(output, /__GEOHARNESS_SCENARIOS__/)
   for (const id of [
     '01-building-data-inspection', '02-river-building-query',
     '03-building-statistics-by-district', '04-road-accessibility',
     '05-parameter-revision', '06-multi-constraint-selection',
+    '07-official-nyc-building-inspection',
   ]) assert.match(output, new RegExp(id))
 })

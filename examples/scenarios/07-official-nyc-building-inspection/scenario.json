@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "id": "07-official-nyc-building-inspection",
+  "title": "Official NYC Building Inspection",
+  "region": "Lower Manhattan, New York City",
+  "prompt": "prompt.txt",
+  "revision_prompt": null,
+  "data": [
+    "data/buildings.geojson"
+  ],
+  "expected_plan": "expected-plan.json",
+  "expected_result": "expected-result.json",
+  "task_graph": "task-graph.json",
+  "supports_revision": false,
+  "fixture_profile": "official-nyc-open-data-5zhs-2jue-2026-08-27"
+}

@@ -49,6 +49,16 @@ class LayerRegistry:
         indexes = [int(layer_id.removeprefix("layer_")) for layer_id in self._metadata]
         return f"layer_{max(indexes, default=0) + 1:04d}"
 
+    def clear(self) -> None:
+        """Reset this one already-resolved workspace without touching any parent path."""
+        for directory in (self.layers_root, self.exports_root):
+            for child in directory.iterdir():
+                if not child.is_file():
+                    raise ValueError(f"Unexpected non-file in Geo workspace: {child}")
+                child.unlink()
+        self.registry_path.unlink(missing_ok=True)
+        self._metadata.clear()
+
     def register(
         self,
         name: str,
@@ -119,4 +129,8 @@ class LayerRegistry:
         frame = self.get(layer_id)
         if frame.crs is not None and not frame.crs.is_geographic:
             frame = frame.to_crs("EPSG:4326")
-        return json.loads(frame.to_json(drop_id=True))
+        # GeoPandas leaves datetime-like attributes as pandas Timestamp values in
+        # its feature dictionaries. The standard JSON encoder cannot serialize
+        # them, so preserve real source dates as readable strings at the canonical
+        # GeoJSON boundary instead of dropping the field.
+        return json.loads(frame.to_json(drop_id=True, default=str))

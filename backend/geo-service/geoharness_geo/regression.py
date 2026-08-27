@@ -9,7 +9,7 @@ from .registry import LayerRegistry
 
 
 class ScenarioRegression:
-    """Independent spatial/statistical oracle for the six v1.0 Scenario outputs."""
+    """Independent spatial/statistical oracle for supported Scenario outputs."""
 
     def __init__(self, registry: LayerRegistry, layer_aliases: dict[str, str]):
         self.registry = registry
@@ -44,6 +44,7 @@ class ScenarioRegression:
             "04-road-accessibility": self.road_accessibility,
             "05-parameter-revision": self.parameter_revision_initial,
             "06-multi-constraint-selection": self.multi_constraint,
+            "07-official-nyc-building-inspection": self.official_building_inspection,
         }
         try:
             return validators[scenario_id]()
@@ -69,6 +70,36 @@ class ScenarioRegression:
                 "polygon_geometry": statistics["geometry_type"] == "Polygon",
                 "valid_geometry": statistics["invalid_geometry_count"] == 0,
                 "positive_area": statistics["total_building_area_m2"] > 0,
+            },
+        }
+
+    def official_building_inspection(self) -> dict[str, Any]:
+        buildings = self.frame("buildings")
+        metric = buildings.to_crs(METRIC_CRS)
+        years = buildings["construction_year"].dropna()
+        geometry_types = sorted(set(buildings.geom_type.dropna().tolist()))
+        statistics = {
+            "feature_count": len(buildings),
+            "geometry_type": geometry_types[0] if len(geometry_types) == 1 else "Mixed",
+            "crs": "OGC:CRS84" if buildings.crs is not None and buildings.crs.is_geographic else str(buildings.crs),
+            "invalid_geometry_count": int((~buildings.geometry.is_valid).sum()),
+            "missing_height_roof_ft_count": int(buildings["height_roof_ft"].isna().sum()),
+            "missing_construction_year_count": int(buildings["construction_year"].isna().sum()),
+            "construction_year_min": int(years.min()),
+            "construction_year_max": int(years.max()),
+            "total_building_area_m2": float(metric.geometry.area.sum()),
+        }
+        return {
+            "statistics": statistics,
+            "checks": {
+                "official_feature_count": statistics["feature_count"] == 133,
+                "multipolygon_geometry": statistics["geometry_type"] == "MultiPolygon",
+                "valid_geometry": statistics["invalid_geometry_count"] == 0,
+                "positive_area": statistics["total_building_area_m2"] > 0,
+                "audited_year_range": (
+                    statistics["construction_year_min"] == 1830
+                    and statistics["construction_year_max"] == 2021
+                ),
             },
         }
 
