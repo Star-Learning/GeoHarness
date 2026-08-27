@@ -149,3 +149,10 @@ mock 替代 GEOS/PROJ 运算。
 投影、Agent workspace RPC、真实官方数据 discovery/load、Python/GeoPandas buffer/filter 和
 50/50 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
 正确性仍以确定性 Scenario/oracle 为准，不能依赖模型措辞。
+
+### 6. 左下角模型设置入口
+
+已解决，不是活跃阻塞。`root` 接管后不恢复会话/项目侧栏；GeoHarness 左栏底部通过 Harness
+Connection API 提供 Provider/API Key 管理。真实浏览器确认 profile 中 ustc credential 为
+configured，DeepSeek credential 缺失且可写。密钥不回显、不进入仓库；当前外部模型
+`Connection error` 仍按上一项作为 Provider/网络问题单独保留。

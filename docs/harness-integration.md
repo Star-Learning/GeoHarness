@@ -74,6 +74,16 @@ ctx.slots.register({ name: 'root', priority: -100 }, GeoHarnessShell)
 Session API，并以固定 Agent session id 管理当前 GIS 工作台会话；如果未来需要多会话导航，
 应在 GeoHarness 产品需求内设计，而不是重新露出不服务 GIS 流程的完整上游侧栏。
 
+原侧栏底部的设置能力通过 Connection API 保留在 GeoHarness 左栏底部。GeoHarness 不复制
+上游 Settings React 源码，也不重新声明已经由 Sidebar 插件占有的 `sidebar.settings` Slot；
+它调用当前公开的 `settings.describe`、`llm.providers`、`credentials.describe` 和
+`credentials.set` 构建紧凑入口。页面只读取 `configured/writable` 状态，既有密钥始终 write-only；
+新值直接写入 Harness credential store，不进入 GeoHarness state 之外的持久层、日志或仓库。
+
+视觉层继续使用 DSW background/label/border/business/shadow tokens。三栏以低对比度 surface、
+12px 间距、圆角边框和一至三级阴影区分顶栏、工作区、Agent 卡片、composer 与 modal，地图仍
+保持最大视觉面积，没有引入另一套高饱和品牌色。
+
 ## 正式执行链：Native Harness Agent，不是 Scenario 路由
 
 底部输入提交后，客户端真实调用：

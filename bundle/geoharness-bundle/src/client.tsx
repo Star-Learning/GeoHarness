@@ -59,6 +59,29 @@ interface ClientContext {
           clientTimeZone?: string
         }): Promise<ApiResponse<{ accepted: true }>>
       }
+      settings: {
+        describe(payload: Record<string, never>): Promise<ApiResponse<{
+          writable: boolean
+          namespaces: Array<{ ns: string, value: Record<string, unknown> }>
+        }>>
+      }
+      llm: {
+        providers(payload: Record<string, never>): Promise<ApiResponse<{
+          providers: Array<{
+            provider: string
+            displayName: string
+            settingsNs: string
+            settingsPath: string[]
+            active: boolean
+          }>
+        }>>
+      }
+      credentials: {
+        describe(payload: { refs: string[] }): Promise<ApiResponse<{
+          credentials: Record<string, { configured: boolean, writable: boolean }>
+        }>>
+        set(payload: { ref: string, value: string }): Promise<ApiResponse<Record<string, never>>>
+      }
     }
     rpc: {
       call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<{
@@ -326,7 +349,22 @@ interface GeoHarnessInjected {
     models(): Promise<{ routable: boolean, current: { provider: string, model: string } }>
     prompt(text: string): Promise<{ accepted: true }>
     workspace(): Promise<WorkspaceProjection>
+    credentialDirectory(): Promise<CredentialDirectory>
+    setCredential(ref: string, value: string): Promise<void>
   }
+}
+
+interface CredentialProvider {
+  provider: string
+  displayName: string
+  ref: string
+  configured: boolean
+  writable: boolean
+}
+
+interface CredentialDirectory {
+  writable: boolean
+  providers: CredentialProvider[]
 }
 
 function resultValue<T>(response: ApiResponse<T>, operation: string): T {
@@ -338,6 +376,23 @@ function argumentSummary(args: Record<string, unknown>) {
   const pairs = Object.entries(args).filter(([key]) => key !== 'step_id').slice(0, 3)
   if (pairs.length === 0) return 'Agent-selected parameters'
   return pairs.map(([key, value]) => `${key}=${typeof value === 'string' || typeof value === 'number' ? value : '…'}`).join(' · ')
+}
+
+function settingAtPath(value: Record<string, unknown>, path: readonly string[]) {
+  let current: unknown = value
+  for (const segment of path) {
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) return undefined
+    current = (current as Record<string, unknown>)[segment]
+  }
+  return current
+}
+
+function credentialRef(provider: string, profile: unknown) {
+  if (profile !== null && typeof profile === 'object' && !Array.isArray(profile)) {
+    const configured = (profile as Record<string, unknown>).apiKeyEnv
+    if (typeof configured === 'string' && configured.trim() !== '') return configured
+  }
+  return `${provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_API_KEY`
 }
 
 function GeoHarnessShell({ agent }: GeoHarnessInjected) {
@@ -353,6 +408,12 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
   const [agentAnswer, setAgentAnswer] = React.useState('')
   const [agentModel, setAgentModel] = React.useState('Harness model not checked')
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [settingsLoading, setSettingsLoading] = React.useState(false)
+  const [settingsError, setSettingsError] = React.useState<string | null>(null)
+  const [credentialProviders, setCredentialProviders] = React.useState<CredentialProvider[]>([])
+  const [credentialDrafts, setCredentialDrafts] = React.useState<Record<string, string>>({})
+  const [savingCredential, setSavingCredential] = React.useState<string | null>(null)
   const runSequence = React.useRef(0)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
 
@@ -361,6 +422,50 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
     if (panel === null) return
     panel.scrollTop = runStatus === 'success' || runStatus === 'failed' ? panel.scrollHeight : 0
   }, [runStatus])
+
+  React.useEffect(() => {
+    if (!settingsOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [settingsOpen])
+
+  const refreshCredentialDirectory = async () => {
+    setSettingsLoading(true)
+    setSettingsError(null)
+    try {
+      const directory = await agent.credentialDirectory()
+      setCredentialProviders(directory.providers)
+      if (!directory.writable) setSettingsError('当前 Harness settings provider 是只读的。')
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSettingsLoading(false)
+    }
+  }
+
+  const openSettings = () => {
+    setSettingsOpen(true)
+    void refreshCredentialDirectory()
+  }
+
+  const saveCredential = async (provider: CredentialProvider) => {
+    const value = credentialDrafts[provider.ref]?.trim() ?? ''
+    if (value === '') return
+    setSavingCredential(provider.ref)
+    setSettingsError(null)
+    try {
+      await agent.setCredential(provider.ref, value)
+      setCredentialDrafts(current => ({ ...current, [provider.ref]: '' }))
+      await refreshCredentialDirectory()
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSavingCredential(null)
+    }
+  }
 
   const submitGoal = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -501,7 +606,8 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
       <section className="gh-workspace">
         <aside className="gh-panel gh-layers" aria-label="Layer panel">
           <div className="gh-panel-heading">
-            <span><b>Layers</b><small>Layer Registry</small></span>
+            <span><b>Layers</b><small>Verified workspace registry</small></span>
+            <span className="gh-panel-count">{layers.length}</span>
           </div>
           <div className="gh-layer-section-label">Agent-loaded data</div>
           <div className="gh-layer-list">
@@ -515,6 +621,17 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
           <div className="gh-layer-footer">
             <span>{visibleCount} visible</span><span>{layers[0]?.crs ?? 'CRS —'}</span>
           </div>
+          <div className="gh-settings-dock" aria-label="Harness settings">
+            <div className="gh-settings-copy">
+              <span className="gh-eyebrow">HARNESS SETTINGS</span>
+              <small>API keys · model providers</small>
+            </div>
+            <button type="button" className="gh-settings-trigger" aria-haspopup="dialog" onClick={openSettings}>
+              <span className="gh-settings-icon" aria-hidden="true">⚙</span>
+              <span><b>模型与 API Key</b><small>{credentialProviders.filter(provider => provider.configured).length} 个 Provider 已配置</small></span>
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
         </aside>
 
         <GeoMap
@@ -527,7 +644,7 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
-            <span><b>Agent</b><small>Goal → Plan → Tools → Layers</small></span>
+            <span><b>Agent workspace</b><small>Goal → Plan → Tools → Layers</small></span>
             <span className={`gh-agent-state is-${runStatus}`}>{runStatus}</span>
           </div>
           <div className="gh-agent-scroll" ref={agentScroll}>
@@ -595,6 +712,51 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
           {runStatus === 'running' ? '正在执行…' : '执行 GIS 任务'} <span>↗</span>
         </button>
       </form>
+
+      {settingsOpen && <div className="gh-settings-overlay" role="presentation">
+        <button type="button" className="gh-settings-mask" aria-label="Close model settings" onClick={() => setSettingsOpen(false)} />
+        <section className="gh-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="gh-settings-title">
+          <header>
+            <div>
+              <span className="gh-eyebrow">HARNESS CREDENTIALS</span>
+              <h2 id="gh-settings-title">模型与 API Key</h2>
+              <p>密钥写入 Harness credential store，不会保存到 GeoHarness 仓库或浏览器页面。</p>
+            </div>
+            <button type="button" className="gh-settings-close" autoFocus aria-label="关闭设置" onClick={() => setSettingsOpen(false)}>×</button>
+          </header>
+          <div className="gh-settings-body">
+            {settingsLoading && credentialProviders.length === 0 && <p className="gh-settings-placeholder">正在读取 Harness Provider…</p>}
+            {!settingsLoading && credentialProviders.length === 0 && settingsError === null && <p className="gh-settings-placeholder">当前 profile 没有可配置的模型 Provider。</p>}
+            {credentialProviders.map(provider => <article className="gh-provider-card" key={`${provider.provider}-${provider.ref}`}>
+              <div className="gh-provider-heading">
+                <span className={provider.configured ? 'is-configured' : ''} />
+                <div><b>{provider.displayName}</b><small>{provider.provider} · {provider.ref}</small></div>
+                <em>{provider.configured ? '已配置' : '需要密钥'}</em>
+              </div>
+              <div className="gh-provider-editor">
+                <input
+                  type="password"
+                  value={credentialDrafts[provider.ref] ?? ''}
+                  disabled={!provider.writable || savingCredential === provider.ref}
+                  aria-label={`${provider.displayName} API Key`}
+                  placeholder={provider.configured ? '已安全保存；输入新值可替换' : '粘贴 API Key'}
+                  onChange={event => {
+                    const value = event.currentTarget.value
+                    setCredentialDrafts(current => ({ ...current, [provider.ref]: value }))
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!provider.writable || savingCredential !== null || (credentialDrafts[provider.ref]?.trim() ?? '') === ''}
+                  onClick={() => { void saveCredential(provider) }}
+                >{savingCredential === provider.ref ? '保存中…' : provider.configured ? '替换密钥' : '保存密钥'}</button>
+              </div>
+            </article>)}
+            {settingsError !== null && <p className="gh-settings-error" role="alert">{settingsError}</p>}
+          </div>
+          <footer><span>更改立即应用到当前 Harness profile</span><button type="button" onClick={() => { void refreshCredentialDirectory() }}>刷新状态</button></footer>
+        </section>
+      </div>}
     </main>
   )
 }
@@ -637,6 +799,41 @@ export function apply(ctx: ClientContext) {
           }
           return response.value as WorkspaceProjection
         },
+        credentialDirectory: async () => {
+          const [settings, providers] = await Promise.all([
+            connection.api.settings.describe({}),
+            connection.api.llm.providers({}),
+          ])
+          const settingsValue = resultValue(settings, '读取 Harness settings 失败')
+          const providerValue = resultValue(providers, '读取 Harness LLM Provider 失败')
+          const namespaces = new Map(settingsValue.namespaces.map(namespace => [namespace.ns, namespace]))
+          const rows = providerValue.providers
+            .filter(provider => provider.active && provider.settingsNs !== '')
+            .map(provider => {
+              const namespace = namespaces.get(provider.settingsNs)
+              const profile = namespace === undefined ? undefined : settingAtPath(namespace.value, provider.settingsPath)
+              return {
+                provider: provider.provider,
+                displayName: provider.displayName,
+                ref: credentialRef(provider.provider, profile),
+              }
+            })
+          const unique = [...new Map(rows.map(row => [row.ref, row])).values()]
+          const credentials = unique.length === 0
+            ? { credentials: {} as Record<string, { configured: boolean, writable: boolean }> }
+            : resultValue(await connection.api.credentials.describe({ refs: unique.map(row => row.ref) }), '读取 Harness credentials 失败')
+          return {
+            writable: settingsValue.writable,
+            providers: unique.map(row => ({
+              ...row,
+              configured: credentials.credentials[row.ref]?.configured ?? false,
+              writable: settingsValue.writable && (credentials.credentials[row.ref]?.writable ?? true),
+            })),
+          }
+        },
+        setCredential: async (ref: string, value: string) => {
+          resultValue(await connection.api.credentials.set({ ref, value }), `保存 ${ref} 失败`)
+        },
       },
     }),
   }, GeoHarnessShell)
@@ -647,3 +844,4 @@ void _jsx
 
 export { layerIdsForStep, mergeVerificationLayers, stepStatus } from './verification-map'
 export { historyMaxSeq, projectAgentHistory } from './agent-session'
+export { credentialRef, settingAtPath }

@@ -434,3 +434,18 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   `ustc / deepseek-v4-flash-ascend1`，但两次真实 Prompt 都在任何 Tool Call 之前以
   `Connection error` 结束，因此外部模型自主规划 E2E 仍受 Provider/网络配置阻塞；UI 已
   fail-loud，且错误明确说明不会回退到 Scenario。
+
+## Harness 凭据入口与工作台视觉层级
+
+状态：完成（2026-08-27）
+
+- [x] 保持 `root` 接管和无会话/项目列表，同时在左栏底部恢复紧凑的“模型与 API Key”入口。
+- [x] 入口直接调用当前 Harness `settings.describe`、`llm.providers`、
+  `credentials.describe/set`；已有 key 只返回 configured/writable，不回显 secret，新 key 写入
+  Harness credential store，不写入仓库。
+- [x] 真实 profile 验收列出 DeepSeek / `DEEPSEEK_API_KEY`（需要密钥）和 ustc /
+  `USTC_API_KEY`（已配置）；保存/替换按钮只有输入非空且 Provider 可写时才启用。
+- [x] 使用 Harness DSW tokens 重做页面层级：64px 顶栏、带 gap 的三栏 surface、圆角和 lv1
+  阴影、右侧嵌套 Agent cards、突出 composer，以及 lv3 credentials modal；未恢复旧侧栏。
+- [x] 浏览器 1170×912 验收无溢出/白屏，设置弹窗可开关，主地图仍占最大面积；build、
+  typecheck、peer、官方数据门禁、Node 50/50 和 Python 9/9 全部通过。

@@ -20,6 +20,9 @@ source, and it is not a separate Chat + Map website.
 - A three-column GIS workspace that takes over the official `root` single Slot at priority `-100`:
   opening Harness immediately shows GeoHarness without the upstream session/project sidebar. The
   workspace still uses upstream Connection, Session APIs and DSW theme tokens.
+- A lower-left **模型与 API Key** surface backed by the official `settings.describe`,
+  `llm.providers` and secure `credentials.describe/set` APIs. It preserves Provider credential
+  setup without bringing the unrelated session/project browser back.
 - 13 Harness defineTool consumers, including `discover_datasets`, with schema validation,
   timeout/cancellation, structured `ToolResult` and Agent planning guidance.
 - A cancellable local Python provider using GeoPandas, Shapely, PyProj and persistent GeoPackage
@@ -97,6 +100,10 @@ plans from the submitted text and chooses its tools; explicit values such as 200
 the values supplied to the GIS operation. Real Session events advance the right-hand steps,
 verified workspace Layers appear on the map, and the Agent Result panel shows the final answer.
 Pan with pointer drag and zoom with the mouse wheel or map controls.
+
+Use the lower-left **模型与 API Key** button to inspect configured Providers and securely add or
+replace a credential. Stored values remain write-only in the Harness credential store and are never
+written to this repository or echoed back into the page.
 
 A configured Harness model provider is required for this production path. When no routable model
 exists, GeoHarness shows an explicit configuration error and does not silently fall back to a

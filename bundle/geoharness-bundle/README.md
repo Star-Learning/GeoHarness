@@ -16,6 +16,11 @@ the upstream AppFrame, including the session/project sidebar, with one GeoHarnes
 as Harness opens. The workspace uses Harness DSW theme tokens and injects only the official
 Connection client service.
 
+The left panel retains a compact settings dock for model credentials. It discovers current routes
+through `settings.describe` and `llm.providers`, checks only redacted credential state through
+`credentials.describe`, and saves a typed replacement through `credentials.set`. Existing keys are
+never returned to the browser or stored by GeoHarness.
+
 The bottom composer is the only execution entry. It uses the real Session API:
 
 ```text

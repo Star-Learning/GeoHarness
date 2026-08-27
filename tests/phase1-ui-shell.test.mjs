@@ -24,13 +24,20 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
   for (const label of [
     'GeoHarness', 'Map workspace', 'Layer panel', 'Agent workspace',
     'Describe your spatial goal', 'Native Harness Agent', 'LIVE AGENT TOOL TRACE',
+    'HARNESS SETTINGS', 'API keys · model providers',
   ]) assert.match(source, new RegExp(label, 'i'))
-  assert.match(styles, /grid-template-columns: 220px minmax\(340px, 1fr\) 272px/)
+  assert.match(styles, /grid-template-columns: 236px minmax\(340px, 1fr\) 304px/)
   assert.match(styles, /--dsw-alias-bg-base/)
   assert.match(styles, /--dsw-alias-state-business-primary/)
+  assert.match(styles, /border-radius: 14px/)
+  assert.match(styles, /box-shadow: var\(--dsw-shadow-lv2\)/)
   assert.doesNotMatch(source, /name: 'conversation(?:\.|')/)
   assert.match(source, /name: 'root'/)
   assert.match(source, /priority: -100/)
+  assert.match(source, /connection\.api\.settings\.describe/)
+  assert.match(source, /connection\.api\.llm\.providers/)
+  assert.match(source, /connection\.api\.credentials\.(describe|set)/)
+  assert.match(source, /type="password"/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
   assert.match(source, /connection\.api\.sessions\.prompt/)
@@ -69,6 +76,11 @@ test('the generated factory replaces the Harness root Slot with the GeoHarness s
     throw new Error(`unexpected external: ${specifier}`)
   })
   assert.deepEqual([...plugin.inject], ['slots', 'connection'])
+  assert.equal(plugin.credentialRef('deepseek-official', { apiKeyEnv: 'DEEPSEEK_API_KEY' }), 'DEEPSEEK_API_KEY')
+  assert.equal(plugin.credentialRef('ustc', undefined), 'USTC_API_KEY')
+  assert.deepEqual(JSON.parse(JSON.stringify(plugin.settingAtPath({
+    providers: { ustc: { apiKeyEnv: 'USTC_API_KEY' } },
+  }, ['providers', 'ustc']))), { apiKeyEnv: 'USTC_API_KEY' })
 
   const slots = []
   plugin.apply({
