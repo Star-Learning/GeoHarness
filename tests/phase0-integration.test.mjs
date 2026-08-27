@@ -127,6 +127,7 @@ test('the browser artifact replaces the declared conversation surface through it
   assert.equal(handoff.id, packageName)
   const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
+    useEffect: effect => { effect() },
     useMemo: factory => factory(),
     useRef: initial => ({ current: initial }),
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],

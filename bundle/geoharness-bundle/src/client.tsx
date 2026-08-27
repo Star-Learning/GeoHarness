@@ -86,10 +86,26 @@ const BROWSER_WORKSPACE_KEY = 'browser:goal'
 
 type TaskGraphStep = EmbeddedScenario['taskGraph']['steps'][number]
 
+interface ToolExecutionResult {
+  success?: boolean
+  summary?: string
+  data?: unknown
+  parameters?: Record<string, unknown>
+  outputs?: string[]
+}
+
+interface ExecutionStep extends TaskGraphStep {
+  status?: TaskStepStatus
+  resolved_outputs?: Array<{ alias: string, layer_id: string }>
+  result?: ToolExecutionResult | null
+  error?: string | null
+}
+
 interface GoalRunResult {
   scenario_id?: string
   goal?: string
-  steps?: TaskGraphStep[]
+  status?: TaskStepStatus
+  steps?: ExecutionStep[]
   map_verification?: MapVerification
   run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
   goal_resolution?: {
@@ -97,6 +113,79 @@ interface GoalRunResult {
     scenario_id: string
     parameters: Record<string, unknown>
   }
+}
+
+interface GoalStartResult {
+  job_status: 'running'
+  goal_resolution: NonNullable<GoalRunResult['goal_resolution']>
+}
+
+interface JobProgressResult {
+  job_status: 'running' | 'success' | 'failed'
+  execution: GoalRunResult | null
+  map_preview: MapVerification | null
+  error: string | null
+}
+
+interface ResultFact {
+  label: string
+  value: string
+}
+
+function recordValue(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function collectResultFacts(value: unknown, prefix = '', depth = 0): ResultFact[] {
+  if (!recordValue(value) || depth > 2) return []
+  const facts: ResultFact[] = []
+  for (const [key, item] of Object.entries(value)) {
+    const label = prefix === '' ? key : `${prefix}.${key}`
+    if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
+      facts.push({ label, value: typeof item === 'number' ? item.toLocaleString('en-US', { maximumFractionDigits: 2 }) : String(item) })
+    } else if (Array.isArray(item)) {
+      facts.push({ label, value: `${item.length} item${item.length === 1 ? '' : 's'}` })
+      for (const [index, row] of item.slice(0, 4).entries()) {
+        if (!recordValue(row)) continue
+        const identity = Object.entries(row).find(([rowKey, rowValue]) =>
+          (rowKey.endsWith('_id') || rowKey === 'name') && (typeof rowValue === 'string' || typeof rowValue === 'number'))
+        const metric = Object.entries(row).find(([rowKey, rowValue]) =>
+          ['feature_count', 'selected_count', 'count', 'area_sum_m2'].includes(rowKey) && typeof rowValue === 'number')
+        if (metric !== undefined) {
+          const rowLabel = identity === undefined ? `${label}.${index + 1}` : `${label}.${String(identity[1])}`
+          facts.push({
+            label: rowLabel,
+            value: Number(metric[1]).toLocaleString('en-US', { maximumFractionDigits: 2 }),
+          })
+        }
+      }
+    } else if (recordValue(item)) {
+      facts.push(...collectResultFacts(item, label, depth + 1))
+    }
+    if (facts.length >= 8) break
+  }
+  return facts.slice(0, 8)
+}
+
+function resolvedPreviewSteps(steps: readonly TaskGraphStep[], parameters: Record<string, unknown>): ExecutionStep[] {
+  return steps.map(step => {
+    if (step.tool !== 'create_buffer') return { ...step }
+    const river = step.id.includes('river')
+    const distance = parameters[river ? 'river_distance_m' : 'road_distance_m']
+    if (typeof distance !== 'number' || !Number.isFinite(distance)) return { ...step }
+    const subject = river
+      ? (step.title.toLowerCase().includes('exclusion') ? 'river exclusion' : 'river')
+      : 'road'
+    return {
+      ...step,
+      title: `Create ${distance} m ${subject} buffer`,
+      parameters: { ...step.parameters, distance, unit: 'meter' },
+    }
+  })
+}
+
+function waitForNextProgress() {
+  return new Promise<void>(resolve => { setTimeout(resolve, 280) })
 }
 
 function installStyles() {
@@ -256,6 +345,11 @@ function GeoMap({
           event.currentTarget.releasePointerCapture(event.pointerId)
         }}
         onPointerCancel={() => { drag.current = null }}
+        onWheel={event => {
+          event.preventDefault()
+          const factor = Math.exp(-event.deltaY * 0.0015)
+          setZoom(value => Math.max(0.7, Math.min(5, value * factor)))
+        }}
         onClick={() => onSelect(null)}
       >
         <g transform={`translate(${500 + pan.x} ${350 + pan.y}) scale(${zoom}) translate(-500 -350)`}>
@@ -351,11 +445,20 @@ function GeoHarnessShell() {
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
   const [revisionSummary, setRevisionSummary] = React.useState<string | null>(null)
-  const [taskSteps, setTaskSteps] = React.useState<TaskGraphStep[]>(initialScenario.payload.taskGraph.steps)
+  const [taskSteps, setTaskSteps] = React.useState<ExecutionStep[]>(initialScenario.payload.taskGraph.steps)
+  const runSequence = React.useRef(0)
+  const agentScroll = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    const panel = agentScroll.current
+    if (panel === null) return
+    panel.scrollTop = runStatus === 'success' || runStatus === 'failed' ? panel.scrollHeight : 0
+  }, [runStatus])
 
   const selectScenario = (id: string) => {
     const next = SCENARIOS.find(scenario => scenario.id === id)
     if (next === undefined) return
+    runSequence.current += 1
     setSelectedId(id)
     setPrompt(next.prompt)
     setGoal(next.prompt)
@@ -402,42 +505,96 @@ function GeoHarnessShell() {
   const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
   const plannedOutputs = taskSteps.flatMap(step => step.outputs)
   const highlightedLayerIds = layerIdsForStep(verification, selectedStepId)
+  const inputLayers = layers.filter(layer => layer.source !== 'derived')
+  const derivedLayers = layers.filter(layer => layer.source === 'derived')
+  const statusForStep = (step: ExecutionStep) => step.status ?? stepStatus(verification, step.id)
+  const outputStates = taskSteps.flatMap(step => step.outputs.map(alias => ({
+    alias,
+    step,
+    status: statusForStep(step),
+    resolved: step.resolved_outputs?.find(output => output.alias === alias) ?? null,
+    layer: derivedLayers.find(layer => layer.name === alias) ?? null,
+  })))
+  const successfulResults = taskSteps.filter(step => statusForStep(step) === 'success'
+    && step.result?.success === true && typeof step.result.summary === 'string')
+  const latestAgentStep = successfulResults.at(-1) ?? null
+  const agentFacts = collectResultFacts(latestAgentStep?.result?.data)
+
+  const pollJob = async (scenarioId: string, sequence: number): Promise<GoalRunResult | null> => {
+    if (clientConnection === undefined) return null
+    while (runSequence.current === sequence) {
+      const response = await clientConnection.rpc.call('/geoharness', 'scenario/progress', {
+        scenario_id: scenarioId,
+        workspace_key: BROWSER_WORKSPACE_KEY,
+      })
+      if (!response.ok || response.value === null || typeof response.value !== 'object') {
+        throw new Error(response.error?.message ?? 'GeoHarness progress is unavailable')
+      }
+      const progress = response.value as JobProgressResult
+      if (runSequence.current !== sequence) return null
+      const execution = progress.execution
+      if (execution?.steps !== undefined) {
+        setTaskSteps(execution.steps)
+        setRunHistoryCount(execution.run_history?.length ?? 0)
+        const activeStep = execution.steps.find(step => step.status === 'running')
+        if (activeStep !== undefined) setSelectedStepId(activeStep.id)
+      }
+      if (progress.map_preview?.status === 'ready'
+        && Object.values(progress.map_preview.checks).every(Boolean)) {
+        setLayers(current => mergeVerificationLayers(current, progress.map_preview as MapVerification))
+      }
+      if (progress.job_status === 'failed') {
+        throw new Error(progress.error ?? execution?.steps?.find(step => step.status === 'failed')?.error ?? 'GIS workflow failed')
+      }
+      if (progress.job_status === 'success') {
+        const finalVerification = execution?.map_verification
+        if (execution === null || finalVerification === undefined) throw new Error('Completed Task Graph has no map verification')
+        if (finalVerification.status !== 'ready' || !Object.values(finalVerification.checks).every(Boolean)) {
+          throw new Error(finalVerification.issues.join('; ') || 'Map verification failed')
+        }
+        setLayers(current => mergeVerificationLayers(current, finalVerification))
+        setVerification(finalVerification)
+        setTaskSteps(execution.steps ?? [])
+        setRunHistoryCount(execution.run_history?.length ?? 1)
+        setRunStatus('success')
+        return execution
+      }
+      await waitForNextProgress()
+    }
+    return null
+  }
 
   const runGoal = async (goalPrompt: string) => {
     if (clientConnection === undefined || runStatus === 'running') return
+    const sequence = ++runSequence.current
     setGoal(goalPrompt)
     setRunStatus('running')
     setRunError(null)
     setSelectedStepId(null)
+    setRevisionSummary(null)
     try {
-      const response = await clientConnection.rpc.call('/geoharness', 'goal/run', {
+      const response = await clientConnection.rpc.call('/geoharness', 'goal/start', {
         goal_prompt: goalPrompt,
         workspace_key: BROWSER_WORKSPACE_KEY,
       })
       if (!response.ok || response.value === null || typeof response.value !== 'object') {
-        throw new Error(response.error?.message ?? 'GeoHarness RPC returned no execution')
+        throw new Error(response.error?.message ?? 'GeoHarness could not start the GIS workflow')
       }
-      const result = response.value as GoalRunResult
-      if (result.map_verification === undefined) throw new Error('Task Graph result has no map verification')
-      if (result.map_verification.status !== 'ready' || !Object.values(result.map_verification.checks).every(Boolean)) {
-        throw new Error(result.map_verification.issues.join('; ') || 'Map verification failed')
-      }
-      const resolvedId = result.goal_resolution?.scenario_id ?? result.map_verification.scenario_id
-      const resolved = SCENARIOS.find(scenario => scenario.id === resolvedId)
-      if (resolved === undefined) throw new Error(`Goal resolved to unknown Scenario ${resolvedId}`)
+      const start = response.value as GoalStartResult
+      const resolved = SCENARIOS.find(scenario => scenario.id === start.goal_resolution.scenario_id)
+      if (resolved === undefined) throw new Error(`Goal resolved to unknown Scenario ${start.goal_resolution.scenario_id}`)
+      if (runSequence.current !== sequence) return
       setSelectedId(resolved.id)
-      setLayers(mergeVerificationLayers(registerScenarioLayers(resolved.payload), result.map_verification))
-      setVerification(result.map_verification)
-      setTaskSteps(result.steps ?? resolved.payload.taskGraph.steps)
-      setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
-      setRunHistoryCount(result.run_history?.length ?? 1)
-      setRevisionSummary(null)
-      const firstOutputStep = result.map_verification.step_bindings.find(binding => binding.outputs.length > 0)
+      setLayers(registerScenarioLayers(resolved.payload))
+      setVerification(null)
+      setTaskSteps(resolvedPreviewSteps(resolved.payload.taskGraph.steps, start.goal_resolution.parameters))
+      setRunHistoryCount(0)
+      const result = await pollJob(resolved.id, sequence)
+      if (result === null) return
+      const firstOutputStep = result.map_verification?.step_bindings.find(binding => binding.outputs.length > 0)
       setSelectedStepId(firstOutputStep?.step_id ?? null)
-      if (result.map_verification.status !== 'ready') {
-        setRunError(result.map_verification.issues.join('; ') || 'Map verification failed')
-      }
     } catch (error) {
+      if (runSequence.current !== sequence) return
       setRunStatus('failed')
       setRunError(error instanceof Error ? error.message : String(error))
     }
@@ -445,42 +602,29 @@ function GeoHarnessShell() {
 
   const reviseTaskGraph = async (revisionPrompt: string) => {
     if (clientConnection === undefined || runStatus === 'running') return
+    const sequence = ++runSequence.current
+    setGoal(revisionPrompt)
     setRunStatus('running')
     setRunError(null)
+    setVerification(null)
     try {
-      const response = await clientConnection.rpc.call('/geoharness', 'scenario/revise', {
+      const response = await clientConnection.rpc.call('/geoharness', 'scenario/revise/start', {
         scenario_id: selected.id,
         workspace_key: BROWSER_WORKSPACE_KEY,
         revision_prompt: revisionPrompt,
       })
       if (!response.ok || response.value === null || typeof response.value !== 'object') {
-        throw new Error(response.error?.message ?? 'GeoHarness revision returned no execution')
+        throw new Error(response.error?.message ?? 'GeoHarness could not start the revision')
       }
-      const result = response.value as {
-        map_verification?: MapVerification
-        run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
-      }
-      if (result.map_verification === undefined) throw new Error('Revised Task Graph has no map verification')
-      if (result.map_verification.status !== 'ready' || !Object.values(result.map_verification.checks).every(Boolean)) {
-        throw new Error(result.map_verification.issues.join('; ') || 'Revised map verification failed')
-      }
-      setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
-      setVerification(result.map_verification)
-      if (Array.isArray((response.value as GoalRunResult).steps)) {
-        setTaskSteps((response.value as GoalRunResult).steps ?? taskSteps)
-      }
-      setGoal(revisionPrompt)
-      setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
-      setRunHistoryCount(result.run_history?.length ?? 0)
+      const result = await pollJob(selected.id, sequence)
+      if (result === null) return
       const latestRun = result.run_history?.at(-1)
       setRevisionSummary(latestRun === undefined
         ? null
         : `${latestRun.executed_steps.length} rerun · ${latestRun.reused_steps.length} reused`)
       setSelectedStepId('filter_candidate_buildings')
-      if (result.map_verification.status !== 'ready') {
-        setRunError(result.map_verification.issues.join('; ') || 'Revised map verification failed')
-      }
     } catch (error) {
+      if (runSequence.current !== sequence) return
       setRunStatus('failed')
       setRunError(error instanceof Error ? error.message : String(error))
     }
@@ -502,6 +646,38 @@ function GeoHarnessShell() {
     return String(index + 1)
   }
 
+  const renderLayerRow = (layer: LayerRecord, outputStatus?: TaskStepStatus) => (
+    <article className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'} key={layer.id}>
+      <button
+        type="button"
+        className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
+        aria-label={`${layer.visible ? 'Hide' : 'Show'} ${layer.name}`}
+        aria-pressed={layer.visible}
+        onClick={() => toggleLayer(layer)}
+      ><span style={{ background: layer.style.color }} /></button>
+      <div className="gh-layer-meta">
+        <strong>{layer.name}{outputStatus === 'success' && <em className="gh-output-check">✓</em>}</strong>
+        <small>{layer.geometry} · {layer.featureCount} features</small>
+        {layer.generatedBy !== null && <small>step · {layer.generatedBy}</small>}
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.1"
+          value={layer.opacity}
+          aria-label={`${layer.name} opacity`}
+          onChange={event => {
+            // React clears currentTarget after the input callback. Capture the
+            // primitive before the queued functional update runs, especially
+            // during a real pointer drag that emits many input events.
+            const opacity = Number(event.currentTarget.value)
+            setLayers(current => setLayerOpacity(current, layer.id, opacity))
+          }}
+        />
+      </div>
+    </article>
+  )
+
   return (
     <main className="gh-shell" data-geoharness-plugin="loaded" data-geoharness-phase="10">
       <header className="gh-topbar">
@@ -517,6 +693,7 @@ function GeoHarnessShell() {
           <select
             id="gh-scenario"
             value={selectedId}
+            disabled={runStatus === 'running'}
             onChange={event => selectScenario(event.currentTarget.value)}
             aria-label="Choose a GeoHarness scenario"
           >
@@ -541,35 +718,17 @@ function GeoHarnessShell() {
           </div>
           <div className="gh-layer-section-label">Scenario inputs</div>
           <div className="gh-layer-list">
-            {layers.map(layer => <article className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'} key={layer.id}>
-              <button
-                type="button"
-                className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
-                aria-label={`${layer.visible ? 'Hide' : 'Show'} ${layer.name}`}
-                aria-pressed={layer.visible}
-                onClick={() => toggleLayer(layer)}
-              ><span style={{ background: layer.style.color }} /></button>
-              <div className="gh-layer-meta">
-                <strong>{layer.name}</strong>
-                <small>{layer.geometry} · {layer.featureCount} features</small>
-                {layer.generatedBy !== null && <small>step · {layer.generatedBy}</small>}
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={layer.opacity}
-                  aria-label={`${layer.name} opacity`}
-                  onChange={event => {
-                    // React clears currentTarget after the input callback. Capture the
-                    // primitive before the queued functional update runs, especially
-                    // during a real pointer drag that emits many input events.
-                    const opacity = Number(event.currentTarget.value)
-                    setLayers(current => setLayerOpacity(current, layer.id, opacity))
-                  }}
-                />
-              </div>
-            </article>)}
+            {inputLayers.map(layer => renderLayerRow(layer))}
+          </div>
+          <div className="gh-layer-section-label">Task outputs</div>
+          <div className="gh-layer-list gh-output-list" aria-label="Task output layers">
+            {outputStates.length === 0 && <p className="gh-output-empty">This workflow returns structured results without a new map layer.</p>}
+            {outputStates.map(({ alias, step, status, resolved, layer }, index) => layer === null
+              ? <article className={`gh-output-row is-${status}`} key={`${step.id}-${alias}`} data-output-status={status}>
+                <i>{stepIcon(status, index)}</i>
+                <span><strong>{alias}</strong><small>{status === 'success' ? resolved?.layer_id ?? 'registered' : `${status} · ${step.title}`}</small></span>
+              </article>
+              : renderLayerRow(layer, status))}
           </div>
           {uploadError !== null && <p className="gh-layer-error" role="alert">{uploadError}</p>}
           <div className="gh-layer-footer">
@@ -590,7 +749,7 @@ function GeoHarnessShell() {
             <span><b>Agent</b><small>Goal → Plan → Tools → Layers</small></span>
             <span className={`gh-agent-state is-${runStatus}`}>{runStatus}</span>
           </div>
-          <div className="gh-agent-scroll">
+          <div className="gh-agent-scroll" ref={agentScroll}>
             <section className="gh-agent-block">
               <span className="gh-eyebrow">GOAL</span>
               <p>{goal}</p>
@@ -599,7 +758,7 @@ function GeoHarnessShell() {
               <span className="gh-eyebrow">PLAN PREVIEW</span>
               <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
                 {taskSteps.map((step, index) => {
-                  const status = stepStatus(verification, step.id)
+                  const status = statusForStep(step)
                   return <li
                   className={`is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`}
                   data-step-id={step.id}
@@ -620,15 +779,28 @@ function GeoHarnessShell() {
             <section className="gh-agent-block gh-current-step">
               <span className="gh-eyebrow">CURRENT STEP</span>
               <div><span>Phase</span><b>Task Graph</b></div>
-              <div><span>Steps</span><b>{verification === null ? `${taskSteps.length} pending` : `${verification.step_bindings.filter(step => step.status === 'success').length}/${taskSteps.length} success`}</b></div>
+              <div><span>Steps</span><b>{taskSteps.filter(step => statusForStep(step) === 'success').length}/{taskSteps.length} success</b></div>
               <div><span>Outputs</span><b>{plannedOutputs.length}</b></div>
               <div><span>History</span><b>{runHistoryCount} run{runHistoryCount === 1 ? '' : 's'}</b></div>
               {revisionSummary !== null && <div><span>Revision</span><b>{revisionSummary}</b></div>}
               <div><span>Map</span><b className="is-teal">{verification?.status ?? 'awaiting run'}</b></div>
-              <button className="gh-run-button" type="button" onClick={() => { void executePrompt(prompt.trim() || goal) }} disabled={clientConnection === undefined || runStatus === 'running'}>
-                {runStatus === 'running' ? 'Running GIS workflow…' : 'Run current input'}
-              </button>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
+            </section>
+            <section className="gh-agent-block gh-agent-result" aria-label="Agent result">
+              <span className="gh-eyebrow">AGENT RESULT</span>
+              {latestAgentStep === null
+                ? <p className="gh-result-empty">真实工具结果会随任务执行显示在这里。</p>
+                : <>
+                  <strong className="gh-result-headline">{latestAgentStep.result?.summary}</strong>
+                  {agentFacts.length > 0 && <dl>
+                    {agentFacts.map(fact => <React.Fragment key={fact.label}>
+                      <dt>{fact.label.replaceAll('_', ' ')}</dt><dd>{fact.value}</dd>
+                    </React.Fragment>)}
+                  </dl>}
+                  <div className="gh-result-trace">
+                    {successfulResults.slice(-3).map(step => <small key={step.id}><i>✓</i>{step.result?.summary}</small>)}
+                  </div>
+                </>}
             </section>
           </div>
         </aside>
@@ -643,7 +815,9 @@ function GeoHarnessShell() {
           aria-label="Describe your spatial goal"
           placeholder="描述你想解决的空间问题……"
         />
-        <button type="submit" disabled={prompt.trim() === '' || runStatus === 'running'}>执行 GIS 任务 <span>↗</span></button>
+        <button type="submit" disabled={clientConnection === undefined || prompt.trim() === '' || runStatus === 'running'}>
+          {runStatus === 'running' ? '正在执行…' : '执行 GIS 任务'} <span>↗</span>
+        </button>
       </form>
     </main>
   )

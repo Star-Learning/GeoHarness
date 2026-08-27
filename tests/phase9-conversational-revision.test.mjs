@@ -70,13 +70,33 @@ test('Scenario 05 uses the real RPC and GeoPandas provider to revise 500 m to 20
 
     const revisionPrompt = (await readFile(join(scenarioRoot, scenarioId, 'revision-prompt.txt'), 'utf8')).trim()
     assert.equal(revisionPrompt, '改成 200 米。')
-    const revisedResponse = await registration.handler('scenario/revise', {
+    const revisedResponse = await registration.handler('scenario/revise/start', {
       scenario_id: scenarioId,
       workspace_key: workspaceKey,
       revision_prompt: revisionPrompt,
     }, signal)
     assert.equal(revisedResponse.ok, true)
-    const revised = revisedResponse.value
+    assert.equal(revisedResponse.value.job_status, 'running')
+    const observedRevisionSuccessCounts = new Set()
+    let revised
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const progress = await registration.handler('scenario/progress', {
+        scenario_id: scenarioId,
+        workspace_key: workspaceKey,
+      })
+      assert.equal(progress.ok, true)
+      if (progress.value.execution?.steps !== undefined) {
+        observedRevisionSuccessCounts.add(progress.value.execution.steps.filter(step => step.status === 'success').length)
+      }
+      if (progress.value.job_status === 'failed') assert.fail(progress.value.error)
+      if (progress.value.job_status === 'success') {
+        revised = progress.value.execution
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 30))
+    }
+    assert.notEqual(revised, undefined, 'background revision did not complete')
+    assert.ok(observedRevisionSuccessCounts.size >= 2, 'revision steps did not complete progressively')
 
     assert.equal(revised.status, 'success')
     assert.equal(revised.map_verification.status, 'ready')
@@ -140,15 +160,46 @@ test('a nonpreset 275 m user goal runs once with real official data and no hidde
 
     const prompt = '找出距离主要道路 Broadway 275 米以内的建筑。'
     const workspaceKey = 'phase9-goal-275m'
-    const response = await registration.handler('goal/run', {
+    const response = await registration.handler('goal/start', {
       goal_prompt: prompt,
       workspace_key: workspaceKey,
     }, new AbortController().signal)
     assert.equal(response.ok, true)
-    const execution = response.value
+    assert.equal(response.value.job_status, 'running')
+    assert.equal(response.value.goal_resolution.parameters.road_distance_m, 275)
+    const observedSuccessCounts = new Set([0])
+    const observedPreviewLayerCounts = new Set([0])
+    let observedLivePreview = false
+    let execution
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const progress = await registration.handler('scenario/progress', {
+        scenario_id: scenarioId,
+        workspace_key: workspaceKey,
+      })
+      assert.equal(progress.ok, true)
+      if (progress.value.execution?.steps !== undefined) {
+        observedSuccessCounts.add(progress.value.execution.steps.filter(step => step.status === 'success').length)
+      }
+      if (progress.value.map_preview !== null) {
+        const derivedPreviewCount = progress.value.map_preview.map_layers.filter(layer =>
+          layer.active && layer.metadata.source === 'derived').length
+        observedPreviewLayerCounts.add(derivedPreviewCount)
+        if (progress.value.job_status === 'running' && derivedPreviewCount > 0) observedLivePreview = true
+      }
+      if (progress.value.job_status === 'failed') assert.fail(progress.value.error)
+      if (progress.value.job_status === 'success') {
+        execution = progress.value.execution
+        break
+      }
+      await new Promise(resolve => setTimeout(resolve, 30))
+    }
+    assert.notEqual(execution, undefined, 'background GIS job did not complete')
+    assert.ok(observedSuccessCounts.size >= 3, `expected progressive step completion, saw ${[...observedSuccessCounts]}`)
+    assert.ok([...observedPreviewLayerCounts].some(count => count > 0), 'expected a real derived Layer preview before completion')
+    assert.equal(observedLivePreview, true, 'expected a verified derived Layer while later GIS steps were still running')
     assert.equal(execution.goal, prompt)
-    assert.equal(execution.goal_resolution.scenario_id, scenarioId)
-    assert.equal(execution.goal_resolution.parameters.road_distance_m, 275)
+    assert.equal(response.value.goal_resolution.scenario_id, scenarioId)
+    assert.equal(response.value.goal_resolution.parameters.road_distance_m, 275)
     assert.equal(execution.run_history.length, 1)
     assert.equal(execution.run_history[0].kind, 'initial')
     assert.deepEqual(execution.run_history[0].executed_steps, [
@@ -232,8 +283,9 @@ test('the conversational RPC parses bounded distance revisions and rejects out-o
   assert.equal(wrongScenario.ok, false)
 
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
-  assert.match(client, /goal\/run/)
-  assert.match(client, /scenario\/revise/)
+  assert.match(client, /goal\/start/)
+  assert.match(client, /scenario\/progress/)
+  assert.match(client, /scenario\/revise\/start/)
   assert.match(client, /revisionPrompt/)
   assert.match(client, /goal_resolution/)
   assert.match(client, /priority: -100/)

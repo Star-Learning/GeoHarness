@@ -384,3 +384,27 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 最终门禁通过：build、typecheck、official-data check、scenario freshness、media check、
   peer check、Node 46/46、Python 9/9、完整浏览器回归与 `git diff --check`；预览服务继续运行
   在 `http://127.0.0.1:31994/`。
+
+## 动态执行、Agent 结果与地图滚轮交互
+
+状态：完成（2026-08-27）
+
+- [x] 新增 workspace-scoped `goal/start`、`scenario/progress`、`scenario/revise/start` 后台 job
+  协议；同步 RPC 继续保留，start 请求返回后不复用其 AbortSignal。
+- [x] Task Graph 的真实 pending/running/success/failed transition 约每 280 ms 投影到右侧 Plan
+  和左侧 Task outputs；success step 的 canonical Registry projection 通过 Map Verification 后
+  即可在后续步骤仍运行时加入地图，不伪造中间几何。
+- [x] 删除右侧 `Run current input`，页面只保留底部一个“执行 GIS 任务”入口；运行时按钮
+  显示“正在执行…”。
+- [x] 新增 Agent Result 区，直接展示真实 ToolResult 的 summary、selected_count、input_count
+  等结构化数据和最近三步 trace，不读取 expected result 冒充运行结果。
+- [x] SVG 地图新增 0.7×–5× 有界鼠标滚轮缩放，保留工具栏缩放、fit bounds 与拖拽平移。
+- [x] 启动响应中的解析距离立即更新 Plan preview；真实 333 m 浏览器验收从启动即显示
+  `Create 333 m road buffer`，最终返回 260/360，未短暂冒充 500 m 执行。
+- [x] 真实 275 m 后台回归观察到至少三个不同完成计数，并在 job 仍 running 时观察到已验证
+  派生 Layer；最终仍为 241 candidates、5/5 success、Map ready、history 1。
+- [x] 完整 Harness Web 验收页面仅有一个执行入口，333 m 返回 260 candidates；滚轮把地图
+  从 1.0× 放大到 2.5×，服务保留在 `http://127.0.0.1:31994/`。
+- [x] 七个 Scenario 全部以新动态界面重新执行并保存 15 张 1280×720 Harness 截图，重建
+  七个 960×540 GIF；最终门禁通过 Node 48/48、Python 9/9、build、typecheck、官方数据、
+  场景新鲜度、media、peer 和 `git diff --check`。

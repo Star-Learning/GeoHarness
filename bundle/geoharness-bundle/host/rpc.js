@@ -108,13 +108,89 @@ export function resolveGeoGoal(prompt) {
 
 /** Loopback-only browser bridge for running and retrieving Scenario verification projections. */
 export function registerGeoRpc(ctx) {
+  const jobs = new Map()
+
+  const startJob = ({ scenarioId, workspaceKey, execute }) => {
+    const key = `${workspaceKey}:${scenarioId}`
+    const existing = [...jobs.values()].find(job => job.workspaceKey === workspaceKey && job.status === 'running')
+    if (existing?.status === 'running') return null
+    const job = {
+      scenarioId,
+      workspaceKey,
+      status: 'running',
+      execution: null,
+      mapPreview: null,
+      previewSequence: 0,
+      error: null,
+    }
+    jobs.set(key, job)
+    const onTransition = (event, snapshot) => {
+      job.execution = snapshot
+      if (event.to !== 'success' || event.outputs?.length === 0
+        || typeof ctx.taskGraph.buildMapVerification !== 'function') return
+      const previewSequence = event.sequence
+      void ctx.taskGraph.buildMapVerification(snapshot, workspaceKey)
+        .then(mapPreview => {
+          if (job.status === 'running' && previewSequence > job.previewSequence) {
+            job.mapPreview = mapPreview
+            job.previewSequence = previewSequence
+          }
+        })
+        .catch(() => {})
+    }
+    void Promise.resolve()
+      .then(() => execute(onTransition))
+      .then(value => {
+        job.execution = value
+        job.mapPreview = value.map_verification ?? job.mapPreview
+        if (value.status === 'success' && value.map_verification?.status === 'ready') {
+          job.status = 'success'
+          return
+        }
+        job.status = 'failed'
+        job.error = value.steps?.find(step => step.status === 'failed')?.error
+          ?? value.map_verification?.issues?.join('; ')
+          ?? 'GIS workflow did not complete successfully'
+      })
+      .catch(error => {
+        job.status = 'failed'
+        job.error = (error instanceof Error ? error.message : String(error)).slice(0, 500)
+      })
+    return job
+  }
+
   return ctx.connection.rpc.handle('/geoharness', async (endpoint, payload, signal) => {
-    if (endpoint === 'goal/run') {
+    if (endpoint === 'goal/run' || endpoint === 'goal/start') {
       const request = goalRequestPayload(payload)
       if (request === null) return badRequest('A non-empty goal_prompt and valid workspace_key are required')
       const resolution = resolveGeoGoal(request.prompt)
       if (resolution === null) {
         return badRequest('The goal does not match a supported GeoHarness v1.0 GIS workflow')
+      }
+      if (endpoint === 'goal/start') {
+        const job = startJob({
+          scenarioId: resolution.scenarioId,
+          workspaceKey: request.workspaceKey,
+          execute: onTransition => ctx.taskGraph.runScenario({
+            scenarioId: resolution.scenarioId,
+            workspaceKey: request.workspaceKey,
+            parameterPatches: resolution.parameterPatches,
+            goal: request.prompt,
+            onTransition,
+          }),
+        })
+        if (job === null) return badRequest('A GIS workflow is already running in this workspace')
+        return {
+          ok: true,
+          value: {
+            job_status: job.status,
+            goal_resolution: {
+              prompt: request.prompt,
+              scenario_id: resolution.scenarioId,
+              parameters: resolution.parameters,
+            },
+          },
+        }
       }
       const value = await ctx.taskGraph.runScenario({
         scenarioId: resolution.scenarioId,
@@ -137,6 +213,19 @@ export function registerGeoRpc(ctx) {
     }
     const request = scenarioRequestPayload(payload)
     if (request === null) return badRequest('A valid scenario_id and workspace_key are required')
+    if (endpoint === 'scenario/progress') {
+      const job = jobs.get(`${request.workspaceKey}:${request.scenarioId}`)
+      if (job === undefined) return badRequest('No active or completed GIS job exists for this Scenario')
+      return {
+        ok: true,
+        value: {
+          job_status: job.status,
+          execution: job.execution,
+          map_preview: job.mapPreview,
+          error: job.error,
+        },
+      }
+    }
     if (endpoint === 'scenario/run') {
       const value = await ctx.taskGraph.runScenario({ ...request, signal })
       return { ok: true, value }
@@ -144,12 +233,27 @@ export function registerGeoRpc(ctx) {
     if (endpoint === 'scenario/latest') {
       return { ok: true, value: ctx.taskGraph.latest(request.workspaceKey, request.scenarioId) }
     }
-    if (endpoint === 'scenario/revise') {
+    if (endpoint === 'scenario/revise' || endpoint === 'scenario/revise/start') {
       if (request.scenarioId !== '05-parameter-revision') {
         return badRequest('Conversational revision is supported only for Scenario 05 in v1.0')
       }
       const distance = parseDistanceRevision(payload.revision_prompt)
       if (distance === null) return badRequest('Revision prompt must contain a valid distance')
+      if (endpoint === 'scenario/revise/start') {
+        const job = startJob({
+          scenarioId: request.scenarioId,
+          workspaceKey: request.workspaceKey,
+          execute: onTransition => ctx.taskGraph.reviseScenario({
+            ...request,
+            stepId: 'buffer_major_roads',
+            parameterPatch: { distance, unit: 'meter' },
+            reason: payload.revision_prompt,
+            onTransition,
+          }),
+        })
+        if (job === null) return badRequest('A GIS workflow is already running in this workspace')
+        return { ok: true, value: { job_status: job.status } }
+      }
       const value = await ctx.taskGraph.reviseScenario({
         ...request,
         stepId: 'buffer_major_roads',

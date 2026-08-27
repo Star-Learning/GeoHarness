@@ -1,6 +1,7 @@
 # Scenario 05 conversational revision
 
-An initial natural-language request is first sent to `/geoharness/goal/run`. The bounded router
+An initial natural-language request is first sent to `/geoharness/goal/start`, then observed through
+`/geoharness/scenario/progress`. The bounded router
 selects one of the seven v1.0 workflows, extracts explicit metres or kilometres and patches the
 cloned Task Graph before execution. For example, “Broadway 275 米以内” starts Scenario 05 directly
 at 275 m: one initial history entry, a `Create 275 m road buffer` step and 241 official buildings.
@@ -41,7 +42,7 @@ maximum independently measured distance: 273.7806 m
 hidden 500 m execution: none
 ```
 
-Both the UI composer and direct callers use the official
-`/geoharness/scenario/revise` Connection RPC endpoint. The acceptance test invokes that real RPC
-handler with the real TaskGraphRuntime and local Python/GeoPandas provider, then independently
+The UI composer uses the official `/geoharness/scenario/revise/start` endpoint and the same progress
+polling path; synchronous direct callers can still use `/geoharness/scenario/revise`. The acceptance
+test invokes the real RPC handler with the real TaskGraphRuntime and local Python/GeoPandas provider, then independently
 checks every returned building is within 200.5 m of official Broadway geometry.

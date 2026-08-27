@@ -89,7 +89,11 @@ dsh --profile web --no-open
 Open Harness and the center surface is already GeoHarness. Enter a spatial requirement in the
 bottom input and press **执行 GIS 任务**. The Example selector only loads sample prompts; the Host
 resolves the actual workflow and parameters from the submitted text. GeoHarness does not add a
-separate tab or drawer. The frozen official-data workflows do not require a model API key.
+separate tab or drawer. While the real GIS tools run, the Plan and Task output rows advance from
+pending to running to success, verified derived layers appear on the map, and the Agent Result
+panel reports the tools' actual structured summaries and counts. The composer is the only run
+entry. Pan with pointer drag and zoom with the mouse wheel or map controls. The frozen
+official-data workflows do not require a model API key.
 
 ## Seven official-data v1.0 Demos
 

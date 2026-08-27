@@ -96,6 +96,13 @@ Python 9/9、Node 45/45 均通过。
 并以 `CI=true pnpm peers check` 验证 peer graph；Node 45/45 和 Python 9/9 随后全部通过。
 这是非交互终端提示，不是产品或测试阻塞。
 
+### 动态任务进度与地图交互
+
+当前无产品阻塞。步骤进度、输出 Layer 状态和 Agent Result 都来自真实 TaskGraph/ToolResult；
+派生几何必须先通过 partial Map Verification 才进入浏览器。后台 job 只保存在当前 Harness
+Host 进程内，服务重启后不恢复正在运行的任务，这是 v1.0 本地工作区运行模型的已知边界，
+不影响已完成结果落在 workspace Registry。持久化/跨进程任务队列不在 v1.0 范围内。
+
 ## 非阻塞限制与后续门禁
 
 ### 1. 上游源码 CLI 在当前 Node 24 环境中的运行问题

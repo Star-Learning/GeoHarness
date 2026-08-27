@@ -17,6 +17,7 @@ const expectedScenarios = [
     frames: 3,
   },
   { id: '06-multi-constraint-selection', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
+  { id: '07-official-nyc-building-inspection', screenshots: ['initial.jpg', 'result.jpg'], frames: 2 },
 ]
 
 const videoHeadings = [

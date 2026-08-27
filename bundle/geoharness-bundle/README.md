@@ -17,18 +17,26 @@ Harness Tool execution remain in the Host/Python layers rather than being hidden
 Each Scenario also ships a validated `task-graph.json`. The Host `TaskGraphRuntime` executes those
 DAGs through `ctx.geo`, records pending/running/success/failed transitions, resolves canonical
 Layer aliases, and preserves ordered transition history. The client shows the same embedded plan,
-dependencies and declared outputs instead of maintaining a second hand-written Demo plan.
+dependencies and declared outputs instead of maintaining a second hand-written Demo plan. Runs
+start as workspace-scoped background jobs: the client polls actual Task Graph snapshots, marks
+steps and output aliases as their transitions occur, and merges only canonical partial projections
+that already pass Map Verification. The right panel also renders structured ToolResult summaries
+and facts; it never substitutes `expected-result.json` for an Agent result.
 
-The Host registers `/geoharness/goal/run`, `/geoharness/scenario/run`,
-`/geoharness/scenario/latest` and `/geoharness/scenario/revise` through the official Connection generic RPC API with loopback
+The Host registers `/geoharness/goal/start`, `/geoharness/scenario/progress`,
+`/geoharness/scenario/revise/start` and their synchronous compatibility endpoints
+`goal/run`, `scenario/run`, `scenario/latest`, `scenario/revise` through the official Connection generic RPC API with loopback
 authority. A successful run projects Registry metadata and canonical display GeoJSON, verifies
 lineage/parents/feature counts, and lets the client add derived layers. Selecting a successful
 Task step highlights exactly its output Layer rows and SVG map features. The bounded v1.0 revision
 endpoint accepts Scenario 05 distance changes, invalidates only the target step and its downstream
 closure, preserves upstream Layer IDs, records run/reuse history, and keeps superseded derived
-Layers as inactive lineage evidence. `goal/run` classifies only the bounded v1.0 workflows,
+Layers as inactive lineage evidence. `goal/start` and `goal/run` classify only the bounded v1.0 workflows,
 extracts explicit metric or kilometre distances, patches the cloned Task Graph before its first
 step runs and returns the resolved workflow and parameters with the verified result.
+
+The browser has one execution entry in the bottom composer. Its center SVG map supports pointer
+pan, fit bounds, toolbar zoom and bounded mouse-wheel zoom from 0.7× to 5×.
 
 Seven independent regression suites execute the same DAGs and require capability coverage, output
 Layer aliases, an independent GeoPandas spatial oracle and exact expected statistics. Run them

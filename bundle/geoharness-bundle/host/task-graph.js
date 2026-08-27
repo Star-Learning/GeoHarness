@@ -346,6 +346,9 @@ export class TaskGraphRuntime extends Service {
   }
 
   async runScenario({ scenarioId, workspaceKey = 'direct', signal, onTransition, parameterPatches = {}, goal }) {
+    const key = `${workspaceKey}:${scenarioId}`
+    this.runs.delete(key)
+    this.verifications.delete(key)
     const definition = applyInitialDefinitionPatches(
       await this.loadDefinition(scenarioId),
       parameterPatches,
@@ -369,7 +372,6 @@ export class TaskGraphRuntime extends Service {
         parameters: step.parameters,
       }, step.signal),
     })
-    const key = `${workspaceKey}:${scenarioId}`
     this.runs.set(key, execution)
     const snapshot = await execution.run({ signal })
     const mapVerification = await this.buildMapVerification(snapshot, workspaceKey, signal)
@@ -377,13 +379,15 @@ export class TaskGraphRuntime extends Service {
     return { ...snapshot, map_verification: mapVerification }
   }
 
-  async reviseScenario({ scenarioId, workspaceKey = 'direct', stepId, parameterPatch, reason, signal }) {
+  async reviseScenario({ scenarioId, workspaceKey = 'direct', stepId, parameterPatch, reason, signal, onTransition }) {
     const key = `${workspaceKey}:${scenarioId}`
     const execution = this.runs.get(key)
     if (execution === undefined) {
       throw new TaskGraphError(`No completed Task Graph to revise for ${scenarioId}`, 'TASK_GRAPH_RUN_MISSING')
     }
+    execution.onTransition = onTransition
     const revision = execution.reviseFrom(stepId, parameterPatch, reason)
+    this.verifications.delete(key)
     const snapshot = await execution.run({ signal })
     const mapVerification = await this.buildMapVerification(snapshot, workspaceKey, signal)
     this.verifications.set(key, mapVerification)

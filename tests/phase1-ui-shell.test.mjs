@@ -39,6 +39,13 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
   assert.match(source, /priority: -100/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
+  assert.match(source, /goal\/start/)
+  assert.match(source, /scenario\/progress/)
+  assert.match(source, /AGENT RESULT/)
+  assert.match(source, /resolvedPreviewSteps/)
+  assert.doesNotMatch(source, /expectedResult/)
+  assert.equal((source.match(/执行 GIS 任务/g) ?? []).length, 1)
+  assert.doesNotMatch(source, /Run current input|gh-run-button/)
 })
 
 test('the generated factory replaces the Harness conversation Slot with the GeoHarness shell', async () => {
@@ -57,6 +64,7 @@ test('the generated factory replaces the Harness conversation Slot with the GeoH
   const fragment = Symbol('fragment')
   const jsx = (type, props, key) => ({ type, props: props ?? {}, key })
   const React = {
+    useEffect: effect => { effect() },
     useMemo: factory => factory(),
     useRef: initial => ({ current: initial }),
     useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}],

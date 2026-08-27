@@ -181,3 +181,61 @@ test('the loopback Connection RPC exposes validated Scenario and goal-driven end
   assert.equal(unsupported.ok, false)
   assert.match(unsupported.error.message, /supported GeoHarness v1\.0/)
 })
+
+test('the loopback RPC streams real Task Graph transitions through a workspace-scoped background job', async () => {
+  const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
+  let registration
+  let finishRun
+  const calls = []
+  const ctx = {
+    connection: { rpc: { handle: (channel, handler, options) => { registration = { channel, handler, options }; return async () => {} } } },
+    taskGraph: {
+      runScenario: request => new Promise(resolve => {
+        calls.push(request)
+        request.onTransition({ sequence: 1, to: 'running' }, {
+          scenario_id: '05-parameter-revision', status: 'running',
+          steps: [{ id: 'inspect_buildings', status: 'running', outputs: [], resolved_outputs: [] }],
+          run_history: [],
+        })
+        finishRun = resolve
+      }),
+      latest: () => null,
+    },
+  }
+  registerGeoRpc(ctx)
+  const payload = {
+    goal_prompt: '找出距离主要道路 Broadway 275 米以内的建筑。',
+    workspace_key: 'phase7-live-progress',
+  }
+  const start = await registration.handler('goal/start', payload, new AbortController().signal)
+  assert.equal(start.ok, true)
+  assert.equal(start.value.job_status, 'running')
+  assert.equal(start.value.goal_resolution.parameters.road_distance_m, 275)
+  await new Promise(resolve => setImmediate(resolve))
+
+  const running = await registration.handler('scenario/progress', {
+    scenario_id: '05-parameter-revision', workspace_key: payload.workspace_key,
+  })
+  assert.equal(running.ok, true)
+  assert.equal(running.value.job_status, 'running')
+  assert.equal(running.value.execution.steps[0].status, 'running')
+  assert.equal('signal' in calls[0], false, 'detached jobs must not reuse the completed start RPC signal')
+  const blocked = await registration.handler('goal/start', {
+    goal_prompt: '找出距离 Hudson River 500 米以内的建筑。',
+    workspace_key: payload.workspace_key,
+  })
+  assert.equal(blocked.ok, false)
+  assert.match(blocked.error.message, /already running/)
+
+  finishRun({
+    scenario_id: '05-parameter-revision', status: 'success', steps: [], run_history: [{}],
+    map_verification: { status: 'ready', checks: {}, issues: [], step_bindings: [], map_layers: [] },
+  })
+  await new Promise(resolve => setImmediate(resolve))
+  const completed = await registration.handler('scenario/progress', {
+    scenario_id: '05-parameter-revision', workspace_key: payload.workspace_key,
+  })
+  assert.equal(completed.ok, true)
+  assert.equal(completed.value.job_status, 'success')
+  assert.equal(completed.value.execution.map_verification.status, 'ready')
+})

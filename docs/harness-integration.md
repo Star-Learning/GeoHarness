@@ -225,14 +225,22 @@ channel，客户端把 `connection` 加入 Cordis inject 后通过
 `ctx.connection.rpc.call(...)` 调用。没有新增第二个 Web 服务，也没有绕过 Harness
 transport/trust fence。
 
-公开四个 bounded endpoint：`goal/run` 从输入文本选择现有 v1.0 工作流、解析明确距离并在
-首轮执行前 patch 克隆后的 Task Graph；`scenario/run` 执行指定官方 Scenario DAG 并返回
-step/layer/map projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
-`scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受七个
+前端主路径使用三个异步 bounded endpoint：`goal/start` 从输入文本选择现有 v1.0 工作流、
+解析明确距离并创建 workspace-scoped 后台 job；`scenario/progress` 返回当前真实 Task Graph
+snapshot、已验证的 partial map projection 与 job 状态；`scenario/revise/start` 以同样方式
+启动 Scenario 05 局部修订。为回归和直接调用保留同步兼容 endpoint：`goal/run`、
+`scenario/run`、`scenario/latest`、`scenario/revise`。请求只接受七个
 官方数据 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
 0–100 km 的正距离。成功执行后 Host 会核对 Registry
 `generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
 全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
+
+后台 job 不复用已经返回的 start RPC `AbortSignal`。每次真实 step transition 都更新 snapshot；
+success transition 后 Host 从 Python Registry 构建 canonical partial projection，只有
+feature count、parents、lineage 和 output binding 全部通过才会进入浏览器地图。客户端约每
+280 ms 轮询，因此右侧 Plan 和左侧 Task outputs 的 pending/running/success 来自执行真相源，
+不是定时器模拟；Agent Result 读取实际 `ToolResult.summary/data`。初次 start 响应中的归一化
+距离会立即更新计划预览，避免官方数据加载期间短暂显示 Scenario 默认距离。
 
 修订没有重新创建整张 Task Graph：Host 在原 execution 上计算被修改 step 的下游闭包，
 只把这些 step 从 `success/failed` 退回 `pending`，清除其当前 alias 绑定并重跑；未受影响的
@@ -247,13 +255,18 @@ Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返
 浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
 
 Phase 9 又通过真实 Connection RPC、TaskGraphRuntime 和 Python/GeoPandas provider 执行
-`goal/run`：输入“Broadway 275 米以内”后只产生一轮 initial history，首轮 buffer 参数与
+`goal/start` + `scenario/progress`：输入“Broadway 275 米以内”后只产生一轮 initial history，首轮 buffer 参数与
 计划标题均为 275 m，得到 241 个候选；独立 UTM 18N oracle 确认全部候选距离不超过
 275.5 m，没有隐藏的 500 m 运行。随后通过 `scenario/run` 与 `scenario/revise` 验证
 Scenario 05 从 500 m / 329 个候选更新为
 200 m / 205 个候选，history 为 2 轮；仅
 `buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
 Map Verification 仍为 `ready`。
+
+真实进度回归在 job 完成前观察到至少三个不同的 step success 计数，并在后续工具仍运行时
+观察到已通过 Map Verification 的派生 Layer；完整 Web 还确认页面只有底部一个执行入口，
+Agent Result 报告 275 m 的 241 个候选与 333 m 的 260 个候选，鼠标滚轮把地图从 1.0×
+缩放到 2.5×。
 
 ## 七个官方数据 Scenario 的真实 Web 验证
 
