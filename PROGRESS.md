@@ -496,6 +496,9 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 原生 `InputBar` 与 `ModelSelect` 被放置在右侧 Agent workspace 底部，输入、访问模式、
   模型选择、上下文状态、发送和停止继续使用 Harness 自身行为；GeoHarness 不再调用
   `sessions.prompt/models/selectModel` 自制一套对话链。
+- [x] 修复原生空会话 Hero“探索未至之境 / 预览版”仍按旧整页坐标渲染并遮挡右栏的问题；
+  仅在 GeoHarness 的 `data-phase="hero"` 状态隐藏该冗余宣传行，工作区选择、模式、输入框、
+  模型和发送控件均继续保留原生实现。
 - [x] 浏览器几何验收确认 Agent panel 为 390×562，composer card 为 370×94，且完整位于
   Agent panel 内；原生模型菜单可展开，页面无 console error。
 - [x] Native Session history 继续驱动右侧 Goal、Tool Trace 和 Agent Result，真实 Session ID

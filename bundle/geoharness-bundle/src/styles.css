@@ -186,6 +186,16 @@
   background: transparent;
 }
 
+/* Harness renders its empty-session marketing headline above the native
+   composer. In GeoHarness that same area already belongs to Agent workspace,
+   so suppress only this redundant hero row while keeping the native workspace
+   picker, mode selector, composer and model controls intact. */
+[data-phase="hero"]:has([data-geoharness-plugin="loaded"])
+  [data-composer-seat]
+  [data-chain-overlay-fallback="conversation.composer"] > div > div:first-of-type {
+  display: none;
+}
+
 @media (max-width: 1000px) {
   .gh-workspace { --gh-agent-column-width: 340px; grid-template-columns: minmax(340px, 1fr) var(--gh-agent-column-width); }
   [data-conversation-scroll]:has([data-geoharness-plugin="loaded"]) { --gh-agent-column-width: 340px; }

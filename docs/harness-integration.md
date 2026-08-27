@@ -91,7 +91,9 @@ GeoHarness Entry 跨父级调用 `renderSlot` 绕过。
 右侧输入区同样是 `ui-conversation/InputBar` 与 `ui-model-selection/ModelSelect` 的原生实例。
 GeoHarness 只用上游公开的稳定 DOM 标记 `[data-conversation-scroll]`、`[data-composer-seat]`、
 `[data-composer-card]` 把既有 composer seat 定位到 Agent workspace 底部；没有依赖 CSS Modules
-哈希类名，也没有复制输入框 JSX。
+哈希类名，也没有复制输入框 JSX。空会话时，上游还会在 composer 上方渲染整页 Hero；GeoHarness
+以当前真实 `data-phase="hero"` 和 `data-chain-overlay-fallback="conversation.composer"` 标记只隐藏
+“探索未至之境 / 预览版”这一冗余宣传行，工作区、模式、输入框、模型和发送控件不变。
 
 视觉层继续使用 DSW background/label/border/business/shadow tokens。三栏以低对比度 surface、
 12px 间距、圆角边框和一至三级阴影区分顶栏、工作区、Agent 卡片、composer 与 modal，地图仍

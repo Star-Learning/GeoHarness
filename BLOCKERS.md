@@ -172,4 +172,6 @@ credential store 管理。当前外部模型问题继续按上一项单独保留
 位置。真实浏览器确认输入框、访问模式、模型按钮、发送按钮都位于右栏，模型菜单可打开；
 GeoHarness 源码不再调用 `sessions.prompt/models/selectModel`。是否能完成外部推理仍取决于上一项
 外部 Provider/网络条件，不能由“菜单可用”推断模型调用成功。最终回归已通过 client build、
-typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。
+typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。空会话阶段额外出现的上游
+“探索未至之境 / 预览版”Hero 遮挡已通过 `data-phase="hero"` 精确作用域解决，不影响普通会话
+或任何原生 composer 控件。

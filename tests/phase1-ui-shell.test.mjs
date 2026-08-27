@@ -45,6 +45,8 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   assert.match(styles, /grid-template-columns: minmax\(400px, 1fr\) var\(--gh-agent-column-width\)/)
   assert.match(styles, /\[data-conversation-scroll\]:has\(\[data-geoharness-plugin="loaded"\]\)/)
   assert.match(styles, /> \[data-composer-seat\]/)
+  assert.match(styles, /\[data-phase="hero"\]:has\(\[data-geoharness-plugin="loaded"\]\)/)
+  assert.match(styles, /data-chain-overlay-fallback="conversation\.composer"/)
   assert.match(styles, /native Harness ConversationRoot still owns the composer/i)
   assert.doesNotMatch(styles, /\.gh-composer\s*\{/)
   assert.match(styles, /--dsw-alias-bg-base/)
