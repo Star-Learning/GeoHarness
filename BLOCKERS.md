@@ -147,7 +147,7 @@ mock 替代 GEOS/PROJ 运算。
 
 已完成的本地证据包括：13 个 Tool schema 注册、System Prompt 注入、Native Session event
 投影、Agent workspace RPC、真实官方数据 discovery/load、Python/GeoPandas buffer/filter 和
-50/50 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
+51/51 Node、9/9 Python 回归。配置真实 Provider 后应补一项模型 planning smoke test；空间
 正确性仍以确定性 Scenario/oracle 为准，不能依赖模型措辞。
 
 ### 6. 左下角模型设置入口
@@ -156,3 +156,9 @@ mock 替代 GEOS/PROJ 运算。
 Connection API 提供 Provider/API Key 管理。真实浏览器确认 profile 中 ustc credential 为
 configured，DeepSeek credential 缺失且可写。密钥不回显、不进入仓库；当前外部模型
 `Connection error` 仍按上一项作为 Provider/网络问题单独保留。
+
+### 7. Agent 测试 Prompt 与页面字体
+
+已解决，不是活跃阻塞。测试输入已集中到 `docs/agent-test-prompts.md`，并通过自动门禁确认
+不会向 Agent 注入内部 Scenario/Layer 标识。全局字号提高后，1170×912 浏览器验收确认页面
+尺寸与 viewport 一致、凭据弹窗在视口内，未出现三栏溢出、地图白屏或输入区截断。

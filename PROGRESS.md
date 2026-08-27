@@ -449,3 +449,18 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   阴影、右侧嵌套 Agent cards、突出 composer，以及 lv3 credentials modal；未恢复旧侧栏。
 - [x] 浏览器 1170×912 验收无溢出/白屏，设置弹窗可开关，主地图仍占最大面积；build、
   typecheck、peer、官方数据门禁、Node 50/50 和 Python 9/9 全部通过。
+
+## Agent 测试 Prompt 与全局字体可读性
+
+状态：完成（2026-08-27）
+
+- [x] 新增 `docs/agent-test-prompts.md`，提供 12 类可直接复制的全 Agent 测试，覆盖官方数据
+  发现、质量检查、200/275/500 米动态参数、分区统计、多约束、最近要素、导出、同会话修订
+  和数据能力边界；测试输入不包含内部 Scenario/Layer 标识，也不预设 Task Graph。
+- [x] 新增 Prompt 文档回归门禁，校验 13 个独立输入块（含连续修订第二轮）以及真实数据、
+  非预设距离、上下文修订和拒绝伪造等要求。
+- [x] 将 GeoHarness 基础、图层、地图、Agent trace、结果、输入框和凭据弹窗字号整体提高
+  1–2 px；基础与输入字号统一为 14 px，继续使用 Harness DSW 字体和颜色 token。
+- [x] 1170×912 浏览器实测 document 与 viewport 均为 1170×912、无页面溢出；三栏工作台、
+  空地图、Agent cards、底部输入和 680 px 凭据弹窗均完整可见。
+- [x] 最终门禁通过：build、typecheck、peer、Node 51/51、Python 9/9 和 `git diff --check`。

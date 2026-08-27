@@ -184,6 +184,7 @@ pnpm peers check             # confirm exact Harness peer compatibility
 
 ## Documentation
 
+- [Agent test prompts](docs/agent-test-prompts.md)
 - [Verified Harness integration](docs/harness-integration.md)
 - [Geo Tool contract](docs/tool-spec.md)
 - [Task Graph runtime](docs/task-graph.md)
