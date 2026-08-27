@@ -167,11 +167,15 @@ class ScenarioRegression:
                 "initial_distance_is_500m": True,
                 "all_initial_candidates_within_500m": all(distance <= 500.5 for distance in distances),
             })
-        if distance_m == 1000:
+        if distance_m != 500:
             statistics.update({"revised_candidate_count": len(candidates), "revised_buffer_distance_m": distance_m})
             checks.update({
-                "revised_distance_is_1000m": True,
-                "all_revised_candidates_within_1000m": all(distance <= 1000.5 for distance in distances),
+                "all_revised_candidates_within_distance": all(distance <= distance_m + 0.5 for distance in distances),
+            })
+        if distance_m == 200:
+            checks.update({
+                "revised_distance_is_200m": True,
+                "all_revised_candidates_within_200m": all(distance <= 200.5 for distance in distances),
             })
         return {"statistics": statistics, "checks": checks}
 

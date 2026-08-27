@@ -141,27 +141,38 @@ Slot 是当前 Web UI 的公开组合边界。插件注册顺序与 Slot 声明�
 所以外部插件必须等待声明生命周期：
 
 ```js
-ctx.slots.inject('conversation.view', () =>
+ctx.slots.inject('conversation.session.header.actions', () =>
   ctx.slots.register({
-    name: 'conversation.view',
-    id: 'geoharness',
-    label: 'GeoHarness',
-  }, GeoHarnessView),
+    name: 'conversation.session.header.actions',
+    id: 'geoharness-gis',
+  }, GeoHarnessHeaderAction),
+)
+ctx.slots.inject('shell.overlay', () =>
+  ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'geoharness-gis-panel',
+  }, GeoHarnessPanel),
 )
 ```
 
 GeoHarness v1.0 只使用两个加法型 Slot：
 
-- `conversation.view`：session scope 的 list slot，新增一个独立视图标签；
-- `shell.overlay`：root scope 的 list slot，新增一个全局浮层标记。
+- `conversation.session.header.actions`：session scope 的 list slot，在 Harness 原对话标题栏
+  增加一个原生风格的“GIS 地图”按钮；
+- `shell.overlay`：root scope 的 list slot，承载由该按钮开关的右侧 GIS 工作区。
+
+GeoHarness 不再注册 `conversation.view`，所以不会新增 `GeoHarness` 标签。按钮和面板均是
+Harness AppFrame 中已有公开 seat 的加法型扩展；面板使用 DSW theme tokens，跟随原页面
+背景、标签、边框、交互和业务蓝色，不复制或长期修改上游 UI 源码。
 
 不能注册到 `root`。当前 `SlotRegistry` 源码明确警告：`root` 是 single slot，
 由 `ui-layout` 的完整 AppFrame 占用；动态注册的新条目会遮蔽整个应用框架，
 同时让框架声明的所有子 Slot 消失。
 
-Phase 3 的真实 Web 验证已确认，`conversation.view` 足以容纳三栏 GIS Workspace、
-SVG 矢量地图、Layer Panel、Task 状态与 Prompt composer；720p 高度约束也已在该
-Slot 中修复。因此 v1.0 不需要独立 Web surface，更没有修改上游源码或另做无关站点。
+当前真实 Web 验证确认，`shell.overlay` 可以在保留原对话页和标题栏的同时容纳三栏
+GIS Workspace、SVG 矢量地图、Layer Panel、Task 状态与 Prompt composer；720p 高度约束
+由 drawer 自身处理。因此 v1.0 不需要独立标签或独立 Web surface，更没有修改上游源码
+或另做无关站点。
 
 ## Service 与 Tool 的实际接入（Phase 5）
 
@@ -238,8 +249,9 @@ Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返
 `success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 132 个要素；
 浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
 
-Phase 9 又在完整 Harness Web 中连续 POST `scenario/run` 与 `scenario/revise`：Scenario 05
-从 500 m / 329 个候选更新为 1 km / 360 个候选，history 为 2 轮；仅
+Phase 9 又通过真实 Connection RPC、TaskGraphRuntime 和 Python/GeoPandas provider 连续执行
+`scenario/run` 与 `scenario/revise`：Scenario 05 从 500 m / 329 个候选更新为
+200 m / 205 个候选，history 为 2 轮；仅
 `buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
 Map Verification 仍为 `ready`。
 
@@ -248,7 +260,7 @@ Map Verification 仍为 `ready`。
 Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 Web profile
 中分别运行七个独立 Scenario，不使用另建的 Chat + Map 页面。浏览器显示的 Plan 来自
 各自 `task-graph.json`，Tools 通过 Host Service 调用 Python GIS provider，派生 Layers
-通过官方 Connection RPC 投影到 `conversation.view` 内的地图。真实结果为：
+通过官方 Connection RPC 投影到原对话页内打开的 `shell.overlay` GIS 面板。真实结果为：
 
 | Scenario | Harness UI 中确认的结果 |
 | --- | --- |
@@ -256,7 +268,7 @@ Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 W
 | 02 River Building Query | 132 个河流 500 m 邻近建筑 |
 | 03 Statistics by District | 360 个建筑按 MN-101/102/103 分为 162 / 40 / 158 |
 | 04 Broadway Accessibility | 249 个 Broadway 300 m 可达建筑，分区为 130 / 8 / 111 |
-| 05 Parameter Revision | 500 m 为 329，修订 1 km 后为 360；2 rerun、3 reused、history 2 |
+| 05 Parameter Revision | 500 m 为 329，修订 200 m 后为 205；2 rerun、3 reused、history 2 |
 | 06 Multi-Constraint Selection | 27 个多约束候选 |
 | 07 Official NYC Building Inspection | 133 个有效 MultiPolygon，建成年份缺失 2 |
 
@@ -269,7 +281,7 @@ Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 W
 
 ## Scenario 07 聚焦快照
 
-Scenario 07 沿用上述同一 Bundle、`conversation.view`、Connection RPC、TaskGraphRuntime、
+Scenario 07 沿用上述同一 Bundle、标题栏 action + `shell.overlay`、Connection RPC、TaskGraphRuntime、
 Python provider、Layer Registry 与 Map Verification 链路。输入是独立的
 NYC Open Data `BUILDING`（`5zhs-2jue`）在固定 Lower Manhattan bbox 内的 2026-08-27
 审计快照：133 个 MultiPolygon。官方来源、Socrata 查询、publisher、source update、

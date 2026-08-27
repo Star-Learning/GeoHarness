@@ -66,6 +66,7 @@ test('the inspected DeepSeek Harness baseline is readable and still exposes the 
   assert.match(clientModules, /dsh\.client/)
   assert.match(slotRuntime, /inject\(key: keyof SlotMap & string/)
   assert.match(conversationSlots, /'conversation\.view'/)
+  assert.match(conversationSlots, /'conversation\.session\.header\.actions'/)
   assert.match(layoutSlots, /'shell\.overlay'/)
   assert.match(serviceGuide, /## Provide a service/)
   assert.match(serviceGuide, /## Consume a service/)
@@ -155,16 +156,18 @@ test('the browser artifact registers its factory and contributes only through de
 
   assert.equal(appendedStyles.length, 1)
   assert.equal(appendedStyles[0].dataset.plugin, packageName)
-  assert.deepEqual(awaited, ['conversation.view', 'shell.overlay'])
+  assert.deepEqual(awaited, ['conversation.session.header.actions', 'shell.overlay'])
   assert.deepEqual(
     registrations.map(({ options }) => ({ name: options.name, id: options.id })),
     [
-      { name: 'conversation.view', id: 'geoharness' },
-      { name: 'shell.overlay', id: 'geoharness-brand' },
+      { name: 'conversation.session.header.actions', id: 'geoharness-gis' },
+      { name: 'shell.overlay', id: 'geoharness-gis-panel' },
     ],
   )
-  assert.ok(Number(registrations[0].component().props['data-geoharness-phase']) >= 1)
+  assert.equal(registrations[0].component().props['data-geoharness-toggle'], true)
+  assert.equal(registrations[0].component().props['aria-controls'], 'geoharness-gis-panel')
   assert.equal(registrations[1].component().props['data-geoharness-plugin'], 'loaded')
+  assert.equal(registrations[1].component().props.hidden, true)
 })
 
 test('the repository does not vendor DeepSeek Harness source', async () => {

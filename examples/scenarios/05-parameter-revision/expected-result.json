@@ -5,12 +5,12 @@
   ],
   "expected": {
     "initial_candidate_count": 329,
-    "revised_candidate_count": 360,
+    "revised_candidate_count": 205,
     "retained_history_entries": 2
   },
   "checks": [
     "initial_candidate_count == 329",
-    "revised_candidate_count == 360",
+    "revised_candidate_count == 205",
     "unchanged_upstream_steps_are_reused == true",
     "downstream_lineage_is_updated == true"
   ]

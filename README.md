@@ -17,7 +17,8 @@ source, and it is not a separate Chat + Map website.
 
 - A dual-face Harness plugin/bundle: Host plugin plus browser module, composed through current
   `dsh.bundle`, `dsh.client`, Cordis Service and Harness Slot contracts.
-- A three-column GIS workspace inside the official `conversation.view` surface: Layer Registry,
+- A three-column GIS workspace opened from the original conversation header through the official
+  `conversation.session.header.actions` and `shell.overlay` surfaces: Layer Registry,
   interactive vector map and observable Agent Task Graph.
 - Twelve model-facing Geo Tools with Harness schema validation, timeout/cancellation, structured
   `ToolResult` and prompt guidance.
@@ -26,7 +27,7 @@ source, and it is not a separate Chat + Map website.
 - An executable DAG runtime with dependency resolution, state transitions, Layer aliases and run
   history.
 - Verified `Task Step ↔ Layer ↔ Map` projection over the official loopback Connection RPC.
-- Conversational Scenario 05 revision from 500 m to 1 km with downstream-only rerun and retained
+- Conversational Scenario 05 revision from 500 m to 200 m with downstream-only rerun and retained
   lineage.
 - Seven independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
   test, README, screenshots, animated Demo and video script.
@@ -37,8 +38,8 @@ source, and it is not a separate Chat + Map website.
 
 ```text
 DeepSeek Harness Web
-  └─ conversation.view / shell.overlay Slots
-       └─ GeoHarness browser workspace
+  └─ conversation.session.header.actions + shell.overlay Slots
+       └─ in-conversation GIS button + GeoHarness side workspace
             └─ official Connection RPC (/geoharness)
                  └─ TaskGraphRuntime + Map Verification
                       └─ 12 Harness defineTool consumers
@@ -83,8 +84,9 @@ dsh plugin --profile web add ./bundle/geoharness-bundle
 dsh --profile web --no-open
 ```
 
-In Harness, open a session for this repository, choose the `GeoHarness` tab, select a Scenario and
-press **Run + verify on map**. The frozen official-data workflows do not require a model API key.
+In Harness, open a session for this repository, click **GIS 地图** in the original conversation
+header, select a Scenario and press **Run + verify on map**. GeoHarness does not add a separate
+conversation tab. The frozen official-data workflows do not require a model API key.
 
 ## Seven official-data v1.0 Demos
 
@@ -94,7 +96,7 @@ press **Run + verify on map**. The frozen official-data workflows do not require
 | 02 River Building Query | 132 buildings within 500 m | [README](examples/scenarios/02-river-building-query/README.md) | [GIF](examples/scenarios/02-river-building-query/media/demo.gif) |
 | 03 Statistics by District | 360 buildings split 162 / 40 / 158 | [README](examples/scenarios/03-building-statistics-by-district/README.md) | [GIF](examples/scenarios/03-building-statistics-by-district/media/demo.gif) |
 | 04 Broadway Accessibility | 249 candidates; District split 130 / 8 / 111 | [README](examples/scenarios/04-road-accessibility/README.md) | [GIF](examples/scenarios/04-road-accessibility/media/demo.gif) |
-| 05 Parameter Revision | 500 m: 329 → 1 km: 360; 2 rerun / 3 reused | [README](examples/scenarios/05-parameter-revision/README.md) | [GIF](examples/scenarios/05-parameter-revision/media/demo.gif) |
+| 05 Parameter Revision | 500 m: 329 → 200 m: 205; 2 rerun / 3 reused | [README](examples/scenarios/05-parameter-revision/README.md) | [GIF](examples/scenarios/05-parameter-revision/media/demo.gif) |
 | 06 Multi-Constraint Selection | 27 candidates satisfying both distances | [README](examples/scenarios/06-multi-constraint-selection/README.md) | [GIF](examples/scenarios/06-multi-constraint-selection/media/demo.gif) |
 | 07 Official NYC Building Inspection | 133 valid MultiPolygons; 2 missing construction years; 1830–2021 | [README](examples/scenarios/07-official-nyc-building-inspection/README.md) | [GIF](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif) |
 
@@ -133,7 +135,7 @@ pnpm run verify:phase10
 Other useful commands:
 
 ```sh
-pnpm run verify:phase9       # 500 m → 1 km partial rerun
+pnpm run verify:phase9       # real RPC + GeoPandas 500 m → 200 m partial rerun
 pnpm run check:official-data # verify official source hashes and derived statistics
 pnpm run build:media         # rebuild GIFs from the committed real screenshots
 pnpm run check:scenarios     # prove generated official-data packages are fresh

@@ -12,8 +12,8 @@
     "unit": "meter"
   },
   "revision": {
-    "prompt": "改成 1 公里。",
-    "distance": 1000,
+    "prompt": "改成 200 米。",
+    "distance": 200,
     "unit": "meter",
     "rerun_from_capability": "create_buffer"
   }

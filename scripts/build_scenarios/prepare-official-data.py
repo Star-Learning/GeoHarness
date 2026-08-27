@@ -287,6 +287,7 @@ def build_payloads(sources: dict[str, gpd.GeoDataFrame]) -> tuple[dict[str, dict
         "district_counts": district_counts(buildings, districts),
         "road_300m_candidate_count": int((road_distances <= 300).sum()),
         "road_300m_district_counts": district_counts(accessible, districts),
+        "road_200m_candidate_count": int((road_distances <= 200).sum()),
         "road_500m_candidate_count": int((road_distances <= 500).sum()),
         "road_1000m_candidate_count": int((road_distances <= 1000).sum()),
         "multi_constraint_candidate_count": int(((road_distances <= 300) & (river_distances >= 800)).sum()),

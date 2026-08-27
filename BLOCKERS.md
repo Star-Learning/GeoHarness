@@ -20,13 +20,14 @@ Harness externals、CSS 注入和产物新鲜度增加测试。GeoHarness 不依
 
 ### 三栏 UI Shell 的 Slot 适配性
 
-真实 Harness Web 验证确认，Phase 1 三栏工作区可以通过 `conversation.view` 完整
-呈现，`shell.overlay` 可以承载轻量品牌状态；无需注册会遮蔽 AppFrame 的 `root`。
+当前 Harness 源码与真实 Web 验证确认：`conversation.session.header.actions` 可添加原生
+标题栏按钮，`shell.overlay` 可承载三栏右侧工作区；GeoHarness 不再注册
+`conversation.view`，也无需注册会遮蔽 AppFrame 的 `root`。
 
 ### 真实矢量地图的 Slot 适配性
 
 Phase 3 已在真实 Harness Web 中验证：六个 Scenario 数据可嵌入客户端，三栏视图
-可在 `conversation.view` 中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
+可在 `shell.overlay` 中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
 检查。720p 容器高度问题已通过视口约束修复，无需独立 Web surface。
 
 ### Task Step 与地图绑定
@@ -44,8 +45,9 @@ Phase 9 的明确阶段边界，不是 Phase 8 阻塞。
 ### Scenario 05 会话修订
 
 Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run history、旧 Layer lineage
-保留和 active map projection。完整 Harness Web 连续 RPC 验证从 500 m / 329 个候选更新到
-1 km / 360 个候选，只有两项下游 step 重跑；不再是活跃阻塞。
+保留和 active map projection。真实 RPC + TaskGraph + Python/GeoPandas 验证从
+500 m / 329 个候选更新到 200 m / 205 个候选，只有两项下游 step 重跑；距离不是预设
+枚举，明确数值在合法范围内可由同一链路重算，不再是活跃阻塞。
 
 ### Phase 10 真实展示素材
 
@@ -77,6 +79,11 @@ pytest 默认用户临时目录及旧 `.pytest_cache` 也曾因 Windows ACL 导�
 阶段失败。`test:python` 现显式使用仓库内、被忽略的 `.tmp/pytest` 与
 根级 `.tmp/pytest-cache`；修复后旧版 Python 7/7、Node 41/41 以及官方数据扩展后的
 Python 9/9、Node 45/45 均通过。
+
+本轮 pnpm 在非交互终端首次执行 workspace script 时再次请求确认 modules purge；没有
+修改依赖版本或联网绕过。直接使用仓库现有 TypeScript/build 入口完成同一构建与类型检查，
+并以 `CI=true pnpm peers check` 验证 peer graph；Node 45/45 和 Python 9/9 随后全部通过。
+这是非交互终端提示，不是产品或测试阻塞。
 
 ## 非阻塞限制与后续门禁
 

@@ -31,8 +31,9 @@
   Agent Workspace 和 Prompt 输入区。
 - [x] 六个官方 Scenario 均可选择；选择会载入对应建议 Prompt，提交 Prompt 会更新
   本地 Goal 与 Scenario 状态。
-- [x] 使用安全的加法型 Slot：主工作区挂载到 `conversation.view`，品牌状态挂载到
-  `shell.overlay`，没有覆盖 Harness `root`。
+- [x] 使用安全的加法型 Slot：原对话标题栏按钮挂载到
+  `conversation.session.header.actions`，GIS 工作区挂载到 `shell.overlay`，没有覆盖
+  Harness `root`，也不新增独立对话标签。
 - [x] 建立 Phase 1 自动测试，覆盖产物可复现性、UI 表面、Scenario 元数据、Slot
   注册、CSS 注入及未提前引入 Phase 3/4 能力。
 - [x] 在隔离 Harness profile 中完成真实 Web 验证：Bundle 安装、会话视图加载、
@@ -50,8 +51,8 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 
 - [x] 建立六个独立需求目录；每个目录均包含 README、Prompt、Scenario manifest、
   Expected Plan、Expected Result 和运行所需的独立数据副本。
-- [x] Scenario 05 额外包含独立的 `revision-prompt.txt`，明确 500 m → 1 km 的
-  参数修改目标与 329 → 360 的固定候选数量。
+- [x] Scenario 05 额外包含独立的 `revision-prompt.txt`，明确 500 m → 200 m 的
+  参数修改目标与 329 → 205 的固定候选数量。
 - [x] 建立可复现的 `scripts/build_scenarios/build-fixtures.mjs`，支持生成和
   `--check` 新鲜度验证。
 - [x] 数据使用带日期与哈希审计的 NYC Open Data Lower Manhattan 快照，统一为
@@ -59,7 +60,7 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 - [x] 为六个 Scenario 分别建立一个独立测试文件，验证目录自包含、数据合法、
   Prompt/Plan/Result 契约和 Scenario 特定期望。
 - [x] 使用 GeoPandas/Shapely/UTM 18N 对关键固定空间结果做独立抽查：Scenario 02
-  为 132，Scenario 04 为 249，Scenario 05 为 329 → 360，Scenario 06 为 27。
+  为 132，Scenario 04 为 249，Scenario 05 为 329 → 205，Scenario 06 为 27。
 
 ## Phase 2 边界
 
@@ -212,7 +213,7 @@ Phase 8。
 - [x] Scenario 02：132 个候选，全部距离河流不超过 500 m。
 - [x] Scenario 03：360 个建筑，三个 District 分别 162/40/158，分区面积和均为正。
 - [x] Scenario 04：249 个候选，District 为 130/8/111，全部距 Broadway 不超过 300 m。
-- [x] Scenario 05：初始 500 m buffer 与 329 个候选通过；1 km 修订及 history 明确交由
+- [x] Scenario 05：初始 500 m buffer 与 329 个候选通过；200 m 修订及 history 明确交由
   Phase 9，不以假数据提前通过。
 - [x] Scenario 06：27 个候选，全部距 Broadway 不超过 300 m 且距河流至少 800 m。
 - [x] 第一轮发现 regression action 的 `scenarioId` 被 provider 消费后未传入 Python；
@@ -228,7 +229,7 @@ Phase 8。
 状态：完成（2026-08-27）
 
 - [x] Scenario 05 的初次执行保持文档规定的 500 m，真实得到 329 个候选；用户输入
-  `改成 1 公里。` 后通过 Harness Connection RPC 将距离修订为 1000 m，真实得到 360 个候选。
+  `改成 200 米。` 后通过 Harness Connection RPC 将距离修订为 200 m，真实得到 205 个候选。
 - [x] Task Graph 支持已完成 execution 的 bounded revision：计算目标 step 下游闭包，
   仅将受影响 step 退回 pending，保留未受影响 success step 的结果和 Layer ID。
 - [x] 本例只重跑 `buffer_major_roads` 与 `filter_candidate_buildings`，复用
@@ -241,7 +242,7 @@ Phase 8。
   有界数值距离；模糊修改、错误 Scenario 和超过 100 km 的输入显式拒绝。
 - [x] 客户端在初次成功后准备官方 `revision-prompt.txt`，提交修订后显示 history、
   rerun/reused 摘要并把 Task step、当前 Layer 与地图重新同步。
-- [x] Python/GeoPandas oracle 同时覆盖 500 m 初始状态和 1000 m 修订状态；2 项 Phase 9
+- [x] Python/GeoPandas oracle 同时覆盖 500 m 初始状态和 200 m 修订状态；2 项 Phase 9
   自动测试及完整 Harness Web 连续 RPC 验证通过。
 
 ## Phase 9 边界
@@ -258,9 +259,9 @@ Scenario 的真实截图、动图/视频、视频脚本与项目文档收尾。
   README，并新增自己的 `screenshots/`、`media/demo.gif` 与 `media/video-script.md`；
   没有用一个共享大 Demo 代替独立验收。
 - [x] 所有截图均来自 DeepSeek Harness `0.1.1-rc.2` 的真实 1280×720 Web UI；每组
-  包含初始状态与结果状态，Scenario 05 还分别记录 500 m 和 1 km 两轮结果。
+  包含初始状态与结果状态，Scenario 05 还分别记录 500 m 和 200 m 两轮结果。
 - [x] 六个真实结果再次核对：Scenario 01 为 360 个建筑；02 为 132 个河流邻近建筑；
-  03 为三个 District 162/40/158；04 为 249 个 Broadway 可达建筑；05 为 329 → 360、
+  03 为三个 District 162/40/158；04 为 249 个 Broadway 可达建筑；05 为 329 → 205、
   2 个 step 重跑且 3 个复用；06 为 27 个多约束候选。
 - [x] 新增可重复的 Demo GIF 构建/检查脚本；六个 960×540 GIF 均由真实 Harness 截图
   生成，Scenario 05 为三帧，其余为两帧。
@@ -316,9 +317,9 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增 `prepare-official-data.py`，校验原始快照并可重复生成建筑、Broadway、
   Community District 和基于官方 land/water difference 的河流派生数据。
 - [x] 保持六个 Scenario 各自独立数据副本、测试与 Demo；固定统计更新为
-  360、132、162/40/158、249、329→360、27。
+  360、132、162/40/158、249、329→205、27。
 - [x] 修复所有图层透明度滑块连续拖动时延迟读取失效 React `currentTarget` 导致的
-  `conversation.view` 崩溃；增加源码回归门禁。
+  GIS 面板崩溃；增加源码回归门禁。
 - [x] 真实道路等距最近邻暴露重复 join row，`nearest_features.matched_count` 已修正为
   唯一输入要素数，同时保留并列目标行供审计。
 - [x] 在重启后的完整 Harness Web 中依次运行 Scenario 01–07，全部为 Task Graph
@@ -327,3 +328,28 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   透明度；每次 `main` 和地图都保持存在，未再出现白屏或 Slot 崩溃。
 - [x] 最终门禁通过：build、typecheck、官方数据/场景新鲜度、媒体可复现性、peer check、
   Node 45/45、Python 9/9、`git diff --check`；31994 预览服务保持运行。
+
+## 原对话界面集成与 200 米真实修订
+
+状态：完成（2026-08-27）
+
+- [x] 确认距离解析不是预设枚举：明确距离在 `(0, 100000]` 米内均可进入同一修订链；
+  将 200 米设为 Scenario 05 的正式验收用例。
+- [x] 用官方 Broadway Centerline 与官方建筑快照在 UTM 18N 中独立复算：500 米为 329 栋，
+  200 米为 205 栋；统计由 `prepare-official-data.py --check` 锁定。
+- [x] Phase 9 测试不使用 mock GIS 结果：实际调用 `/geoharness/scenario/run` 与
+  `/geoharness/scenario/revise` handler、TaskGraphRuntime、Python/GeoPandas provider、
+  Map Verification 和独立距离 oracle。
+- [x] 删除 GeoHarness 的 `conversation.view` 注册；改用
+  `conversation.session.header.actions` 的“GIS 地图”按钮和 `shell.overlay` 右侧工作区，
+  保留 Harness 原对话/轨迹页面。
+- [x] UI 颜色和控件改为 Harness DSW theme tokens；取消旧米色、橙色、青色品牌化装饰，
+  仅地图图层保留必要分类色。
+- [x] 在完整 Harness Web 中验证原页面只有“对话 / 轨迹”标签，“GIS 地图”按钮可开关
+  工作区；Scenario 05 为 329→205、Map ready、history 2、`2 rerun · 3 reused`。
+- [x] 对 Scenario 05 的六个输入/派生图层分别连续修改透明度，地图、面板和 205 个候选
+  状态保持正常；计划标题会随真实参数显示 `Create 200 m road buffer`。
+- [x] 七个 Scenario 全部在新界面中真实执行到 success/Map ready，重新保存 1280×720
+  截图并生成可复现 GIF；移除已失效的 `result-1km.jpg`。
+- [x] 最终门禁通过：官方数据/场景/media check、typecheck、peer check、Node 45/45、
+  Python 9/9、浏览器 UI 回归和 `git diff --check`。

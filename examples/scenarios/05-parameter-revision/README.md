@@ -14,7 +14,7 @@
 
 > 找出距离主要道路 Broadway 500 米以内的建筑。
 
-Revision: > 改成 1 公里。
+Revision: > 改成 200 米。
 
 ## Why this Demo exists
 
@@ -37,7 +37,7 @@ Revision: > 改成 1 公里。
 1. Run a 500 m major-road query
 1. Recognize a distance-only revision
 1. Invalidate downstream steps
-1. Rerun buffer and spatial filter at 1000 m
+1. Rerun buffer and spatial filter at 200 m
 1. Preserve run history and lineage
 
 ## Key GIS workflow
@@ -48,7 +48,7 @@ Revision: > 改成 1 公里。
 
 ## Success criteria
 
-初始结果为 329 个真实建筑；修改后为 360 个；仅 buffer 及其下游步骤重跑。
+初始结果为 329 个真实建筑；修改后为 205 个；仅 buffer 及其下游步骤重跑。
 
 ## Demo focus
 
@@ -56,15 +56,15 @@ Revision: > 改成 1 公里。
 
 ## Demo artifacts
 
-![Scenario 05 revised 1 km Harness result](screenshots/result-1km.jpg)
+![Scenario 05 revised 200 m Harness result](screenshots/result-200m.jpg)
 
 - [Initial Harness screenshot](screenshots/initial.jpg)
 - [500 m result — 329 candidates](screenshots/result-500m.jpg)
-- [1 km revised result — 360 candidates](screenshots/result-1km.jpg)
+- [200 m revised result — 205 candidates](screenshots/result-200m.jpg)
 - [Animated revision Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
 
-三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 1 公里。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 360 个当前候选。
+三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 200 米。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 205 个当前候选。
 
 ## Run and verify independently
 
@@ -73,4 +73,4 @@ node --test tests/phase9-conversational-revision.test.mjs
 node --test tests/regression/05-parameter-revision.regression.test.mjs
 ```
 
-第一项测试断言 329→360、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。
+第一项测试通过真实 Connection RPC 断言 329→205、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。

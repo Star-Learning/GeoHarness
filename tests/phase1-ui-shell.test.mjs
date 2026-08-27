@@ -31,7 +31,11 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
     '05-parameter-revision', '06-multi-constraint-selection',
     '07-official-nyc-building-inspection',
   ]) assert.match(source, new RegExp(id))
-  assert.match(styles, /grid-template-columns: 228px minmax\(340px, 1fr\) 286px/)
+  assert.match(styles, /grid-template-columns: 220px minmax\(340px, 1fr\) 272px/)
+  assert.match(styles, /--dsw-alias-bg-base/)
+  assert.match(styles, /--dsw-alias-state-business-primary/)
+  assert.doesNotMatch(source, /name: 'conversation\.view'/)
+  assert.match(source, /name: 'conversation\.session\.header\.actions'/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
 })
 
@@ -70,13 +74,15 @@ test('the generated factory registers the shell through additive Harness Slots',
       register: (options, component) => { slots.push({ options, component }); return () => {} },
     },
   })
-  assert.deepEqual(awaited, ['conversation.view', 'shell.overlay'])
-  assert.deepEqual(slots.map(slot => slot.options.id), ['geoharness', 'geoharness-brand'])
+  assert.deepEqual(awaited, ['conversation.session.header.actions', 'shell.overlay'])
+  assert.deepEqual(slots.map(slot => slot.options.id), ['geoharness-gis', 'geoharness-gis-panel'])
   assert.equal(appendedStyles.length, 1)
   assert.match(appendedStyles[0].textContent, /\.gh-shell/)
 
-  const shell = slots[0].component()
-  assert.ok(Number(shell.props['data-geoharness-phase']) >= 1)
-  const badge = slots[1].component()
-  assert.equal(badge.props['data-geoharness-plugin'], 'loaded')
+  const action = slots[0].component()
+  assert.equal(action.props['data-geoharness-toggle'], true)
+  assert.equal(action.props['aria-controls'], 'geoharness-gis-panel')
+  const panel = slots[1].component()
+  assert.equal(panel.props['data-geoharness-plugin'], 'loaded')
+  assert.equal(panel.props.role, 'dialog')
 })

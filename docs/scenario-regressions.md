@@ -16,7 +16,8 @@ broken `Task Step ↔ Layer ↔ Map` projection.
 
 Scenario 05's initial 500 m run is part of Phase 8 and must return 329 buildings. Its
 `revised_candidate_count` and retained history are explicitly deferred—not skipped—to Phase 9,
-where the conversational 1 km revision and partial rerun are implemented and tested.
+where the conversational 200 m revision and partial rerun are implemented and tested through the
+real Connection RPC, Task Graph and GeoPandas provider.
 
 Run Scenarios 01–06 with:
 

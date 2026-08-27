@@ -23,7 +23,7 @@ declare const __GEOHARNESS_SCENARIOS__: EmbeddedScenario[]
 
 const PACKAGE_NAME = '@geoharness/harness-plugin'
 
-type SlotName = 'conversation.view' | 'shell.overlay'
+type SlotName = 'conversation.session.header.actions' | 'shell.overlay'
 
 interface SlotRegistration {
   name: SlotName
@@ -93,12 +93,23 @@ function installStyles() {
   document.head.appendChild(style)
 }
 
+const PANEL_ID = 'geoharness-gis-panel'
+
+function setGeoHarnessPanelOpen(open: boolean) {
+  if (typeof document === 'undefined') return
+  const panel = document.getElementById(PANEL_ID)
+  if (panel === null) return
+  panel.hidden = !open
+  for (const trigger of document.querySelectorAll<HTMLElement>('[data-geoharness-toggle]')) {
+    trigger.setAttribute('aria-expanded', String(open))
+  }
+  if (open) panel.focus()
+  else document.querySelector<HTMLElement>('[data-geoharness-toggle]')?.focus()
+}
+
 function BrandMark({ small = false }: { small?: boolean }) {
   return (
-    <span className={small ? 'gh-brand-mark gh-brand-mark--small' : 'gh-brand-mark'} aria-hidden="true">
-      <span className="gh-brand-mark__orbit" />
-      <span className="gh-brand-mark__pin" />
-    </span>
+    <span className={small ? 'gh-brand-mark gh-brand-mark--small' : 'gh-brand-mark'} aria-hidden="true">⌖</span>
   )
 }
 
@@ -314,7 +325,7 @@ function GeoMap({
   )
 }
 
-function GeoHarnessShell() {
+function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
   const initialScenario = SCENARIOS[1] ?? SCENARIOS[0]
   const [selectedId, setSelectedId] = React.useState(initialScenario.id)
   const selected = React.useMemo(
@@ -385,6 +396,8 @@ function GeoHarnessShell() {
   const taskSteps = selected.payload.taskGraph.steps
   const plannedOutputs = taskSteps.flatMap(step => step.outputs)
   const highlightedLayerIds = layerIdsForStep(verification, selectedStepId)
+  const activeBufferDistance = verification?.map_layers.find(layer =>
+    layer.active && layer.aliases.includes('major_road_buffer'))?.metadata.parameters?.distance_m
 
   const runTaskGraph = async () => {
     if (clientConnection === undefined || runStatus === 'running') return
@@ -473,8 +486,8 @@ function GeoHarnessShell() {
         <div className="gh-brand">
           <BrandMark />
           <span>
-            <strong>GeoHarness</strong>
-            <small>Agentic GIS Workspace</small>
+            <strong>GIS Workspace</strong>
+            <small>GeoHarness · official data</small>
           </span>
         </div>
         <div className="gh-launcher">
@@ -492,6 +505,7 @@ function GeoHarnessShell() {
             ))}
           </select>
           <span className="gh-status"><i /> {layers.length} layers · {featureCount} features</span>
+          {onClose !== undefined && <button type="button" className="gh-drawer-close" onClick={onClose} aria-label="Close GIS workspace">×</button>}
         </div>
       </header>
 
@@ -565,6 +579,9 @@ function GeoHarnessShell() {
               <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
                 {taskSteps.map((step, index) => {
                   const status = stepStatus(verification, step.id)
+                  const title = step.id === 'buffer_major_roads' && typeof activeBufferDistance === 'number'
+                    ? `Create ${activeBufferDistance} m road buffer`
+                    : step.title
                   return <li
                   className={`is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`}
                   data-step-id={step.id}
@@ -574,7 +591,7 @@ function GeoHarnessShell() {
                   <button type="button" className="gh-step-button" onClick={() => setSelectedStepId(step.id)}>
                   <i>{stepIcon(status, index)}</i>
                   <span>
-                    <b>{step.title}</b>
+                    <b>{title}</b>
                     <small>{step.tool} · deps {step.dependencies.length === 0 ? '—' : step.dependencies.join(', ')}</small>
                     {step.outputs.length > 0 && <small>→ {step.outputs.join(', ')}</small>}
                   </span>
@@ -614,8 +631,38 @@ function GeoHarnessShell() {
   )
 }
 
-function GeoHarnessBadge() {
-  return <div className="gh-shell-badge" data-geoharness-plugin="loaded"><BrandMark small /> GeoHarness</div>
+function GeoHarnessHeaderAction() {
+  return <button
+    type="button"
+    className="gh-header-action"
+    data-geoharness-toggle
+    aria-controls={PANEL_ID}
+    aria-expanded="false"
+    onClick={() => {
+      const panel = typeof document === 'undefined' ? null : document.getElementById(PANEL_ID)
+      setGeoHarnessPanelOpen(panel === null || panel.hidden === true)
+    }}
+  ><BrandMark small /> GIS 地图</button>
+}
+
+function GeoHarnessPanel() {
+  return <section
+    id={PANEL_ID}
+    className="gh-overlay"
+    data-geoharness-plugin="loaded"
+    role="dialog"
+    aria-label="GeoHarness GIS workspace"
+    aria-modal="false"
+    tabIndex={-1}
+    hidden
+    onKeyDown={event => {
+      if (event.key === 'Escape') setGeoHarnessPanelOpen(false)
+    }}
+  >
+    <div className="gh-drawer">
+      <GeoHarnessShell onClose={() => setGeoHarnessPanelOpen(false)} />
+    </div>
+  </section>
 }
 
 export const inject = ['slots', 'connection'] as const
@@ -623,17 +670,16 @@ export const inject = ['slots', 'connection'] as const
 export function apply(ctx: ClientContext) {
   clientConnection = ctx.connection
   installStyles()
-  ctx.slots.inject('conversation.view', () => ctx.slots.register({
-    name: 'conversation.view',
-    id: 'geoharness',
-    order: 20,
-    label: 'GeoHarness',
-  }, GeoHarnessShell))
+  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'geoharness-gis',
+    order: 30,
+  }, GeoHarnessHeaderAction))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
-    id: 'geoharness-brand',
-    order: 20,
-  }, GeoHarnessBadge))
+    id: 'geoharness-gis-panel',
+    order: 30,
+  }, GeoHarnessPanel))
 }
 
 // Kept as a value reference so TypeScript preserves the jsx-runtime external.

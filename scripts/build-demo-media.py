@@ -15,7 +15,7 @@ SCENARIOS: dict[str, tuple[list[str], list[int]]] = {
     "03-building-statistics-by-district": (["initial.jpg", "result.jpg"], [1300, 2600]),
     "04-road-accessibility": (["initial.jpg", "result.jpg"], [1300, 2600]),
     "05-parameter-revision": (
-        ["initial.jpg", "result-500m.jpg", "result-1km.jpg"],
+        ["initial.jpg", "result-500m.jpg", "result-200m.jpg"],
         [1100, 1900, 2800],
     ),
     "06-multi-constraint-selection": (["initial.jpg", "result.jpg"], [1300, 2800]),

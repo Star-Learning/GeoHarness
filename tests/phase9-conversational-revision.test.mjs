@@ -34,32 +34,54 @@ async function setup(workspaceRoot) {
   return ctx
 }
 
-test('Scenario 05 revises 500 m to 1 km and reruns only the affected downstream steps', async () => {
+test('Scenario 05 uses the real RPC and GeoPandas provider to revise 500 m to 200 m', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase9-revision-'))
   try {
     const ctx = await setup(temporary)
+    const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
+    let registration
+    registerGeoRpc({
+      connection: {
+        rpc: {
+          handle: (channel, handler, options) => {
+            registration = { channel, handler, options }
+            return async () => {}
+          },
+        },
+      },
+      taskGraph: ctx.taskGraph,
+    })
+    assert.equal(registration.channel, '/geoharness')
+    assert.deepEqual(registration.options, { authority: 'loopback' })
+
     const workspaceKey = 'phase9-revision'
     const expected = JSON.parse(await readFile(join(scenarioRoot, scenarioId, 'expected-result.json'), 'utf8'))
-    const initial = await ctx.taskGraph.runScenario({ scenarioId, workspaceKey })
+    const signal = new AbortController().signal
+    const initialResponse = await registration.handler('scenario/run', {
+      scenario_id: scenarioId,
+      workspace_key: workspaceKey,
+    }, signal)
+    assert.equal(initialResponse.ok, true)
+    const initial = initialResponse.value
     assert.equal(initial.steps.find(step => step.id === 'filter_candidate_buildings').result.data.selected_count, expected.expected.initial_candidate_count)
     assert.equal(initial.run_history.length, 1)
     assert.equal(initial.run_history[0].kind, 'initial')
     const initialLayers = { ...initial.layers }
 
     const revisionPrompt = (await readFile(join(scenarioRoot, scenarioId, 'revision-prompt.txt'), 'utf8')).trim()
-    assert.equal(revisionPrompt, '改成 1 公里。')
-    const revised = await ctx.taskGraph.reviseScenario({
-      scenarioId,
-      workspaceKey,
-      stepId: 'buffer_major_roads',
-      parameterPatch: { distance: 1000, unit: 'meter' },
-      reason: revisionPrompt,
-    })
+    assert.equal(revisionPrompt, '改成 200 米。')
+    const revisedResponse = await registration.handler('scenario/revise', {
+      scenario_id: scenarioId,
+      workspace_key: workspaceKey,
+      revision_prompt: revisionPrompt,
+    }, signal)
+    assert.equal(revisedResponse.ok, true)
+    const revised = revisedResponse.value
 
     assert.equal(revised.status, 'success')
     assert.equal(revised.map_verification.status, 'ready')
     assert.equal(revised.steps.find(step => step.id === 'filter_candidate_buildings').result.data.selected_count, expected.expected.revised_candidate_count)
-    assert.equal(revised.steps.find(step => step.id === 'buffer_major_roads').result.parameters.distance_m, 1000)
+    assert.equal(revised.steps.find(step => step.id === 'buffer_major_roads').result.parameters.distance_m, 200)
     assert.equal(revised.run_history.length, expected.expected.retained_history_entries)
     assert.deepEqual(revised.run_history[1].executed_steps, ['buffer_major_roads', 'filter_candidate_buildings'])
     assert.deepEqual(revised.run_history[1].reused_steps, ['inspect_buildings', 'filter_major_roads', 'transform_major_roads'])
@@ -81,15 +103,16 @@ test('Scenario 05 revises 500 m to 1 km and reruns only the affected downstream 
     assert.equal(oldBuffer.active, false)
     assert.equal(oldBuffer.checks.lineage_matches, true)
     assert.equal(newBuffer.active, true)
-    assert.equal(newBuffer.metadata.parameters.distance_m, 1000)
+    assert.equal(newBuffer.metadata.parameters.distance_m, 200)
     assert.equal(candidate.active, true)
-    assert.equal(candidate.geojson.features.length, 360)
+    assert.equal(candidate.geojson.features.length, 205)
 
     const oracle = await ctx.geo.execute({
       action: 'regression', workspaceKey, scenario_id: scenarioId, layer_aliases: revised.layers,
     })
-    assert.equal(oracle.statistics.revised_candidate_count, 360)
-    assert.equal(oracle.statistics.revised_buffer_distance_m, 1000)
+    assert.equal(oracle.statistics.revised_candidate_count, 205)
+    assert.equal(oracle.statistics.revised_buffer_distance_m, 200)
+    assert.equal(oracle.checks.all_revised_candidates_within_200m, true)
     assert.ok(Object.values(oracle.checks).every(Boolean))
   } finally {
     await rm(temporary, { recursive: true, force: true })
@@ -99,6 +122,7 @@ test('Scenario 05 revises 500 m to 1 km and reruns only the affected downstream 
 test('the conversational RPC parses bounded distance revisions and rejects out-of-scope requests', async () => {
   const { parseDistanceRevision, registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
   assert.equal(parseDistanceRevision('改成 1 公里。'), 1000)
+  assert.equal(parseDistanceRevision('改成 200 米。'), 200)
   assert.equal(parseDistanceRevision('Use 750 m instead'), 750)
   assert.equal(parseDistanceRevision('no distance here'), null)
   assert.equal(parseDistanceRevision('改成 1000 公里'), null)
@@ -118,10 +142,10 @@ test('the conversational RPC parses bounded distance revisions and rejects out-o
   const accepted = await registration.handler('scenario/revise', {
     scenario_id: scenarioId,
     workspace_key: 'phase9-rpc',
-    revision_prompt: '改成 1 公里。',
+    revision_prompt: '改成 200 米。',
   }, signal)
   assert.equal(accepted.ok, true)
-  assert.deepEqual(revisions[0].parameterPatch, { distance: 1000, unit: 'meter' })
+  assert.deepEqual(revisions[0].parameterPatch, { distance: 200, unit: 'meter' })
   assert.equal(revisions[0].stepId, 'buffer_major_roads')
 
   const badDistance = await registration.handler('scenario/revise', {
@@ -136,5 +160,6 @@ test('the conversational RPC parses bounded distance revisions and rejects out-o
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   assert.match(client, /scenario\/revise/)
   assert.match(client, /revisionPrompt/)
+  assert.match(client, /activeBufferDistance/)
   assert.match(client, /rerun.*reused/)
 })

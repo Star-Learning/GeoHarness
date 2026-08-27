@@ -17,6 +17,7 @@
     "MN-102": 8,
     "MN-103": 111
   },
+  "road_200m_candidate_count": 205,
   "road_500m_candidate_count": 329,
   "road_1000m_candidate_count": 360,
   "multi_constraint_candidate_count": 27
