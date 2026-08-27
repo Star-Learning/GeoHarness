@@ -31,7 +31,7 @@ export async function validateScenarioPackage(id) {
   if (id === '07-official-nyc-building-inspection') {
     assert.equal(manifest.fixture_profile, 'official-nyc-open-data-5zhs-2jue-2026-08-27')
   } else {
-    assert.equal(manifest.fixture_profile, 'deterministic-manhattan-scale-v1')
+    assert.equal(manifest.fixture_profile, 'official-nyc-open-data-lower-manhattan-2026-08-27')
   }
   assert.ok(prompt.trim().length > 0)
   assert.ok(Array.isArray(manifest.data) && manifest.data.length > 0)
@@ -73,14 +73,16 @@ export async function validateScenarioPackage(id) {
     assert.equal(collection.type, 'FeatureCollection')
     assert.equal(collection.name, basename(dataReference, '.geojson'))
     assert.equal(collection.crs?.properties?.name, 'urn:ogc:def:crs:OGC:1.3:CRS84')
+    assert.equal(collection.metadata?.fixture, false)
+    assert.equal(collection.metadata?.official_data, true)
+    assert.equal(collection.metadata?.terms, 'NYC Open Data Terms of Use')
     if (id === '07-official-nyc-building-inspection') {
-      assert.equal(collection.metadata?.fixture, false)
-      assert.equal(collection.metadata?.official_data, true)
       assert.equal(collection.metadata?.dataset_id, '5zhs-2jue')
-      assert.equal(collection.metadata?.terms, 'NYC Open Data Terms of Use')
     } else {
-      assert.equal(collection.metadata?.fixture, true)
-      assert.equal(collection.metadata?.license, 'CC0-1.0')
+      assert.ok(Array.isArray(collection.metadata?.dataset_ids))
+      assert.ok(collection.metadata.dataset_ids.length > 0)
+      assert.ok(collection.metadata.dataset_ids.every(value => /^[a-z0-9]{4}-[a-z0-9]{4}$/.test(value)))
+      assert.match(collection.metadata?.processing ?? '', /official|Official|Broadway|bbox/)
     }
     assert.ok(Array.isArray(collection.features) && collection.features.length > 0)
     for (const feature of collection.features) {

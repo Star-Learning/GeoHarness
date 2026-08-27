@@ -3,8 +3,8 @@
 ## Scenario
 
 - ID: `06-multi-constraint-selection`
-- Region: Manhattan, New York City
-- Fixture profile: `deterministic-manhattan-scale-v1`
+- Region: Lower Manhattan, New York City
+- Data profile: `official-nyc-open-data-lower-manhattan-2026-08-27`
 
 ## Real user need
 
@@ -12,23 +12,23 @@
 
 ## User prompt
 
-> 找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。
+> 找出距离主要道路 Broadway 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。
 
 ## Why this Demo exists
 
-这个 Scenario 将一个真实空间需求、独立数据、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+这个 Scenario 将一个真实空间需求、独立官方数据副本、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。提交后的快照可离线复现，不依赖运行时联网。
 
 ## Input data
 
 | File | Dataset | Original provider | License / terms | Download / generation date |
 | --- | --- | --- | --- | --- |
-| `data/buildings.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
-| `data/roads.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
-| `data/rivers.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+| `data/buildings.geojson` | NYC Open Data BUILDING (`5zhs-2jue`) | NYC Office of Technology and Innovation | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
+| `data/roads.geojson` | NYC Open Data Centerline (`inkn-q76z`) | NYC Office of Technology and Innovation | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
+| `data/rivers.geojson` | Community Districts land/water difference (`5crt-au7u`, `6ak9-vek3`) | NYC Department of City Planning | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
 
 ### Data source and processing
 
-这些文件是 GeoHarness 为稳定回归测试创作的、小型 Manhattan-scale 合成矢量 fixture，并非 NYC 官方地籍或道路数据。坐标锚定在 Manhattan 附近，使用 OGC:CRS84；几何和属性由 `scripts/build_scenarios/build-fixtures.mjs` 确定性生成。处理包括固定 3.2 km 测试范围、最小字段集和 7 位小数坐标量化；未做几何简化。数据按 CC0-1.0 提供。
+这些文件全部来自仓库内 `data/official-sources/nyc/` 的 NYC Open Data 固定快照。建筑数据从固定 bbox 的 2,622 个官方要素中做空间均匀的 360 要素系统抽样；道路保留官方四车道以上 Centerline，并将真实 Broadway 段标记为本 Demo 的 `major` corridor；District 使用官方 101–103 边界；Hudson/East River 由官方含水域边界减去陆地区边界后分侧得到。处理脚本不重画建筑、道路或 District 几何，完整来源、查询、哈希和条款见 [官方源数据说明](../../../data/official-sources/nyc/README.md)。
 
 ## Expected Agent behavior
 
@@ -48,7 +48,7 @@
 
 ## Success criteria
 
-得到 2 个同时满足 road distance <= 300 m 且 river distance >= 800 m 的建筑。
+得到 27 个同时满足 road distance <= 300 m 且 river distance >= 800 m 的真实建筑。
 
 ## Demo focus
 
@@ -62,7 +62,7 @@
 - [Animated Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
 
-真实结果画面选择 `exclude_river_buffer`，道路邻近和河流排除两类 Buffer 同时可见，最终 2 个 `candidate_buildings` 与 Task step 同步高亮。
+真实结果画面选择 `exclude_river_buffer`，道路邻近和河流排除两类 Buffer 同时可见，最终 27 个 `candidate_buildings` 与 Task step 同步高亮。
 
 ## Run and verify independently
 
@@ -70,4 +70,4 @@
 node --test tests/regression/06-multi-constraint-selection.regression.test.mjs
 ```
 
-独立回归验证结果为 2，并分别复算 road distance ≤ 300 m、river distance ≥ 800 m，避免只对 Tool 文本做字符串断言。
+独立回归验证结果为 27，并分别复算 road distance ≤ 300 m、river distance ≥ 800 m。

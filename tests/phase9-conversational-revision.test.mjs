@@ -83,12 +83,12 @@ test('Scenario 05 revises 500 m to 1 km and reruns only the affected downstream 
     assert.equal(newBuffer.active, true)
     assert.equal(newBuffer.metadata.parameters.distance_m, 1000)
     assert.equal(candidate.active, true)
-    assert.equal(candidate.geojson.features.length, 8)
+    assert.equal(candidate.geojson.features.length, 360)
 
     const oracle = await ctx.geo.execute({
       action: 'regression', workspaceKey, scenario_id: scenarioId, layer_aliases: revised.layers,
     })
-    assert.equal(oracle.statistics.revised_candidate_count, 8)
+    assert.equal(oracle.statistics.revised_candidate_count, 360)
     assert.equal(oracle.statistics.revised_buffer_distance_m, 1000)
     assert.ok(Object.values(oracle.checks).every(Boolean))
   } finally {

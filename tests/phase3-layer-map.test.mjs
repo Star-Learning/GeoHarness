@@ -77,8 +77,8 @@ test('uploaded GeoJSON is validated before registration', async () => {
   const scenario = await loadScenario('01-building-data-inspection')
   const layer = registry.registerUploadedLayer('my-buildings.geojson', scenario.data.buildings)
   assert.equal(layer.source, 'upload')
-  assert.equal(layer.featureCount, 12)
-  assert.equal(layer.geometry, 'Polygon')
+  assert.equal(layer.featureCount, 360)
+  assert.equal(layer.geometry, 'MultiPolygon')
   assert.throws(() => registry.registerUploadedLayer('bad.json', { type: 'FeatureCollection' }), /valid GeoJSON/)
 })
 
@@ -95,6 +95,8 @@ test('the Phase 3 client embeds all Scenario data and implements map interaction
   assert.match(source, /NYC OPEN DATA/)
   assert.match(source, /Official NYC Open Data/)
   assert.match(source, /type="range"/)
+  assert.match(source, /const opacity = Number\(event\.currentTarget\.value\)/)
+  assert.doesNotMatch(source, /setLayerOpacity\(current, layer\.id, Number\(event\.currentTarget\.value\)\)/)
   assert.match(output, /__GEOHARNESS_SCENARIOS__/)
   for (const id of [
     '01-building-data-inspection', '02-river-building-query',

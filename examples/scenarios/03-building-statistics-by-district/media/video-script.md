@@ -1,35 +1,35 @@
-# Scenario 03 视频脚本
+# Building Statistics by District 视频脚本
 
 ## 视频标题建议
 
-一句话，让 AI 完成分区建筑统计
+一句话让 AI 自动做分区统计。
 
 ## 开场问题
 
-按行政区统计建筑数量和面积，既有几何计算，也有空间关联与分组汇总。能否让结果表和地图保持同一个真相源？
+如果输入换成带真实字段、复杂 MultiPolygon/MultiLineString 和官方行政区边界的 NYC Open Data，GeoHarness 是否仍能把一句空间需求变成可验证 GIS 工作流？
 
 ## 用户输入
 
-选择 Scenario 03，展示输入：
+在 DeepSeek Harness 的 `GeoHarness` 标签选择 `03-building-statistics-by-district`，输入：
 
 > 按 Community District 统计建筑数量和建筑总面积。
 
 ## Agent Plan
 
-镜头展示检查两类输入、计算建筑面积、Spatial Join、Aggregate by Region 五个步骤。指出汇总 step 直接依赖真实建筑与 District Layers。
+展示本 Scenario 的真实 Task Graph：`inspect_dataset` → `calculate_geometry` → `spatial_join` → `aggregate_by_region`。每一步只引用 Layer Registry 返回的 Layer ID。
 
 ## 关键地图变化
 
-运行后出现 `buildings_with_geometry`、`buildings_with_district` 与 `district_statistics`。选中聚合 step，两个 District 结果面在地图高亮，同时 Layer Registry 保留派生 lineage。
+运行前展示本目录的 NYC Open Data 输入 Layer；运行后选择产生最终空间结果的 Task step，使派生 Layer、Registry 行与实际地图要素同步高亮。
 
 ## 最终结果
 
-口播：两个 Demo District 分别统计到 6 个建筑，总数为 12；两个分区的建筑面积总和均为正，空间 oracle 与 Task Graph 输出一致。
+三个真实 Community District 分别统计到 162、40、158 个建筑，总计 360 个，面积总和为正。
 
 ## 继续追问
 
-切换 District 统计层的透明度，点击分区要素查看 `district_id` 和汇总字段，演示表格语义如何回到地图对象。
+打开任一要素的 Feature Inspector，核对官方 OBJECTID/BIN、Centerline、District 或派生统计字段；切换图层显隐和透明度，确认地图不是静态结果图。
 
 ## 结尾一句
 
-GeoHarness 把空间关联、分区汇总和专题地图连成一条可验证链路。
+GeoHarness 的演示输入、GIS 计算与地图验证现在都建立在可追溯的 NYC Open Data 快照上。

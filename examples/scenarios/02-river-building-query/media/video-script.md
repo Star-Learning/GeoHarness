@@ -1,35 +1,35 @@
-# Scenario 02 视频脚本
+# River Building Query 视频脚本
 
 ## 视频标题建议
 
-只说一句话，AI 自动找出河流附近的建筑
+只说一句话，AI 自己完成 Buffer + 空间筛选。
 
 ## 开场问题
 
-“河流 500 米以内”看似简单，实际需要理解 CRS、做米制投影、生成缓冲区、空间筛选并统计。用户是否还需要逐个选择工具？
+如果输入换成带真实字段、复杂 MultiPolygon/MultiLineString 和官方行政区边界的 NYC Open Data，GeoHarness 是否仍能把一句空间需求变成可验证 GIS 工作流？
 
 ## 用户输入
 
-选择 Scenario 02，展示输入：
+在 DeepSeek Harness 的 `GeoHarness` 标签选择 `02-river-building-query`，输入：
 
 > 找出距离 Hudson River 和 East River 500 米以内的建筑，并告诉我一共有多少栋。
 
 ## Agent Plan
 
-快速扫过六步 DAG：检查建筑和河流、转换到 EPSG:32618、创建 500 m buffer、筛选建筑、汇总结果。提醒观众每个 step 都声明依赖与输出 Layer。
+展示本 Scenario 的真实 Task Graph：`inspect_dataset` → `transform_crs` → `create_buffer` → `spatial_filter` → `analyze_distribution`。每一步只引用 Layer Registry 返回的 Layer ID。
 
 ## 关键地图变化
 
-运行前只显示两条河流与 12 个建筑。运行后地图出现 `rivers_metric`、`river_buffer` 和 `candidate_buildings`；点击筛选 step，5 个候选在地图和 Layer Registry 同步高亮。
+运行前展示本目录的 NYC Open Data 输入 Layer；运行后选择产生最终空间结果的 Task step，使派生 Layer、Registry 行与实际地图要素同步高亮。
 
 ## 最终结果
 
-口播：独立 GeoPandas oracle 复算确认候选为 5，且每个候选到 Hudson River 或 East River 的距离都不超过 500 米；Map Verification 为 ready。
+生成 river_buffer 和 candidate_buildings，并得到 132 个真实候选建筑。
 
 ## 继续追问
 
-关闭 `river_buffer` 再打开，比较中间空间范围；点击候选建筑检查其属性，说明每一步都能在地图上追溯。
+打开任一要素的 Feature Inspector，核对官方 OBJECTID/BIN、Centerline、District 或派生统计字段；切换图层显隐和透明度，确认地图不是静态结果图。
 
 ## 结尾一句
 
-用户描述目标，GeoHarness 自己完成投影、Buffer、筛选与验证。
+GeoHarness 的演示输入、GIS 计算与地图验证现在都建立在可追溯的 NYC Open Data 快照上。

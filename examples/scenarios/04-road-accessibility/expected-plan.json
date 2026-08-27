@@ -9,6 +9,7 @@
   ],
   "constraints": {
     "road_class": "major",
+    "corridor": "BROADWAY",
     "distance": 300,
     "unit": "meter",
     "group_field": "district_id"

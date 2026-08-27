@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "id": "03-building-statistics-by-district",
   "title": "Building Statistics by District",
-  "region": "Manhattan, New York City",
+  "region": "Lower Manhattan, New York City",
   "prompt": "prompt.txt",
   "revision_prompt": null,
   "data": [
@@ -13,5 +13,5 @@
   "expected_result": "expected-result.json",
   "task_graph": "task-graph.json",
   "supports_revision": false,
-  "fixture_profile": "deterministic-manhattan-scale-v1"
+  "fixture_profile": "official-nyc-open-data-lower-manhattan-2026-08-27"
 }

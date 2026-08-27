@@ -85,7 +85,7 @@ calls directly to arbitrary HTTP or filesystem paths.
 ## CRS and distance rules
 
 - Input Scenario GeoJSON is OGC:CRS84 / EPSG:4326.
-- Metric operations default to UTM zone 18N (`EPSG:32618`), appropriate for Manhattan fixtures.
+- Metric operations default to UTM zone 18N (`EPSG:32618`), appropriate for the frozen Lower Manhattan snapshots.
 - Buffers reject zero/negative distances and unknown units.
 - Spatial operands are transformed to a common CRS before predicates.
 - GeoJSON export uses EPSG:4326; GeoPackage preserves the canonical layer CRS.

@@ -67,8 +67,8 @@ test('successful Task steps resolve to registry lineage and canonical map GeoJSO
     const candidate = verification.map_layers.find(layer => layer.aliases.includes('candidate_buildings'))
     assert.equal(candidate.step_id, 'filter_buildings')
     assert.equal(candidate.metadata.generated_by, 'filter_buildings')
-    assert.equal(candidate.metadata.feature_count, 5)
-    assert.equal(candidate.geojson.features.length, 5)
+    assert.equal(candidate.metadata.feature_count, 132)
+    assert.equal(candidate.geojson.features.length, 132)
     assert.ok(Object.values(candidate.checks).every(Boolean))
     assert.deepEqual(
       verification.step_bindings.find(binding => binding.step_id === 'filter_buildings').outputs,
@@ -116,7 +116,7 @@ test('the browser projection adds derived layers and selects map layers by Task 
     const layers = plugin.mergeVerificationLayers([], result.map_verification)
     assert.deepEqual([...layers].map(layer => layer.name), ['rivers_metric', 'river_buffer', 'candidate_buildings'])
     const candidate = layers.find(layer => layer.name === 'candidate_buildings')
-    assert.equal(candidate.featureCount, 5)
+    assert.equal(candidate.featureCount, 132)
     assert.equal(candidate.generatedBy, 'filter_buildings')
     assert.equal(candidate.source, 'derived')
     assert.deepEqual(

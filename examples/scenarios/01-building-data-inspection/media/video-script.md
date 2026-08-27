@@ -1,35 +1,35 @@
-# Scenario 01 视频脚本
+# Building Data Inspection 视频脚本
 
 ## 视频标题建议
 
-AI 能不能自己看懂一份 GIS 建筑数据？
+AI 能不能自己看懂一份 GIS 数据？
 
 ## 开场问题
 
-拿到一份陌生的建筑 GeoJSON，通常要先看坐标系、几何类型、字段、缺失值和几何质量。GeoHarness 能不能从一句模糊需求开始，自己完成这些检查？
+如果输入换成带真实字段、复杂 MultiPolygon/MultiLineString 和官方行政区边界的 NYC Open Data，GeoHarness 是否仍能把一句空间需求变成可验证 GIS 工作流？
 
 ## 用户输入
 
-屏幕打开 Harness 的 `GeoHarness` 会话标签，选择 Scenario 01，展示输入：
+在 DeepSeek Harness 的 `GeoHarness` 标签选择 `01-building-data-inspection`，输入：
 
 > 帮我看看这个建筑数据有什么特点。
 
 ## Agent Plan
 
-镜头依次停留在 `Inspect building dataset`、`Calculate building geometry`、`Summarize fields and geometry`。强调 Agent 使用正式 Geo Tools，并让中间 Layer 进入 Registry。
+展示本 Scenario 的真实 Task Graph：`inspect_dataset` → `calculate_geometry` → `analyze_distribution`。每一步只引用 Layer Registry 返回的 Layer ID。
 
 ## 关键地图变化
 
-点击运行前，地图只有 12 个输入建筑；运行后出现 `buildings_with_geometry`，点击第二个 Task step，让该 Layer 的 12 个真实要素与地图同步高亮。
+运行前展示本目录的 NYC Open Data 输入 Layer；运行后选择产生最终空间结果的 Task step，使派生 Layer、Registry 行与实际地图要素同步高亮。
 
 ## 最终结果
 
-口播：结果确认共有 12 个 Polygon、坐标系为 OGC:CRS84、几何全部有效，`height_m` 有 1 个缺失值，建筑面积均由投影后的真实几何计算。
+报告 360 个真实 MultiPolygon、OGC:CRS84、0 个缺失 height_m，且所有几何有效。
 
 ## 继续追问
 
-点击任一建筑打开 Feature Inspector，展示 `building_id`、用途和高度；切换 Layer 显隐说明结果不是一段文本，而是可验证地图状态。
+打开任一要素的 Feature Inspector，核对官方 OBJECTID/BIN、Centerline、District 或派生统计字段；切换图层显隐和透明度，确认地图不是静态结果图。
 
 ## 结尾一句
 
-GeoHarness 先理解数据，再决定该用哪些 GIS 步骤。
+GeoHarness 的演示输入、GIS 计算与地图验证现在都建立在可追溯的 NYC Open Data 快照上。

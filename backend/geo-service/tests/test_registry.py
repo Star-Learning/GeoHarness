@@ -11,18 +11,18 @@ def test_registry_persists_canonical_layer_metadata_and_data(registry, register_
     buildings = register_scenario_layer("01-building-data-inspection", "buildings")
     assert buildings.layer_id == "layer_0001"
     assert buildings.name == "buildings"
-    assert buildings.geometry == "Polygon"
+    assert buildings.geometry == "MultiPolygon"
     assert buildings.crs == "EPSG:4326"
-    assert buildings.feature_count == 12
+    assert buildings.feature_count == 360
     assert buildings.source == "scenario"
     assert len(buildings.bbox) == 4
 
     restored = LayerRegistry(registry.root)
     assert restored.metadata(buildings.layer_id) == buildings
-    assert len(restored.get(buildings.layer_id)) == 12
+    assert len(restored.get(buildings.layer_id)) == 360
     geojson = restored.geojson(buildings.layer_id)
     assert geojson["type"] == "FeatureCollection"
-    assert len(geojson["features"]) == 12
+    assert len(geojson["features"]) == 360
 
 
 def test_registry_serializes_real_datetime_attributes_to_geojson(registry):

@@ -28,10 +28,10 @@ source, and it is not a separate Chat + Map website.
 - Verified `Task Step ↔ Layer ↔ Map` projection over the official loopback Connection RPC.
 - Conversational Scenario 05 revision from 500 m to 1 km with downstream-only rerun and retained
   lineage.
-- Six independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
+- Seven independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
   test, README, screenshots, animated Demo and video script.
-- One supplemental official real-data Scenario backed by an audited NYC Open Data snapshot and
-  the same Tool, Layer Registry, Task Graph and map-verification path.
+- Every Scenario is backed by a dated, audited NYC Open Data snapshot and uses the same Tool,
+  Layer Registry, Task Graph and map-verification path.
 
 ## Architecture
 
@@ -84,18 +84,19 @@ dsh --profile web --no-open
 ```
 
 In Harness, open a session for this repository, choose the `GeoHarness` tab, select a Scenario and
-press **Run + verify on map**. The deterministic GIS workflows do not require a model API key.
+press **Run + verify on map**. The frozen official-data workflows do not require a model API key.
 
-## Six deterministic v1.0 Demos
+## Seven official-data v1.0 Demos
 
 | Scenario | Verified result | Package | Demo |
 | --- | --- | --- | --- |
-| 01 Building Data Inspection | 12 valid Polygons; 1 missing height | [README](examples/scenarios/01-building-data-inspection/README.md) | [GIF](examples/scenarios/01-building-data-inspection/media/demo.gif) |
-| 02 River Building Query | 5 buildings within 500 m | [README](examples/scenarios/02-river-building-query/README.md) | [GIF](examples/scenarios/02-river-building-query/media/demo.gif) |
-| 03 Statistics by District | 6 + 6 buildings | [README](examples/scenarios/03-building-statistics-by-district/README.md) | [GIF](examples/scenarios/03-building-statistics-by-district/media/demo.gif) |
-| 04 Road Accessibility | 3 candidates; District split 3/0 | [README](examples/scenarios/04-road-accessibility/README.md) | [GIF](examples/scenarios/04-road-accessibility/media/demo.gif) |
-| 05 Parameter Revision | 500 m: 4 → 1 km: 8; 2 rerun / 3 reused | [README](examples/scenarios/05-parameter-revision/README.md) | [GIF](examples/scenarios/05-parameter-revision/media/demo.gif) |
-| 06 Multi-Constraint Selection | 2 candidates satisfying both distances | [README](examples/scenarios/06-multi-constraint-selection/README.md) | [GIF](examples/scenarios/06-multi-constraint-selection/media/demo.gif) |
+| 01 Building Data Inspection | 360 valid MultiPolygons; 0 missing height | [README](examples/scenarios/01-building-data-inspection/README.md) | [GIF](examples/scenarios/01-building-data-inspection/media/demo.gif) |
+| 02 River Building Query | 132 buildings within 500 m | [README](examples/scenarios/02-river-building-query/README.md) | [GIF](examples/scenarios/02-river-building-query/media/demo.gif) |
+| 03 Statistics by District | 360 buildings split 162 / 40 / 158 | [README](examples/scenarios/03-building-statistics-by-district/README.md) | [GIF](examples/scenarios/03-building-statistics-by-district/media/demo.gif) |
+| 04 Broadway Accessibility | 249 candidates; District split 130 / 8 / 111 | [README](examples/scenarios/04-road-accessibility/README.md) | [GIF](examples/scenarios/04-road-accessibility/media/demo.gif) |
+| 05 Parameter Revision | 500 m: 329 → 1 km: 360; 2 rerun / 3 reused | [README](examples/scenarios/05-parameter-revision/README.md) | [GIF](examples/scenarios/05-parameter-revision/media/demo.gif) |
+| 06 Multi-Constraint Selection | 27 candidates satisfying both distances | [README](examples/scenarios/06-multi-constraint-selection/README.md) | [GIF](examples/scenarios/06-multi-constraint-selection/media/demo.gif) |
+| 07 Official NYC Building Inspection | 133 valid MultiPolygons; 2 missing construction years; 1830–2021 | [README](examples/scenarios/07-official-nyc-building-inspection/README.md) | [GIF](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif) |
 
 Every Scenario follows the same rule:
 
@@ -103,25 +104,21 @@ Every Scenario follows the same rule:
 one need = one folder = one data package = one test = one Demo = one video script
 ```
 
-The committed Manhattan-scale fixtures are small, deterministic CC0-1.0 project data. They are
-not represented as official NYC datasets; provenance and processing are recorded in every
-Scenario README.
+Scenarios 01–06 use a frozen Lower Manhattan snapshot assembled from official NYC `BUILDING`,
+`Centerline`, `Hydrography` and `Community District` datasets. The untouched downloaded responses
+are kept under [`data/official-sources/nyc/`](data/official-sources/nyc/README.md); normalized derivatives are reproducible and every
+Scenario still carries its own data copy. Source dataset IDs, queries, hashes, snapshot date and
+processing steps are recorded there and in every Scenario README.
 
-## Official real-data Demo
+## Scenario 07 focused snapshot
 
-Scenario 07 uses 133 real Lower Manhattan building MultiPolygons from the NYC Open Data
+Scenario 07 remains a focused, independent 133-feature Lower Manhattan snapshot from the NYC Open Data
 `BUILDING` dataset (`5zhs-2jue`). Its fixed-bounds snapshot, publisher, query URL, source update,
-processing, terms and independent GeoPandas oracle are committed with the Scenario. It does not
-replace the six deterministic v1.0 regression packages.
-
-| Scenario | Verified result | Package | Demo |
-| --- | --- | --- | --- |
-| 07 Official NYC Building Inspection | 133 valid MultiPolygons; 2 missing construction years; 1830–2021 | [README](examples/scenarios/07-official-nyc-building-inspection/README.md) | [GIF](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif) |
+processing, terms and independent GeoPandas oracle are committed with the Scenario.
 
 ## Verification
 
-Run the complete build, six deterministic regressions, the official real-data regression and the
-Python backend suite:
+Run the complete build, all seven official-data regressions and the Python backend suite:
 
 ```sh
 pnpm test
@@ -137,16 +134,18 @@ Other useful commands:
 
 ```sh
 pnpm run verify:phase9       # 500 m → 1 km partial rerun
+pnpm run check:official-data # verify official source hashes and derived statistics
 pnpm run build:media         # rebuild GIFs from the committed real screenshots
-pnpm run check:scenarios     # prove generated fixtures are fresh
+pnpm run check:scenarios     # prove generated official-data packages are fresh
 pnpm peers check             # confirm exact Harness peer compatibility
 ```
 
 ## v1.0 boundaries
 
 - Vector data only: GeoJSON/GeoPackage/CSV export; no raster, point cloud or GEE pipeline.
-- The six v1.0 regression Scenarios use deterministic project-created fixtures. Scenario 07 is a
-  separate, dated NYC Open Data snapshot and records the exact source query and terms.
+- All seven regression Scenarios use committed, dated NYC Open Data snapshots. Refreshes must be
+  explicit: download, hash validation, derivative rebuild, independent oracle and reviewed expected
+  statistics must all pass before a source update is accepted.
 - Natural-language revision is deliberately bounded to Scenario 05 distance changes with an
   explicit number and unit; arbitrary replanning is not claimed.
 - No external model credential is stored in this repository. Tool schemas and deterministic GIS

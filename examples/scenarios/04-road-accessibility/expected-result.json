@@ -6,14 +6,15 @@
     "accessibility_by_district"
   ],
   "expected": {
-    "accessible_buildings_count": 3,
+    "accessible_buildings_count": 249,
     "district_counts": {
-      "MN-DEMO-01": 3,
-      "MN-DEMO-02": 0
+      "MN-101": 130,
+      "MN-102": 8,
+      "MN-103": 111
     }
   },
   "checks": [
-    "accessible_buildings_count == 3",
+    "accessible_buildings_count == 249",
     "all_candidates_within_300m_of_major_road == true"
   ]
 }

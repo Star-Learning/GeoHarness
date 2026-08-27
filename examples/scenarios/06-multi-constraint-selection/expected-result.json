@@ -5,10 +5,10 @@
     "candidate_buildings"
   ],
   "expected": {
-    "candidate_buildings_count": 2
+    "candidate_buildings_count": 27
   },
   "checks": [
-    "candidate_buildings_count == 2",
+    "candidate_buildings_count == 27",
     "all_candidates_within_300m_of_major_road == true",
     "all_candidates_at_least_800m_from_river == true"
   ]

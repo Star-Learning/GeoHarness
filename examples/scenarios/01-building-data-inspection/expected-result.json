@@ -3,15 +3,15 @@
     "buildings"
   ],
   "expected": {
-    "feature_count": 12,
-    "geometry_type": "Polygon",
+    "feature_count": 360,
+    "geometry_type": "MultiPolygon",
     "crs": "OGC:CRS84",
     "invalid_geometry_count": 0,
-    "missing_height_m_count": 1
+    "missing_height_m_count": 0
   },
   "checks": [
-    "feature_count == 12",
-    "geometry_type == Polygon",
+    "feature_count == 360",
+    "geometry_type == MultiPolygon",
     "invalid_geometry_count == 0",
     "total_building_area_m2 > 0"
   ]

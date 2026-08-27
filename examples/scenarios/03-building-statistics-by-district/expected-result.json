@@ -4,15 +4,16 @@
     "district_statistics"
   ],
   "expected": {
-    "total_buildings_count": 12,
+    "total_buildings_count": 360,
     "district_counts": {
-      "MN-DEMO-01": 6,
-      "MN-DEMO-02": 6
+      "MN-101": 162,
+      "MN-102": 40,
+      "MN-103": 158
     }
   },
   "checks": [
-    "total_buildings_count == 12",
-    "district_count == 2",
+    "total_buildings_count == 360",
+    "district_count == 3",
     "all_district_area_sums_m2 > 0"
   ]
 }

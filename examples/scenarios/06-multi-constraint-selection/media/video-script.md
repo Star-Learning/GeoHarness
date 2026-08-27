@@ -1,35 +1,35 @@
-# Scenario 06 视频脚本
+# Multi-Constraint Selection 视频脚本
 
 ## 视频标题建议
 
-AI 能自己规划一套多约束 GIS 工作流吗？
+从单个 Tool Calling 升级到真正的 Agent Planning。
 
 ## 开场问题
 
-目标同时要求“靠近主要道路”和“远离两条河流”。这不是单个 Tool Calling，而是两个空间条件的组合与布尔逻辑。
+如果输入换成带真实字段、复杂 MultiPolygon/MultiLineString 和官方行政区边界的 NYC Open Data，GeoHarness 是否仍能把一句空间需求变成可验证 GIS 工作流？
 
 ## 用户输入
 
-选择 Scenario 06，展示输入：
+在 DeepSeek Harness 的 `GeoHarness` 标签选择 `06-multi-constraint-selection`，输入：
 
-> 找出距离主要道路 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。
+> 找出距离主要道路 Broadway 300 米以内，同时距离 Hudson River 和 East River 至少 800 米的建筑。
 
 ## Agent Plan
 
-扫过九步 DAG：检查数据、筛主要道路、分别转换道路与河流、创建 300 m 道路 buffer 和 800 m 河流排除 buffer、先选道路候选、再排除河流邻近建筑、最后汇总。
+展示本 Scenario 的真实 Task Graph：`inspect_dataset` → `spatial_filter` → `transform_crs` → `create_buffer` → `spatial_filter` → `analyze_distribution`。每一步只引用 Layer Registry 返回的 Layer ID。
 
 ## 关键地图变化
 
-运行后同时显示两类 Buffer 与多级候选 Layer。选中 `Exclude buildings near rivers`，地图最终只高亮 2 个满足 `inside road buffer AND outside river buffer` 的建筑。
+运行前展示本目录的 NYC Open Data 输入 Layer；运行后选择产生最终空间结果的 Task step，使派生 Layer、Registry 行与实际地图要素同步高亮。
 
 ## 最终结果
 
-口播：独立 oracle 确认结果为 2；它们到主要道路均不超过 300 米，同时到 Hudson River / East River 至少 800 米，所有 Task outputs 都已链接到 verified map Layers。
+得到 27 个同时满足 road distance <= 300 m 且 river distance >= 800 m 的真实建筑。
 
 ## 继续追问
 
-依次点击道路候选 step 与河流排除 step，观察地图从第一道约束到最终布尔结果的变化，说明中间决策可检查、可解释。
+打开任一要素的 Feature Inspector，核对官方 OBJECTID/BIN、Centerline、District 或派生统计字段；切换图层显隐和透明度，确认地图不是静态结果图。
 
 ## 结尾一句
 
-从单个工具调用到多约束规划，GeoHarness 让每一步空间逻辑都能在地图上被证实。
+GeoHarness 的演示输入、GIS 计算与地图验证现在都建立在可追溯的 NYC Open Data 快照上。

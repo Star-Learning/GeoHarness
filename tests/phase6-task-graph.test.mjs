@@ -71,7 +71,7 @@ test('TaskGraphRuntime executes Scenario 02 through the real Geo provider and re
     assert.equal(result.status, 'success')
     assert.equal(result.steps.length, 6)
     assert.ok(result.steps.every(step => step.status === 'success'))
-    assert.equal(result.steps.find(step => step.id === 'filter_buildings').result.data.selected_count, 5)
+    assert.equal(result.steps.find(step => step.id === 'filter_buildings').result.data.selected_count, 132)
     assert.match(result.layers.river_buffer, /^layer[_-]/)
     assert.match(result.layers.candidate_buildings, /^layer[_-]/)
     assert.equal(transitions.length, 12)

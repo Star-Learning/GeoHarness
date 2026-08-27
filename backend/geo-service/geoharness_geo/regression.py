@@ -66,8 +66,8 @@ class ScenarioRegression:
         return {
             "statistics": statistics,
             "checks": {
-                "feature_count": statistics["feature_count"] == 12,
-                "polygon_geometry": statistics["geometry_type"] == "Polygon",
+                "feature_count": statistics["feature_count"] == 360,
+                "multipolygon_geometry": statistics["geometry_type"] == "MultiPolygon",
                 "valid_geometry": statistics["invalid_geometry_count"] == 0,
                 "positive_area": statistics["total_building_area_m2"] > 0,
             },

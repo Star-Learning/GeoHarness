@@ -3,8 +3,8 @@
 ## Scenario
 
 - ID: `05-parameter-revision`
-- Region: Manhattan, New York City
-- Fixture profile: `deterministic-manhattan-scale-v1`
+- Region: Lower Manhattan, New York City
+- Data profile: `official-nyc-open-data-lower-manhattan-2026-08-27`
 
 ## Real user need
 
@@ -12,24 +12,24 @@
 
 ## User prompt
 
-> 找出距离主要道路 500 米以内的建筑。
+> 找出距离主要道路 Broadway 500 米以内的建筑。
 
 Revision: > 改成 1 公里。
 
 ## Why this Demo exists
 
-这个 Scenario 将一个真实空间需求、独立数据、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+这个 Scenario 将一个真实空间需求、独立官方数据副本、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。提交后的快照可离线复现，不依赖运行时联网。
 
 ## Input data
 
 | File | Dataset | Original provider | License / terms | Download / generation date |
 | --- | --- | --- | --- | --- |
-| `data/buildings.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
-| `data/roads.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+| `data/buildings.geojson` | NYC Open Data BUILDING (`5zhs-2jue`) | NYC Office of Technology and Innovation | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
+| `data/roads.geojson` | NYC Open Data Centerline (`inkn-q76z`) | NYC Office of Technology and Innovation | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
 
 ### Data source and processing
 
-这些文件是 GeoHarness 为稳定回归测试创作的、小型 Manhattan-scale 合成矢量 fixture，并非 NYC 官方地籍或道路数据。坐标锚定在 Manhattan 附近，使用 OGC:CRS84；几何和属性由 `scripts/build_scenarios/build-fixtures.mjs` 确定性生成。处理包括固定 3.2 km 测试范围、最小字段集和 7 位小数坐标量化；未做几何简化。数据按 CC0-1.0 提供。
+这些文件全部来自仓库内 `data/official-sources/nyc/` 的 NYC Open Data 固定快照。建筑数据从固定 bbox 的 2,622 个官方要素中做空间均匀的 360 要素系统抽样；道路保留官方四车道以上 Centerline，并将真实 Broadway 段标记为本 Demo 的 `major` corridor；District 使用官方 101–103 边界；Hudson/East River 由官方含水域边界减去陆地区边界后分侧得到。处理脚本不重画建筑、道路或 District 几何，完整来源、查询、哈希和条款见 [官方源数据说明](../../../data/official-sources/nyc/README.md)。
 
 ## Expected Agent behavior
 
@@ -48,7 +48,7 @@ Revision: > 改成 1 公里。
 
 ## Success criteria
 
-初始结果为 4 个建筑；修改后为 8 个；仅 buffer 及其下游步骤重跑。
+初始结果为 329 个真实建筑；修改后为 360 个；仅 buffer 及其下游步骤重跑。
 
 ## Demo focus
 
@@ -59,12 +59,12 @@ Revision: > 改成 1 公里。
 ![Scenario 05 revised 1 km Harness result](screenshots/result-1km.jpg)
 
 - [Initial Harness screenshot](screenshots/initial.jpg)
-- [500 m result — 4 candidates](screenshots/result-500m.jpg)
-- [1 km revised result — 8 candidates](screenshots/result-1km.jpg)
+- [500 m result — 329 candidates](screenshots/result-500m.jpg)
+- [1 km revised result — 360 candidates](screenshots/result-1km.jpg)
 - [Animated revision Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
 
-三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 1 公里。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 8 个当前候选；不是两次相互独立的静态查询。
+三帧动图来自同一个完整 Harness Web execution：先运行 500 m，再通过 `/geoharness/scenario/revise` 提交“改成 1 公里。”。修订画面真实显示 2 轮 history、`2 rerun · 3 reused` 和 360 个当前候选。
 
 ## Run and verify independently
 
@@ -73,4 +73,4 @@ node --test tests/phase9-conversational-revision.test.mjs
 node --test tests/regression/05-parameter-revision.regression.test.mjs
 ```
 
-第一项测试断言 4→8、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。
+第一项测试断言 329→360、只重跑 Buffer 与筛选、上游 Layer ID 复用、旧 Layer lineage 保留及当前地图 active projection；第二项验证本目录 500 m 初始结果。

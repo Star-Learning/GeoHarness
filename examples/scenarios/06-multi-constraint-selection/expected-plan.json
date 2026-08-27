@@ -8,6 +8,7 @@
   ],
   "constraints": {
     "road_class": "major",
+    "corridor": "BROADWAY",
     "maximum_road_distance": 300,
     "minimum_river_distance": 800,
     "unit": "meter",

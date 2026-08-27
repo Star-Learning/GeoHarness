@@ -17,8 +17,8 @@ browser renders only currently active derived aliases.
 The acceptance facts are:
 
 ```text
-initial candidates: 4
-revised candidates: 8
+initial candidates: 329
+revised candidates: 360
 run history entries: 2
 rerun: buffer_major_roads, filter_candidate_buildings
 reused: inspect_buildings, filter_major_roads, transform_major_roads

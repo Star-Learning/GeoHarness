@@ -102,13 +102,13 @@ test('Harness ToolRuntime executes a complete river-buffer workflow through the 
     }, 'phase5-filter')
     assert.equal(filtered.isError, false)
     assert.equal(filtered.value.success, true)
-    assert.equal(filtered.value.data.selected_count, 5)
-    assert.match(filtered.content[0].text, /Selected 5 of 12/)
+    assert.equal(filtered.value.data.selected_count, 132)
+    assert.match(filtered.content[0].text, /Selected 132 of 360/)
     assert.deepEqual(filtered.meta, {
       tool: 'spatial_filter',
       success: true,
       outputs: filtered.value.outputs,
-      summary: 'Selected 5 of 12 input features.',
+      summary: 'Selected 132 of 360 input features.',
     })
   } finally {
     await rm(temporary, { recursive: true, force: true })

@@ -30,11 +30,11 @@ def test_geo_service_health_import_layer_tool_and_geojson(tmp_path: Path, scenar
     )
     assert inspected.status_code == 200
     assert inspected.json()["success"] is True
-    assert inspected.json()["data"]["feature_count"] == 12
+    assert inspected.json()["data"]["feature_count"] == 360
 
     geojson = client.get(f"/layers/{layer_id}/geojson")
     assert geojson.status_code == 200
-    assert len(geojson.json()["features"]) == 12
+    assert len(geojson.json()["features"]) == 360
     assert client.get("/layers/layer_missing").status_code == 404
 
     unknown = client.post("/tools/no_such_tool", json={"parameters": {}})

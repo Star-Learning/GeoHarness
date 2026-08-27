@@ -449,15 +449,20 @@ class GeoTools:
             parameters=parameters,
         )
         distances = joined["distance_m"].dropna()
+        # ``sjoin_nearest`` returns one row per equally-near target. Real
+        # centerline data can therefore duplicate a source feature at road
+        # junctions. Report matched *input features*, not join rows, while
+        # retaining every tied target in the derived output layer.
+        matched_count = int(distances.index.nunique())
         return self._success(
             "nearest_features",
             step_id=step_id,
             inputs=[input_layer, target_layer],
             parameters=parameters,
             outputs=[output.layer_id],
-            summary=f"Calculated nearest targets for {int(distances.count())} features.",
+            summary=f"Calculated nearest targets for {matched_count} features.",
             data={
-                "matched_count": int(distances.count()),
+                "matched_count": matched_count,
                 "minimum_distance_m": None if distances.empty else float(distances.min()),
                 "maximum_distance_m": None if distances.empty else float(distances.max()),
             },

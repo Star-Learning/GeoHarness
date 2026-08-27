@@ -525,7 +525,13 @@ function GeoHarnessShell() {
                   step="0.1"
                   value={layer.opacity}
                   aria-label={`${layer.name} opacity`}
-                  onChange={event => setLayers(current => setLayerOpacity(current, layer.id, Number(event.currentTarget.value)))}
+                  onChange={event => {
+                    // React clears currentTarget after the input callback. Capture the
+                    // primitive before the queued functional update runs, especially
+                    // during a real pointer drag that emits many input events.
+                    const opacity = Number(event.currentTarget.value)
+                    setLayers(current => setLayerOpacity(current, layer.id, opacity))
+                  }}
                 />
               </div>
             </article>)}

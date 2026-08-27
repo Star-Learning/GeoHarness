@@ -11,9 +11,9 @@ def test_inspection_geometry_distribution_and_registry_listing(registry, registe
 
     inspection = tools.inspect_dataset(buildings.layer_id, step_id="inspect")
     assert inspection.success
-    assert inspection.data["feature_count"] == 12
-    assert inspection.data["geometry_types"] == ["Polygon"]
-    assert inspection.data["missing_values"]["height_m"] == 1
+    assert inspection.data["feature_count"] == 360
+    assert inspection.data["geometry_types"] == ["MultiPolygon"]
+    assert inspection.data["missing_values"]["height_m"] == 0
     assert inspection.data["invalid_geometry_count"] == 0
     assert inspection.data["area_m2"]["sum"] > 0
 
@@ -24,8 +24,8 @@ def test_inspection_geometry_distribution_and_registry_listing(registry, registe
     assert registry.metadata(calculated.outputs[0]).generated_by == "geometry"
 
     distribution = tools.analyze_distribution(buildings.layer_id, fields=["height_m", "use"])
-    assert distribution.data["statistics"]["height_m"]["missing"] == 1
-    assert distribution.data["statistics"]["use"]["top_values"]["residential"] == 6
+    assert distribution.data["statistics"]["height_m"]["missing"] == 0
+    assert distribution.data["statistics"]["use"]["top_values"]["feature_code_2100"] == 357
 
     listing = tools.list_layers()
     assert len(listing.data["layers"]) == 2
@@ -48,13 +48,13 @@ def test_crs_buffer_spatial_filter_and_export(registry, register_scenario_layer)
         output_name="candidate_buildings",
         step_id="filter",
     )
-    assert candidates.data["selected_count"] == 5
+    assert candidates.data["selected_count"] == 132
     assert registry.metadata(candidates.outputs[0]).parents == [buildings.layer_id, buffer.outputs[0]]
 
     exported = tools.export_layer(candidates.outputs[0], format="geojson", file_name="river-candidates")
     export_path = registry.root / exported.data["path"]
     assert export_path.is_file()
-    assert len(json.loads(export_path.read_text(encoding="utf-8"))["features"]) == 5
+    assert len(json.loads(export_path.read_text(encoding="utf-8"))["features"]) == 132
 
 
 def test_spatial_join_aggregation_and_clip(registry, register_scenario_layer):
@@ -65,8 +65,8 @@ def test_spatial_join_aggregation_and_clip(registry, register_scenario_layer):
     calculated = tools.calculate_geometry(buildings.layer_id, output_name="buildings_geometry")
     joined = tools.spatial_join(calculated.outputs[0], districts.layer_id, predicate="within", output_name="buildings_with_district")
     joined_frame = registry.get(joined.outputs[0])
-    assert len(joined_frame) == 12
-    assert set(joined_frame["district_id"]) == {"MN-DEMO-01", "MN-DEMO-02"}
+    assert len(joined_frame) == 360
+    assert set(joined_frame["district_id"]) == {"MN-101", "MN-102", "MN-103"}
 
     aggregated = tools.aggregate_by_region(
         calculated.outputs[0],
@@ -75,18 +75,19 @@ def test_spatial_join_aggregation_and_clip(registry, register_scenario_layer):
         output_name="district_statistics",
     )
     assert {row["district_id"]: row["feature_count"] for row in aggregated.data["groups"]} == {
-        "MN-DEMO-01": 6,
-        "MN-DEMO-02": 6,
+        "MN-101": 162,
+        "MN-102": 40,
+        "MN-103": 158,
     }
     assert all(row["area_sum_m2"] > 0 for row in aggregated.data["groups"])
 
     west = tools.spatial_filter(
         districts.layer_id,
-        where={"district_id": "MN-DEMO-01"},
+        where={"district_id": "MN-101"},
         output_name="west_district",
     )
     clipped = tools.clip_layer(buildings.layer_id, west.outputs[0], output_name="west_buildings")
-    assert clipped.data["feature_count"] == 6
+    assert clipped.data["feature_count"] == 162
 
 
 def test_nearest_features_and_structured_failure(registry, register_scenario_layer):
@@ -96,7 +97,7 @@ def test_nearest_features_and_structured_failure(registry, register_scenario_lay
 
     nearest = tools.nearest_features(buildings.layer_id, roads.layer_id, output_name="nearest_roads")
     assert nearest.success
-    assert nearest.data["matched_count"] == 12
+    assert nearest.data["matched_count"] == 360
     assert nearest.data["minimum_distance_m"] >= 0
     assert nearest.data["maximum_distance_m"] > nearest.data["minimum_distance_m"]
 
@@ -112,7 +113,7 @@ def test_nearest_features_and_structured_failure(registry, register_scenario_lay
     assert "Unknown Geo Tool" in unknown.summary
 
 
-def test_multi_constraint_workflow_produces_two_candidates(registry, register_scenario_layer):
+def test_multi_constraint_workflow_produces_real_candidates(registry, register_scenario_layer):
     buildings = register_scenario_layer("06-multi-constraint-selection", "buildings")
     roads = register_scenario_layer("06-multi-constraint-selection", "roads")
     rivers = register_scenario_layer("06-multi-constraint-selection", "rivers")
@@ -128,5 +129,5 @@ def test_multi_constraint_workflow_produces_two_candidates(registry, register_sc
         predicate="disjoint",
         output_name="candidate_buildings",
     )
-    assert near_roads.data["selected_count"] == 3
-    assert candidates.data["selected_count"] == 2
+    assert near_roads.data["selected_count"] == 249
+    assert candidates.data["selected_count"] == 27

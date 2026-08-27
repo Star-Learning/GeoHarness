@@ -205,7 +205,7 @@ Phase 5 通过两层真实验证：
 
 - `Context + SystemPrompt + ToolRuntime` 注册全部 12 个 Tool schema，并执行
   `list_layers → transform_crs → create_buffer → spatial_filter`；Python provider
-  对 Scenario 02 返回固定空间结果 5。
+  对 Scenario 02 返回固定空间结果 132。
 - 隔离 profile 启动完整官方 Harness Web，Host 插件无激活错误，浏览器同时发现
   DSH Web surface 与 GeoHarness client 标记。验证环境没有外部模型 API Key，故
   不伪造端到端模型生成；ToolRuntime 入口之后的真实执行链已经覆盖。
@@ -220,8 +220,8 @@ transport/trust fence。
 
 公开三个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
 projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
-`scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受六个
-确定性 v1.0 Scenario id、补充的官方数据 Scenario 07 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
+`scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受七个
+官方数据 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
 0–100 km 的正距离。成功执行后 Host 会核对 Registry
 `generated_by`、parents、feature count、output alias 和 canonical display GeoJSON；只有
 全部通过才返回 `map_verification.status = ready`。浏览器拒绝 failed projection。
@@ -235,29 +235,30 @@ reused steps 与用户原始理由。Registry 中被替代的派生 Layer 不删
 修订，不是浏览器端伪造新结果。
 
 Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返回 Task Graph
-`success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 5 个要素；
+`success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 132 个要素；
 浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
 
 Phase 9 又在完整 Harness Web 中连续 POST `scenario/run` 与 `scenario/revise`：Scenario 05
-从 500 m / 4 个候选更新为 1 km / 8 个候选，history 为 2 轮；仅
+从 500 m / 329 个候选更新为 1 km / 360 个候选，history 为 2 轮；仅
 `buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
 Map Verification 仍为 `ready`。
 
-## 六 Scenario 真实 Web 验证（Phase 10）
+## 七个官方数据 Scenario 的真实 Web 验证
 
 Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 Web profile
-中分别运行六个独立 Scenario，不使用另建的 Chat + Map 页面。浏览器显示的 Plan 来自
+中分别运行七个独立 Scenario，不使用另建的 Chat + Map 页面。浏览器显示的 Plan 来自
 各自 `task-graph.json`，Tools 通过 Host Service 调用 Python GIS provider，派生 Layers
 通过官方 Connection RPC 投影到 `conversation.view` 内的地图。真实结果为：
 
 | Scenario | Harness UI 中确认的结果 |
 | --- | --- |
-| 01 Building Data Inspection | 12 个建筑要素高亮 |
-| 02 River Building Query | 5 个河流 500 m 邻近建筑 |
-| 03 Statistics by District | 两个 District，各 6 个建筑 |
-| 04 Road Accessibility | 3 个道路 300 m 可达建筑 |
-| 05 Parameter Revision | 500 m 为 4，修订 1 km 后为 8；2 rerun、3 reused、history 2 |
-| 06 Multi-Constraint Selection | 2 个多约束候选 |
+| 01 Building Data Inspection | 360 个有效 MultiPolygon，height_m 缺失 0 |
+| 02 River Building Query | 132 个河流 500 m 邻近建筑 |
+| 03 Statistics by District | 360 个建筑按 MN-101/102/103 分为 162 / 40 / 158 |
+| 04 Broadway Accessibility | 249 个 Broadway 300 m 可达建筑，分区为 130 / 8 / 111 |
+| 05 Parameter Revision | 500 m 为 329，修订 1 km 后为 360；2 rerun、3 reused、history 2 |
+| 06 Multi-Constraint Selection | 27 个多约束候选 |
+| 07 Official NYC Building Inspection | 133 个有效 MultiPolygon，建成年份缺失 2 |
 
 每个 Scenario 目录保存初始与结果两类 1280×720 Harness 截图、由这些真实截图生成的
 960×540 Demo GIF、视频脚本、README、独立数据与独立回归。`build-demo-media.py --check`
@@ -266,10 +267,10 @@ Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 W
 全部通过。这证明 v1.0 的展示层仍走已确认的 Bundle/Slot/Connection 集成链，而不是
 在文档收尾阶段引入平行应用。
 
-## 官方真实数据 Web 验证（补充 Demo）
+## Scenario 07 聚焦快照
 
 Scenario 07 沿用上述同一 Bundle、`conversation.view`、Connection RPC、TaskGraphRuntime、
-Python provider、Layer Registry 与 Map Verification 链路。输入不是合成 fixture，而是
+Python provider、Layer Registry 与 Map Verification 链路。输入是独立的
 NYC Open Data `BUILDING`（`5zhs-2jue`）在固定 Lower Manhattan bbox 内的 2026-08-27
 审计快照：133 个 MultiPolygon。官方来源、Socrata 查询、publisher、source update、
 Terms of Use、空间范围与字段规范化均记录在 GeoJSON metadata 和 Scenario README。
@@ -321,8 +322,9 @@ pnpm run verify:phase0
   `profile-boot.ts` 运行时导入 Cordis 的 `const enum FiberState` 而失败；同一
   提交构建后的 `apps/cli/lib/bin.js` 可正常安装、dump 和启动 Web。GeoHarness
   不应在上游仓库内修补此问题。
-- 六个离线 fixture 是项目自有 CC0-1.0 合成数据，用于确定性空间回归；补充的 Scenario
-  07 才是带固定查询与日期的 NYC Open Data 快照。两类数据不会互相冒充或静默替换。
+- 七个 Scenario 都使用带固定查询与日期的 NYC Open Data 快照。Scenarios 01–06 的未改动
+  下载响应统一保存在 `data/official-sources/nyc/`，派生脚本校验 SHA256 与 feature count；
+  每个 Scenario 仍保存自己的独立数据副本。刷新快照必须显式审查统计变化。
 - 当前环境没有外部模型 API Key，因此最终验收不依赖付费模型请求。Harness
   `SystemPrompt + ToolRuntime` 边界、全部 Tool schema、真实 GIS 执行、Task Graph、
   Connection RPC 与 Web UI 已分别做确定性验证。

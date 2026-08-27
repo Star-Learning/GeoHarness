@@ -1,0 +1,23 @@
+{
+  "building_count": 360,
+  "building_geometry_type": "MultiPolygon",
+  "invalid_building_geometry_count": 0,
+  "missing_height_m_count": 0,
+  "missing_construction_year_count": 6,
+  "major_road_feature_count": 51,
+  "river_500m_candidate_count": 132,
+  "district_counts": {
+    "MN-101": 162,
+    "MN-102": 40,
+    "MN-103": 158
+  },
+  "road_300m_candidate_count": 249,
+  "road_300m_district_counts": {
+    "MN-101": 130,
+    "MN-102": 8,
+    "MN-103": 111
+  },
+  "road_500m_candidate_count": 329,
+  "road_1000m_candidate_count": 360,
+  "multi_constraint_candidate_count": 27
+}

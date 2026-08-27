@@ -51,15 +51,15 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 - [x] 建立六个独立需求目录；每个目录均包含 README、Prompt、Scenario manifest、
   Expected Plan、Expected Result 和运行所需的独立数据副本。
 - [x] Scenario 05 额外包含独立的 `revision-prompt.txt`，明确 500 m → 1 km 的
-  参数修改目标与 4 → 8 的固定候选数量。
+  参数修改目标与 329 → 360 的固定候选数量。
 - [x] 建立可复现的 `scripts/build_scenarios/build-fixtures.mjs`，支持生成和
   `--check` 新鲜度验证。
-- [x] 数据使用 CC0-1.0、OGC:CRS84 的小型确定性 Manhattan-scale fixture；
-  每个 README 明确记录来源、许可、生成日期、处理方法和非官方数据性质。
+- [x] 数据使用带日期与哈希审计的 NYC Open Data Lower Manhattan 快照，统一为
+  OGC:CRS84；每个 README 明确记录 dataset id、查询、日期和处理方法。
 - [x] 为六个 Scenario 分别建立一个独立测试文件，验证目录自包含、数据合法、
   Prompt/Plan/Result 契约和 Scenario 特定期望。
 - [x] 使用 GeoPandas/Shapely/UTM 18N 对关键固定空间结果做独立抽查：Scenario 02
-  为 5，Scenario 04 为 3，Scenario 05 为 4 → 8，Scenario 06 为 2。
+  为 132，Scenario 04 为 249，Scenario 05 为 329 → 360，Scenario 06 为 27。
 
 ## Phase 2 边界
 
@@ -108,7 +108,7 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
   限制在显式 Scenario roots，CORS 限制为 localhost。
 - [x] 创建 `docs/tool-spec.md`，记录真实工具、Layer 和 HTTP 契约及 CRS 规则。
 - [x] 7 项 Python 测试覆盖全部 12 个工具、持久化、API、安全边界和失败原子性；
-  固定工作流验证 Scenario 02=5、Scenario 03=6/6、Scenario 06=3→2。
+  固定工作流验证 Scenario 02=132、Scenario 03=162/40/158、Scenario 06=249→27。
 
 ## Phase 4 边界
 
@@ -128,7 +128,7 @@ Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `c
 - [x] `list_layers` 可加载六个独立 Scenario；后续操作只使用 canonical Layer ID，
   backend 成功与失败都保持统一 `ToolResult`。
 - [x] 官方 `Context + SystemPrompt + ToolRuntime` 测试通过 12 个 schema，并真实执行
-  Scenario 02 的 `list → transform → buffer → filter`，固定结果为 5。
+  Scenario 02 的 `list → transform → buffer → filter`，固定结果为 132。
 - [x] schema 拒绝、未知 Layer/backend failure 都在 Harness boundary 保持结构化。
 - [x] `pnpm peers check` 无缺失 peer；精确对齐 Harness `0.1.1-rc.2` 与 Cordis
   `4.0.1`。
@@ -158,7 +158,7 @@ Geo Backend 目前由测试/API 直接调用。让 Harness Agent 通过当前 `c
 - [x] 正式客户端嵌入同一份 DAG，Agent 面板真实显示 step、tool、dependencies、outputs
   和 pending 状态，不维护第二套手写 Demo 计划。
 - [x] 3 项 Phase 6 测试通过；其中 Scenario 02 经真实 Python provider 完成 6 步、
-  12 次转换并得到 5 个候选建筑，另覆盖循环拒绝和失败分支传播。
+  12 次转换并得到 132 个候选建筑，另覆盖循环拒绝和失败分支传播。
 - [x] 完整 Harness Web 再次成功加载 Host 插件和 GeoHarness client；新 profile 尚未选择
   workspace 时按上游设计只显示品牌标记，DAG 客户端产物由可复现构建测试验证。
 
@@ -183,7 +183,7 @@ Phase 9。
 - [x] 浏览器把 verified derived Layers 合并到已有输入层；Task step 状态可点击，输出
   Layer Registry 行与真实 SVG 要素同步高亮，失败信息显式显示。
 - [x] 3 项 Phase 7 测试通过：真实 Scenario 02 的 5 个地图层全部通过投影检查，
-  candidate Layer 为 5；客户端得到 3 个派生层并可由 `filter_buildings` 精确定位。
+  candidate Layer 为 132；客户端得到 3 个派生层并可由 `filter_buildings` 精确定位。
 - [x] 在隔离 Harness Web profile 中实际 POST `/geoharness/scenario/run`；官方 RPC
   envelope 返回 Task Graph success、Map Verification ready、四项检查全 true，并确认
   `slots + connection` 客户端激活。
@@ -208,13 +208,13 @@ Phase 8。
   面积、河流/道路距离、分区计数和多约束布尔逻辑；不复用待测 ToolResult 文本。
 - [x] Expected statistics 对适用字段做深比较；Map Verification 还必须为 `ready`，避免
   统计正确但 step/layer/map 投影断裂。
-- [x] Scenario 01：12 个 Polygon、0 invalid、1 个 height 缺失、面积为正。
-- [x] Scenario 02：5 个候选，全部距离河流不超过 500 m。
-- [x] Scenario 03：12 个建筑，两个 District 分别 6/6，分区面积和均为正。
-- [x] Scenario 04：3 个候选，District 为 3/0，全部距主要道路不超过 300 m。
-- [x] Scenario 05：初始 500 m buffer 与 4 个候选通过；1 km 修订及 history 明确交由
+- [x] Scenario 01：360 个 MultiPolygon、0 invalid、0 个 height 缺失、面积为正。
+- [x] Scenario 02：132 个候选，全部距离河流不超过 500 m。
+- [x] Scenario 03：360 个建筑，三个 District 分别 162/40/158，分区面积和均为正。
+- [x] Scenario 04：249 个候选，District 为 130/8/111，全部距 Broadway 不超过 300 m。
+- [x] Scenario 05：初始 500 m buffer 与 329 个候选通过；1 km 修订及 history 明确交由
   Phase 9，不以假数据提前通过。
-- [x] Scenario 06：2 个候选，全部距主要道路不超过 300 m 且距河流至少 800 m。
+- [x] Scenario 06：27 个候选，全部距 Broadway 不超过 300 m 且距河流至少 800 m。
 - [x] 第一轮发现 regression action 的 `scenarioId` 被 provider 消费后未传入 Python；
   改用内部协议 `scenario_id` 后第二轮 6/6 通过。
 
@@ -227,8 +227,8 @@ Phase 8。
 
 状态：完成（2026-08-27）
 
-- [x] Scenario 05 的初次执行保持文档规定的 500 m，真实得到 4 个候选；用户输入
-  `改成 1 公里。` 后通过 Harness Connection RPC 将距离修订为 1000 m，真实得到 8 个候选。
+- [x] Scenario 05 的初次执行保持文档规定的 500 m，真实得到 329 个候选；用户输入
+  `改成 1 公里。` 后通过 Harness Connection RPC 将距离修订为 1000 m，真实得到 360 个候选。
 - [x] Task Graph 支持已完成 execution 的 bounded revision：计算目标 step 下游闭包，
   仅将受影响 step 退回 pending，保留未受影响 success step 的结果和 Layer ID。
 - [x] 本例只重跑 `buffer_major_roads` 与 `filter_candidate_buildings`，复用
@@ -259,9 +259,9 @@ Scenario 的真实截图、动图/视频、视频脚本与项目文档收尾。
   没有用一个共享大 Demo 代替独立验收。
 - [x] 所有截图均来自 DeepSeek Harness `0.1.1-rc.2` 的真实 1280×720 Web UI；每组
   包含初始状态与结果状态，Scenario 05 还分别记录 500 m 和 1 km 两轮结果。
-- [x] 六个真实结果再次核对：Scenario 01 为 12 个建筑；02 为 5 个河流邻近建筑；
-  03 为两个 District 各 6 个；04 为 3 个道路可达建筑；05 为 4 → 8、2 个 step 重跑且
-  3 个复用；06 为 2 个多约束候选。
+- [x] 六个真实结果再次核对：Scenario 01 为 360 个建筑；02 为 132 个河流邻近建筑；
+  03 为三个 District 162/40/158；04 为 249 个 Broadway 可达建筑；05 为 329 → 360、
+  2 个 step 重跑且 3 个复用；06 为 27 个多约束候选。
 - [x] 新增可重复的 Demo GIF 构建/检查脚本；六个 960×540 GIF 均由真实 Harness 截图
   生成，Scenario 05 为三帧，其余为两帧。
 - [x] 新增 7 项 Phase 10 资产测试，真实解析 JPEG/GIF 结构与尺寸，并检查每个 Scenario
@@ -277,17 +277,16 @@ Scenario 的真实截图、动图/视频、视频脚本与项目文档收尾。
 
 状态：完成（2026-08-27）
 
-Phase 0–10 已按顺序实际实现、测试并分别提交。六个 Scenario 均满足“一个需求 = 一个
+Phase 0–10 已按顺序实际实现、测试并分别提交。七个 Scenario 均满足“一个需求 = 一个
 独立文件夹 = 一套数据 = 一个测试 = 一个 Demo”，并在真实 Harness UI 中完成
 `Goal → Plan → Tools → Layers → Map → Verify → Revise → Result` 链路验证。当前没有阻止
-v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和合成数据边界记录在 `BLOCKERS.md`。
+v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照更新门禁记录在 `BLOCKERS.md`。
 
 ## Supplemental official real-data Demo
 
 状态：完成（2026-08-27）
 
-- [x] 保持六个 v1.0 确定性 Scenario 不变，新增独立
-  `07-official-nyc-building-inspection`，避免以外部变化数据静默破坏原回归契约。
+- [x] 新增独立 `07-official-nyc-building-inspection`，保持“一需求一目录”的回归契约。
 - [x] 从 NYC Open Data `BUILDING`（`5zhs-2jue`）按固定 Lower Manhattan bbox 获取并
   审计 133 个真实 MultiPolygon；GeoJSON metadata 记录 publisher、查询 URL、source
   update、snapshot date、Terms of Use、空间范围和处理说明。
@@ -305,3 +304,26 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和合成数据�
   避免 Windows 上误落入 backend 子目录并产生 ACL 警告。
 - [x] 最终验证通过：build、typecheck、media check、peer check、Node 45/45、Python 9/9、
   `git diff --check`；预览服务保留在 `http://127.0.0.1:31994/` 供人工检查。
+
+## 全场景官方数据替换与滑块回归
+
+状态：完成（2026-08-27）
+
+- [x] 将 Scenarios 01–06 从项目合成数据替换为 NYC Open Data 官方快照；未修改上游
+  Harness，也没有复制 Harness 源码。
+- [x] 原始响应统一保存在 `data/official-sources/nyc/`，记录 dataset id、查询、
+  snapshot date、feature count 与 SHA256；提供 PowerShell 下载脚本。
+- [x] 新增 `prepare-official-data.py`，校验原始快照并可重复生成建筑、Broadway、
+  Community District 和基于官方 land/water difference 的河流派生数据。
+- [x] 保持六个 Scenario 各自独立数据副本、测试与 Demo；固定统计更新为
+  360、132、162/40/158、249、329→360、27。
+- [x] 修复所有图层透明度滑块连续拖动时延迟读取失效 React `currentTarget` 导致的
+  `conversation.view` 崩溃；增加源码回归门禁。
+- [x] 真实道路等距最近邻暴露重复 join row，`nearest_features.matched_count` 已修正为
+  唯一输入要素数，同时保留并列目标行供审计。
+- [x] 在重启后的完整 Harness Web 中依次运行 Scenario 01–07，全部为 Task Graph
+  `success`、Map `ready`；Scenarios 01–06 的官方数据截图和 GIF 已重新生成。
+- [x] 对七个场景全部输入图层，以及 Scenario 04/05/06/07 的全部派生图层连续快速修改
+  透明度；每次 `main` 和地图都保持存在，未再出现白屏或 Slot 崩溃。
+- [x] 最终门禁通过：build、typecheck、官方数据/场景新鲜度、媒体可复现性、peer check、
+  Node 45/45、Python 9/9、`git diff --check`；31994 预览服务保持运行。

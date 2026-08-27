@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "scenario_id": "05-parameter-revision",
-  "goal": "找出距离主要道路 500 米以内的建筑。",
+  "goal": "找出距离主要道路 Broadway 500 米以内的建筑。",
   "steps": [
     {
       "id": "inspect_buildings",

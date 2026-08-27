@@ -44,8 +44,8 @@ Phase 9 的明确阶段边界，不是 Phase 8 阻塞。
 ### Scenario 05 会话修订
 
 Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run history、旧 Layer lineage
-保留和 active map projection。完整 Harness Web 连续 RPC 验证从 500 m / 4 个候选更新到
-1 km / 8 个候选，只有两项下游 step 重跑；不再是活跃阻塞。
+保留和 active map projection。完整 Harness Web 连续 RPC 验证从 500 m / 329 个候选更新到
+1 km / 360 个候选，只有两项下游 step 重跑；不再是活跃阻塞。
 
 ### Phase 10 真实展示素材
 
@@ -59,6 +59,13 @@ Demo/文档收尾阻塞。
 独立 GeoPandas oracle、完整 Harness Web 双次运行、Map Verification 和展示资产验证。
 Socrata 对当前 Node fetch 返回 403 的问题通过受约束的 PowerShell 下载器加 Node
 规范化流程解决；不是当前阻塞。官方数据会更新，因此刷新快照仍需人工审查统计变化。
+
+### 全场景官方数据与透明度滑块
+
+Scenarios 01–06 已全部改用冻结的 NYC Open Data 快照，原始响应、SHA256、固定查询和
+派生脚本均已纳入仓库；Scenario 07 继续使用自己的官方建筑快照。透明度滑块白屏原因是
+React 延迟状态更新读取已失效的 `event.currentTarget`，现已在回调内先捕获数值并增加
+源码与实际浏览器回归。真实 Centerline 的等距最近邻也已修正为按唯一输入要素计数。
 
 ### Windows pnpm / pytest 运行目录
 
@@ -89,12 +96,12 @@ GeoHarness 不应直接修改 `../deepseek-harness` 规避此问题。若后续�
 必须重新核对 `dsh.bundle`、`dsh.client`、客户端产物协议、Slot 名称和
 Service/Tool API，并重跑隔离 profile 验证。
 
-### 3. Demo 数据性质
+### 3. Demo 数据更新门禁
 
-Phase 2 的六个 v1.0 Scenario 采用项目自有、CC0-1.0 的确定性 Manhattan-scale 合成
-fixture，以保证离线、快速、可精确回归。它们不是 NYC 官方地籍、道路或水系数据，
-README 已明确披露。补充 Scenario 07 提供独立的 NYC Open Data 日期快照，不替换这些
-fixture；刷新官方快照时必须重新生成固定统计并更新 Scenario 期望，不能静默接受变化。
+七个 Scenario 都使用冻结、带日期的 NYC Open Data 快照。Scenarios 01–06 的未改动下载
+响应集中在 `data/official-sources/nyc/`，但各 Scenario 仍保留自己的独立数据副本。
+官方数据会更新；刷新时必须重新下载、核对 SHA256/feature count、生成派生数据、运行
+独立 GeoPandas oracle 并人工审查固定统计，不能静默接受变化。
 
 ### 4. Python Geo runtime 门禁
 

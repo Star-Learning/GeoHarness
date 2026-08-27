@@ -11,6 +11,8 @@
     "build": "pnpm -r --if-present run build",
     "build:media": "python scripts/build-demo-media.py",
     "build:scenarios": "node scripts/build_scenarios/build-fixtures.mjs",
+    "download:official-data": "powershell -ExecutionPolicy Bypass -File scripts/download-nyc-official-sources.ps1",
+    "check:official-data": "python scripts/build_scenarios/prepare-official-data.py --check",
     "check:media": "python scripts/build-demo-media.py --check",
     "check:scenarios": "node scripts/build_scenarios/build-fixtures.mjs --check",
     "typecheck": "pnpm -r --if-present run typecheck",

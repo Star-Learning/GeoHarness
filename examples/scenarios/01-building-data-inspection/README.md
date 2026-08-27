@@ -3,8 +3,8 @@
 ## Scenario
 
 - ID: `01-building-data-inspection`
-- Region: Manhattan, New York City
-- Fixture profile: `deterministic-manhattan-scale-v1`
+- Region: Lower Manhattan, New York City
+- Data profile: `official-nyc-open-data-lower-manhattan-2026-08-27`
 
 ## Real user need
 
@@ -16,17 +16,17 @@
 
 ## Why this Demo exists
 
-这个 Scenario 将一个真实空间需求、独立数据、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。复制本目录即可离线复现，不依赖其他 Scenario 的数据。
+这个 Scenario 将一个真实空间需求、独立官方数据副本、可执行 Task Graph、期望 Plan、期望 Result 和回归入口放在同一目录中。提交后的快照可离线复现，不依赖运行时联网。
 
 ## Input data
 
 | File | Dataset | Original provider | License / terms | Download / generation date |
 | --- | --- | --- | --- | --- |
-| `data/buildings.geojson` | GeoHarness deterministic Manhattan-scale fixture | GeoHarness project | CC0-1.0 | 2026-08-27 |
+| `data/buildings.geojson` | NYC Open Data BUILDING (`5zhs-2jue`) | NYC Office of Technology and Innovation | [NYC Open Data Terms](https://opendata.cityofnewyork.us/overview/#termsofuse) | 2026-08-27 |
 
 ### Data source and processing
 
-这些文件是 GeoHarness 为稳定回归测试创作的、小型 Manhattan-scale 合成矢量 fixture，并非 NYC 官方地籍或道路数据。坐标锚定在 Manhattan 附近，使用 OGC:CRS84；几何和属性由 `scripts/build_scenarios/build-fixtures.mjs` 确定性生成。处理包括固定 3.2 km 测试范围、最小字段集和 7 位小数坐标量化；未做几何简化。数据按 CC0-1.0 提供。
+这些文件全部来自仓库内 `data/official-sources/nyc/` 的 NYC Open Data 固定快照。建筑数据从固定 bbox 的 2,622 个官方要素中做空间均匀的 360 要素系统抽样；道路保留官方四车道以上 Centerline，并将真实 Broadway 段标记为本 Demo 的 `major` corridor；District 使用官方 101–103 边界；Hudson/East River 由官方含水域边界减去陆地区边界后分侧得到。处理脚本不重画建筑、道路或 District 几何，完整来源、查询、哈希和条款见 [官方源数据说明](../../../data/official-sources/nyc/README.md)。
 
 ## Expected Agent behavior
 
@@ -45,7 +45,7 @@
 
 ## Success criteria
 
-报告 12 个 Polygon 要素、OGC:CRS84、1 个缺失 height_m，且所有几何有效。
+报告 360 个真实 MultiPolygon、OGC:CRS84、0 个缺失 height_m，且所有几何有效。
 
 ## Demo focus
 
@@ -59,7 +59,7 @@ AI 能不能自己看懂一份 GIS 数据？
 - [Animated Demo](media/demo.gif)
 - [1–4 minute video script](media/video-script.md)
 
-素材来自本 Scenario 在 DeepSeek Harness Web `b150a55` 中的真实执行：结果画面选择 `calculate_building_geometry`，12 个输出要素同时在 Layer Registry 与地图高亮。动图由 `scripts/build-demo-media.py` 从上述真实截图生成，不含伪造结果帧。
+素材来自本 Scenario 在 DeepSeek Harness Web 中对 NYC Open Data 快照的真实执行：结果画面选择 `calculate_building_geometry`，360 个官方建筑输出同时在 Layer Registry 与地图高亮。
 
 ## Run and verify independently
 
@@ -67,4 +67,4 @@ AI 能不能自己看懂一份 GIS 数据？
 node --test tests/regression/01-building-data-inspection.regression.test.mjs
 ```
 
-该测试只读取本目录的数据、Task Graph 与 expected result，并用独立 GeoPandas oracle 验证 12 个要素、几何有效性、缺失值与面积统计。
+该测试只读取本目录的数据、Task Graph 与 expected result，并用独立 GeoPandas oracle 验证 360 个真实要素、几何有效性、缺失值与面积统计。
