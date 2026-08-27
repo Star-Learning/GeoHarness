@@ -134,7 +134,7 @@ test('the browser projection adds derived layers and selects map layers by Task 
   }
 })
 
-test('the loopback Connection RPC exposes only validated Scenario run and latest endpoints', async () => {
+test('the loopback Connection RPC exposes validated Scenario and goal-driven endpoints', async () => {
   const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
   let registration
   const calls = []
@@ -156,6 +156,17 @@ test('the loopback Connection RPC exposes only validated Scenario run and latest
   assert.equal(calls[0].scenarioId, '02-river-building-query')
   assert.equal(calls[0].workspaceKey, 'rpc-test')
   assert.equal(calls[0].signal, signal)
+  const goal = await registration.handler('goal/run', {
+    goal_prompt: '找出距离主要道路 Broadway 275 米以内的建筑。', workspace_key: 'rpc-goal-test',
+  }, signal)
+  assert.equal(goal.ok, true)
+  assert.equal(goal.value.goal_resolution.scenario_id, '05-parameter-revision')
+  assert.equal(goal.value.goal_resolution.parameters.road_distance_m, 275)
+  assert.equal(calls[1].scenarioId, '05-parameter-revision')
+  assert.equal(calls[1].goal, '找出距离主要道路 Broadway 275 米以内的建筑。')
+  assert.deepEqual(calls[1].parameterPatches, {
+    buffer_major_roads: { distance: 275, unit: 'meter' },
+  })
   const latest = await registration.handler('scenario/latest', {
     scenario_id: '02-river-building-query', workspace_key: 'rpc-test',
   }, signal)
@@ -164,4 +175,9 @@ test('the loopback Connection RPC exposes only validated Scenario run and latest
   const invalid = await registration.handler('scenario/run', { scenario_id: '../unsafe' }, signal)
   assert.equal(invalid.ok, false)
   assert.equal(invalid.error.code, 'bad-request')
+  const unsupported = await registration.handler('goal/run', {
+    goal_prompt: '给我讲个故事', workspace_key: 'rpc-goal-test',
+  }, signal)
+  assert.equal(unsupported.ok, false)
+  assert.match(unsupported.error.message, /supported GeoHarness v1\.0/)
 })

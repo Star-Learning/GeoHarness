@@ -108,7 +108,7 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.equal(typeof hostPlugin.registerGeoTools, 'function')
 })
 
-test('the browser artifact registers its factory and contributes only through declared Slots', async () => {
+test('the browser artifact replaces the declared conversation surface through its public Slot', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let handoff
   const appendedStyles = []
@@ -156,18 +156,15 @@ test('the browser artifact registers its factory and contributes only through de
 
   assert.equal(appendedStyles.length, 1)
   assert.equal(appendedStyles[0].dataset.plugin, packageName)
-  assert.deepEqual(awaited, ['conversation.session.header.actions', 'shell.overlay'])
+  assert.deepEqual(awaited, ['conversation'])
   assert.deepEqual(
-    registrations.map(({ options }) => ({ name: options.name, id: options.id })),
+    registrations.map(({ options }) => ({ name: options.name, priority: options.priority })),
     [
-      { name: 'conversation.session.header.actions', id: 'geoharness-gis' },
-      { name: 'shell.overlay', id: 'geoharness-gis-panel' },
+      { name: 'conversation', priority: -100 },
     ],
   )
-  assert.equal(registrations[0].component().props['data-geoharness-toggle'], true)
-  assert.equal(registrations[0].component().props['aria-controls'], 'geoharness-gis-panel')
-  assert.equal(registrations[1].component().props['data-geoharness-plugin'], 'loaded')
-  assert.equal(registrations[1].component().props.hidden, true)
+  assert.equal(registrations[0].component().props['data-geoharness-plugin'], 'loaded')
+  assert.equal(registrations[0].component().props['data-geoharness-phase'], '10')
 })
 
 test('the repository does not vendor DeepSeek Harness source', async () => {

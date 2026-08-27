@@ -77,6 +77,16 @@ test('TaskGraphRuntime executes Scenario 02 through the real Geo provider and re
     assert.equal(transitions.length, 12)
     assert.deepEqual(new Set(transitions.map(event => event.to)), new Set(['running', 'success']))
     assert.deepEqual(ctx.taskGraph.latest('phase6-real', '02-river-building-query'), result)
+    await assert.rejects(ctx.taskGraph.runScenario({
+      scenarioId: '02-river-building-query',
+      workspaceKey: 'phase6-invalid-step',
+      parameterPatches: { not_a_step: { distance: 275 } },
+    }), error => error.code === 'TASK_GRAPH_PATCH_INVALID')
+    await assert.rejects(ctx.taskGraph.runScenario({
+      scenarioId: '02-river-building-query',
+      workspaceKey: 'phase6-invalid-parameter',
+      parameterPatches: { buffer_rivers: { invented_parameter: 275 } },
+    }), error => error.code === 'TASK_GRAPH_PATCH_INVALID')
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }

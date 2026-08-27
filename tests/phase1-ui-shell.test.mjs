@@ -35,11 +35,13 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
   assert.match(styles, /--dsw-alias-bg-base/)
   assert.match(styles, /--dsw-alias-state-business-primary/)
   assert.doesNotMatch(source, /name: 'conversation\.view'/)
-  assert.match(source, /name: 'conversation\.session\.header\.actions'/)
+  assert.match(source, /name: 'conversation'/)
+  assert.match(source, /priority: -100/)
+  assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
 })
 
-test('the generated factory registers the shell through additive Harness Slots', async () => {
+test('the generated factory replaces the Harness conversation Slot with the GeoHarness shell', async () => {
   const code = await readFile(join(bundleRoot, 'client.js'), 'utf8')
   let registration
   const appendedStyles = []
@@ -74,15 +76,15 @@ test('the generated factory registers the shell through additive Harness Slots',
       register: (options, component) => { slots.push({ options, component }); return () => {} },
     },
   })
-  assert.deepEqual(awaited, ['conversation.session.header.actions', 'shell.overlay'])
-  assert.deepEqual(slots.map(slot => slot.options.id), ['geoharness-gis', 'geoharness-gis-panel'])
+  assert.deepEqual(awaited, ['conversation'])
+  assert.deepEqual(
+    slots.map(slot => ({ name: slot.options.name, priority: slot.options.priority })),
+    [{ name: 'conversation', priority: -100 }],
+  )
   assert.equal(appendedStyles.length, 1)
   assert.match(appendedStyles[0].textContent, /\.gh-shell/)
 
-  const action = slots[0].component()
-  assert.equal(action.props['data-geoharness-toggle'], true)
-  assert.equal(action.props['aria-controls'], 'geoharness-gis-panel')
-  const panel = slots[1].component()
-  assert.equal(panel.props['data-geoharness-plugin'], 'loaded')
-  assert.equal(panel.props.role, 'dialog')
+  const shell = slots[0].component()
+  assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
+  assert.equal(shell.type, 'main')
 })

@@ -20,14 +20,17 @@ step_bindings[].step_id
 The official Connection extension transports this model over a dedicated loopback-only channel:
 
 ```text
+POST /geoharness/goal/run
 POST /geoharness/scenario/run
 POST /geoharness/scenario/latest
+POST /geoharness/scenario/revise
 ```
 
 The Host registers the channel through `ctx.connection.rpc.handle(...)`; the client calls it with
 `ctx.connection.rpc.call(...)`. Payloads accept only the six deterministic v1.0 Scenario ids plus
 the audited official-data Scenario 07, and bounded workspace keys. This is the current DeepSeek
-Harness API confirmed from source, not a custom parallel web server.
+Harness API confirmed from source, not a custom parallel web server. `goal/run` additionally
+returns `goal_resolution` and executes a validated initial parameter patch before any Tool step.
 
 When the response is ready, the browser merges only derived Layers into its existing Scenario
 inputs. Clicking a Task step resolves its output Layer ids, highlights those rows in Layer Registry

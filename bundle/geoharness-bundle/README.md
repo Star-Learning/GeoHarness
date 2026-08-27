@@ -7,9 +7,9 @@ This package is the GeoHarness integration layer for the inspected DeepSeek Harn
 
 The host entry composes a Geo Service Definition, a cancellable local Python Provider and twelve
 model-facing Geo Tool consumers using the inspected Harness `Service`, `defineTool`,
-`SystemPrompt` and `ToolRuntime` APIs. The browser entry contributes the
-`GeoHarness` conversation view and a lightweight brand overlay through
-`ctx.slots.inject(...)`. Its generated client artifact embeds the six independent Scenario
+`SystemPrompt` and `ToolRuntime` APIs. The browser entry replaces the public Harness
+`conversation` single Slot at priority `-100` through `ctx.slots.inject(...)`, so GeoHarness is
+the primary center surface rather than a tab, header action or overlay. Its generated client artifact embeds the seven independent Scenario
 packages, registers their vector layers, and renders an interactive SVG map with layer
 visibility, opacity, zoom, pan, fit-bounds and feature inspection controls. Geo computation and
 Harness Tool execution remain in the Host/Python layers rather than being hidden in the browser UI.
@@ -19,25 +19,28 @@ DAGs through `ctx.geo`, records pending/running/success/failed transitions, reso
 Layer aliases, and preserves ordered transition history. The client shows the same embedded plan,
 dependencies and declared outputs instead of maintaining a second hand-written Demo plan.
 
-The Host registers `/geoharness/scenario/run`, `/geoharness/scenario/latest` and
-`/geoharness/scenario/revise` through the official Connection generic RPC API with loopback
+The Host registers `/geoharness/goal/run`, `/geoharness/scenario/run`,
+`/geoharness/scenario/latest` and `/geoharness/scenario/revise` through the official Connection generic RPC API with loopback
 authority. A successful run projects Registry metadata and canonical display GeoJSON, verifies
 lineage/parents/feature counts, and lets the client add derived layers. Selecting a successful
 Task step highlights exactly its output Layer rows and SVG map features. The bounded v1.0 revision
 endpoint accepts Scenario 05 distance changes, invalidates only the target step and its downstream
 closure, preserves upstream Layer IDs, records run/reuse history, and keeps superseded derived
-Layers as inactive lineage evidence.
+Layers as inactive lineage evidence. `goal/run` classifies only the bounded v1.0 workflows,
+extracts explicit metric or kilometre distances, patches the cloned Task Graph before its first
+step runs and returns the resolved workflow and parameters with the verified result.
 
-Six independent regression suites execute the same DAGs and require capability coverage, output
+Seven independent regression suites execute the same DAGs and require capability coverage, output
 Layer aliases, an independent GeoPandas spatial oracle and exact expected statistics. Run them
 with `pnpm run verify:phase8`.
 
-Scenario 05 additionally verifies the conversational change from 500 m to 1 km, including the
-4-to-8 result update, partial rerun, retained history and active map projection. Run it with
+Scenario 05 additionally verifies a nonpreset 275 m first run against official Broadway data
+(241 buildings, one initial history entry) and the conversational change from 500 m to 200 m
+(329 to 205 buildings), including partial rerun, retained history and active map projection. Run it with
 `pnpm run verify:phase9`.
 
-Each of the six Scenario packages now includes real 1280×720 Harness screenshots, a Demo GIF,
-an independent README and a video script. Scenario 05 records both its 500 m and revised 1 km
+Each of the seven Scenario packages now includes real 1280×720 Harness screenshots, a Demo GIF,
+an independent README and a video script. Scenario 05 records both its 500 m and revised 200 m
 states. The media builder checks that GIFs are reproducible from those screenshots, while the
 Phase 10 suite parses the image files and enforces the one-Scenario/one-data/one-test/one-Demo
 contract. Verify the finished v1.0 assets with:

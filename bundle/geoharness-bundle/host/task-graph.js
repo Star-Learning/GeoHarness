@@ -93,6 +93,46 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value)
 }
 
+function updateDistanceTitle(step) {
+  const distance = step.parameters?.distance
+  if (step.tool !== 'create_buffer' || typeof distance !== 'number' || !Number.isFinite(distance)) return
+  const subject = step.id.includes('river')
+    ? (step.title.toLowerCase().includes('exclusion') ? 'river exclusion' : 'river')
+    : 'road'
+  step.title = `Create ${distance} m ${subject} buffer`
+}
+
+function applyInitialDefinitionPatches(definition, parameterPatches = {}, goal) {
+  if (!plainObject(parameterPatches)) {
+    throw new TaskGraphError('Initial parameter patches must be an object', 'TASK_GRAPH_PATCH_INVALID')
+  }
+  const patched = clone(definition)
+  if (goal !== undefined) {
+    if (typeof goal !== 'string' || goal.trim() === '') {
+      throw new TaskGraphError('Initial Task Graph goal must be a non-empty string', 'TASK_GRAPH_PATCH_INVALID')
+    }
+    patched.goal = goal.trim()
+  }
+  const byId = new Map(patched.steps.map(step => [step.id, step]))
+  for (const [stepId, patch] of Object.entries(parameterPatches)) {
+    const step = byId.get(stepId)
+    if (step === undefined) {
+      throw new TaskGraphError(`Unknown initial patch step: ${stepId}`, 'TASK_GRAPH_PATCH_INVALID')
+    }
+    if (!plainObject(patch)) {
+      throw new TaskGraphError(`Initial patch for ${stepId} must be an object`, 'TASK_GRAPH_PATCH_INVALID')
+    }
+    for (const key of Object.keys(patch)) {
+      if (!(key in step.parameters)) {
+        throw new TaskGraphError(`Initial patch cannot add parameter ${stepId}.${key}`, 'TASK_GRAPH_PATCH_INVALID')
+      }
+    }
+    step.parameters = { ...step.parameters, ...clone(patch) }
+    updateDistanceTitle(step)
+  }
+  return validateDefinition(patched)
+}
+
 /** One validated, observable execution of a Scenario Task Graph. */
 export class TaskGraphExecution {
   constructor(definition, options) {
@@ -236,6 +276,7 @@ export class TaskGraphExecution {
     }
     const before = clone(target.parameters)
     target.parameters = { ...target.parameters, ...clone(parameterPatch) }
+    updateDistanceTitle(target)
     const invalidatedOutputs = []
     for (const step of this.steps.values()) {
       if (!affected.has(step.id)) continue
@@ -304,8 +345,12 @@ export class TaskGraphRuntime extends Service {
     return validateDefinition(definition)
   }
 
-  async runScenario({ scenarioId, workspaceKey = 'direct', signal, onTransition }) {
-    const definition = await this.loadDefinition(scenarioId)
+  async runScenario({ scenarioId, workspaceKey = 'direct', signal, onTransition, parameterPatches = {}, goal }) {
+    const definition = applyInitialDefinitionPatches(
+      await this.loadDefinition(scenarioId),
+      parameterPatches,
+      goal,
+    )
     const loaded = await this.ctx.geo.execute({
       action: 'load_scenario',
       scenarioId,

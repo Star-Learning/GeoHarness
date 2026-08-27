@@ -97,7 +97,8 @@ test('the Phase 3 client embeds all Scenario data and implements map interaction
   assert.match(source, /type="range"/)
   assert.match(source, /const opacity = Number\(event\.currentTarget\.value\)/)
   assert.doesNotMatch(source, /setLayerOpacity\(current, layer\.id, Number\(event\.currentTarget\.value\)\)/)
-  assert.match(source, /conversation\.session\.header\.actions/)
+  assert.match(source, /name: 'conversation'/)
+  assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /name: 'conversation\.view'/)
   assert.match(output, /__GEOHARNESS_SCENARIOS__/)
   for (const id of [

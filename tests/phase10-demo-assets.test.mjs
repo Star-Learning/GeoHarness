@@ -133,7 +133,7 @@ test('the root README presents the complete v1.0 integration and verification pa
   const readme = await readFile(join(repositoryRoot, 'README.md'), 'utf8')
   for (const scenario of expectedScenarios) assert.match(readme, new RegExp(scenario.id))
   for (const marker of [
-    'GeoHarness v1.0', '0.1.1-rc.2', 'conversation.session.header.actions',
+    'GeoHarness v1.0', '0.1.1-rc.2', 'conversation single Slot',
     '12 Harness defineTool', 'pnpm test', 'verify:phase10', 'v1.0 boundaries',
   ]) assert.ok(readme.includes(marker), `root README is missing ${marker}`)
   assert.doesNotMatch(readme, /currently at Phase 0|contains no GIS backend/u)

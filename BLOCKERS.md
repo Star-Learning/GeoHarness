@@ -5,6 +5,9 @@
 没有阻止 GeoHarness v1.0 完成的活跃问题。Phase 0–10 均已实现、验证并提交；以下内容
 保留已解决问题和不会阻塞 v1.0 的环境/升级门禁，便于后续维护时复核。
 
+本轮主界面替换与动态参数回归通过 Node 46/46、Python 9/9、官方数据/媒体/peer 门禁及
+真实浏览器测试；没有新增外部阻塞。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、
@@ -20,14 +23,15 @@ Harness externals、CSS 注入和产物新鲜度增加测试。GeoHarness 不依
 
 ### 三栏 UI Shell 的 Slot 适配性
 
-当前 Harness 源码与真实 Web 验证确认：`conversation.session.header.actions` 可添加原生
-标题栏按钮，`shell.overlay` 可承载三栏右侧工作区；GeoHarness 不再注册
-`conversation.view`，也无需注册会遮蔽 AppFrame 的 `root`。
+当前 Harness 源码与真实 Web 验证确认：`ui-layout` 公开的 `conversation` 是
+`single + session-maybe` Slot，`ui-conversation` 的默认 entry 为 priority 0；GeoHarness
+使用 priority -100 成为同一 cell 的 winner，可在不遮蔽 `root` AppFrame 的前提下直接
+替换中心表面。GeoHarness 不再注册 `conversation.view`、标题栏 action 或 `shell.overlay`。
 
 ### 真实矢量地图的 Slot 适配性
 
-Phase 3 已在真实 Harness Web 中验证：六个 Scenario 数据可嵌入客户端，三栏视图
-可在 `shell.overlay` 中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
+Phase 3 已在真实 Harness Web 中验证：七个 Scenario 数据可嵌入客户端，三栏视图
+可在 `conversation` 主槽中加载、渲染 SVG 矢量地图并执行显隐、缩放、切换和要素
 检查。720p 容器高度问题已通过视口约束修复，无需独立 Web surface。
 
 ### Task Step 与地图绑定
@@ -49,9 +53,16 @@ Phase 9 已实现完成图上的局部失效、上游复用、下游重跑、run
 500 m / 329 个候选更新到 200 m / 205 个候选，只有两项下游 step 重跑；距离不是预设
 枚举，明确数值在合法范围内可由同一链路重算，不再是活跃阻塞。
 
+### 输入驱动的非预设距离
+
+`goal/run` 已将显式距离注入首次 Task Graph execution，而不是先运行 Scenario 默认值。
+真实 275 m 用例只生成一轮 initial history，官方 Broadway 数据返回 241 栋，独立 UTM 18N
+oracle 确认全部候选位于 275.5 m 容差内；再修订为 200 m 仍只重跑两个下游步骤。当前没有
+“距离必须是预设值”的产品阻塞。路由仍按 v1.0 边界限制在七个已验收工作流内。
+
 ### Phase 10 真实展示素材
 
-六个 Scenario 已在完整 DeepSeek Harness Web 中分别执行并保存真实截图；由这些截图生成
+七个 Scenario 已在完整 DeepSeek Harness Web 中分别执行并保存真实截图；由这些截图生成
 的 GIF、视频脚本、独立 README 和资产测试均已完成。最终素材测试 7/7 通过，不再有
 Demo/文档收尾阻塞。
 

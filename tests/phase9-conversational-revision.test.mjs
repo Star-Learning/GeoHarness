@@ -82,6 +82,7 @@ test('Scenario 05 uses the real RPC and GeoPandas provider to revise 500 m to 20
     assert.equal(revised.map_verification.status, 'ready')
     assert.equal(revised.steps.find(step => step.id === 'filter_candidate_buildings').result.data.selected_count, expected.expected.revised_candidate_count)
     assert.equal(revised.steps.find(step => step.id === 'buffer_major_roads').result.parameters.distance_m, 200)
+    assert.equal(revised.steps.find(step => step.id === 'buffer_major_roads').title, 'Create 200 m road buffer')
     assert.equal(revised.run_history.length, expected.expected.retained_history_entries)
     assert.deepEqual(revised.run_history[1].executed_steps, ['buffer_major_roads', 'filter_candidate_buildings'])
     assert.deepEqual(revised.run_history[1].reused_steps, ['inspect_buildings', 'filter_major_roads', 'transform_major_roads'])
@@ -119,13 +120,86 @@ test('Scenario 05 uses the real RPC and GeoPandas provider to revise 500 m to 20
   }
 })
 
+test('a nonpreset 275 m user goal runs once with real official data and no hidden 500 m execution', async () => {
+  const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase9-goal-'))
+  try {
+    const ctx = await setup(temporary)
+    const { registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
+    let registration
+    registerGeoRpc({
+      connection: {
+        rpc: {
+          handle: (channel, handler, options) => {
+            registration = { channel, handler, options }
+            return async () => {}
+          },
+        },
+      },
+      taskGraph: ctx.taskGraph,
+    })
+
+    const prompt = '找出距离主要道路 Broadway 275 米以内的建筑。'
+    const workspaceKey = 'phase9-goal-275m'
+    const response = await registration.handler('goal/run', {
+      goal_prompt: prompt,
+      workspace_key: workspaceKey,
+    }, new AbortController().signal)
+    assert.equal(response.ok, true)
+    const execution = response.value
+    assert.equal(execution.goal, prompt)
+    assert.equal(execution.goal_resolution.scenario_id, scenarioId)
+    assert.equal(execution.goal_resolution.parameters.road_distance_m, 275)
+    assert.equal(execution.run_history.length, 1)
+    assert.equal(execution.run_history[0].kind, 'initial')
+    assert.deepEqual(execution.run_history[0].executed_steps, [
+      'inspect_buildings', 'filter_major_roads', 'transform_major_roads',
+      'buffer_major_roads', 'filter_candidate_buildings',
+    ])
+
+    const bufferStep = execution.steps.find(step => step.id === 'buffer_major_roads')
+    const candidateStep = execution.steps.find(step => step.id === 'filter_candidate_buildings')
+    assert.equal(bufferStep.parameters.distance, 275)
+    assert.equal(bufferStep.resolved_parameters.distance, 275)
+    assert.equal(bufferStep.result.parameters.distance_m, 275)
+    assert.equal(bufferStep.title, 'Create 275 m road buffer')
+    const activeBuffers = execution.map_verification.map_layers.filter(layer =>
+      layer.active && layer.aliases.includes('major_road_buffer'))
+    assert.equal(activeBuffers.length, 1)
+    assert.equal(activeBuffers[0].metadata.parameters.distance_m, 275)
+
+    const oracle = await ctx.geo.execute({
+      action: 'regression', workspaceKey, scenario_id: scenarioId, layer_aliases: execution.layers,
+    })
+    assert.equal(oracle.statistics.current_buffer_distance_m, 275)
+    assert.equal(oracle.statistics.current_candidate_count, 241)
+    assert.equal(candidateStep.result.data.selected_count, 241)
+    assert.equal(candidateStep.result.data.selected_count, oracle.statistics.current_candidate_count)
+    assert.equal(oracle.checks.all_current_candidates_within_distance, true)
+    assert.equal(oracle.checks.all_revised_candidates_within_distance, true)
+    assert.ok(Object.values(oracle.checks).every(Boolean))
+  } finally {
+    await rm(temporary, { recursive: true, force: true })
+  }
+})
+
 test('the conversational RPC parses bounded distance revisions and rejects out-of-scope requests', async () => {
-  const { parseDistanceRevision, registerGeoRpc } = await import('../bundle/geoharness-bundle/host/rpc.js')
+  const {
+    parseDistanceMentions, parseDistanceRevision, registerGeoRpc, resolveGeoGoal,
+  } = await import('../bundle/geoharness-bundle/host/rpc.js')
   assert.equal(parseDistanceRevision('改成 1 公里。'), 1000)
   assert.equal(parseDistanceRevision('改成 200 米。'), 200)
   assert.equal(parseDistanceRevision('Use 750 m instead'), 750)
   assert.equal(parseDistanceRevision('no distance here'), null)
   assert.equal(parseDistanceRevision('改成 1000 公里'), null)
+  assert.deepEqual(parseDistanceMentions('道路 275 米以内，河流至少 1 公里').map(item => item.distance), [275, 1000])
+  assert.deepEqual(resolveGeoGoal('找出距离主要道路 Broadway 275 米以内的建筑。'), {
+    scenarioId: '05-parameter-revision',
+    parameterPatches: { buffer_major_roads: { distance: 275, unit: 'meter' } },
+    parameters: { road_distance_m: 275 },
+  })
+  assert.equal(resolveGeoGoal('找出 Broadway 1000 公里内的建筑'), null)
+  assert.equal(resolveGeoGoal('找出 Broadway -1 米内的建筑'), null)
+  assert.equal(resolveGeoGoal('给我讲个故事'), null)
 
   let registration
   const revisions = []
@@ -158,8 +232,10 @@ test('the conversational RPC parses bounded distance revisions and rejects out-o
   assert.equal(wrongScenario.ok, false)
 
   const client = await readFile(join(bundleRoot, 'client.js'), 'utf8')
+  assert.match(client, /goal\/run/)
   assert.match(client, /scenario\/revise/)
   assert.match(client, /revisionPrompt/)
-  assert.match(client, /activeBufferDistance/)
+  assert.match(client, /goal_resolution/)
+  assert.match(client, /priority: -100/)
   assert.match(client, /rerun.*reused/)
 })

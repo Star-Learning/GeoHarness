@@ -17,9 +17,9 @@ source, and it is not a separate Chat + Map website.
 
 - A dual-face Harness plugin/bundle: Host plugin plus browser module, composed through current
   `dsh.bundle`, `dsh.client`, Cordis Service and Harness Slot contracts.
-- A three-column GIS workspace opened from the original conversation header through the official
-  `conversation.session.header.actions` and `shell.overlay` surfaces: Layer Registry,
-  interactive vector map and observable Agent Task Graph.
+- A three-column GIS workspace that directly replaces the official `conversation` single Slot:
+  opening Harness immediately shows GeoHarness while retaining the upstream AppFrame, sidebar,
+  DSW theme tokens and session infrastructure.
 - Twelve model-facing Geo Tools with Harness schema validation, timeout/cancellation, structured
   `ToolResult` and prompt guidance.
 - A cancellable local Python provider using GeoPandas, Shapely, PyProj and persistent GeoPackage
@@ -27,8 +27,10 @@ source, and it is not a separate Chat + Map website.
 - An executable DAG runtime with dependency resolution, state transitions, Layer aliases and run
   history.
 - Verified `Task Step ↔ Layer ↔ Map` projection over the official loopback Connection RPC.
-- Conversational Scenario 05 revision from 500 m to 200 m with downstream-only rerun and retained
-  lineage.
+- Goal-driven routing from the user's prompt into the bounded v1.0 workflows. Explicit distances
+  are patched into the initial Task Graph before execution; a real 275 m Broadway goal runs once
+  at 275 m and returns 241 official buildings, without a hidden 500 m pass.
+- Conversational Scenario 05 revision to 200 m with downstream-only rerun and retained lineage.
 - Seven independent Scenario packages, each with its own data, prompt, Task Graph, oracle-backed
   test, README, screenshots, animated Demo and video script.
 - Every Scenario is backed by a dated, audited NYC Open Data snapshot and uses the same Tool,
@@ -38,9 +40,9 @@ source, and it is not a separate Chat + Map website.
 
 ```text
 DeepSeek Harness Web
-  └─ conversation.session.header.actions + shell.overlay Slots
-       └─ in-conversation GIS button + GeoHarness side workspace
-            └─ official Connection RPC (/geoharness)
+  └─ conversation single Slot (priority -100 takeover)
+       └─ GeoHarness primary GIS workspace
+            └─ official Connection RPC (/geoharness/goal/run)
                  └─ TaskGraphRuntime + Map Verification
                       └─ 12 Harness defineTool consumers
                            └─ cancellable local Python provider
@@ -84,9 +86,10 @@ dsh plugin --profile web add ./bundle/geoharness-bundle
 dsh --profile web --no-open
 ```
 
-In Harness, open a session for this repository, click **GIS 地图** in the original conversation
-header, select a Scenario and press **Run + verify on map**. GeoHarness does not add a separate
-conversation tab. The frozen official-data workflows do not require a model API key.
+Open Harness and the center surface is already GeoHarness. Enter a spatial requirement in the
+bottom input and press **执行 GIS 任务**. The Example selector only loads sample prompts; the Host
+resolves the actual workflow and parameters from the submitted text. GeoHarness does not add a
+separate tab or drawer. The frozen official-data workflows do not require a model API key.
 
 ## Seven official-data v1.0 Demos
 
@@ -135,7 +138,7 @@ pnpm run verify:phase10
 Other useful commands:
 
 ```sh
-pnpm run verify:phase9       # real RPC + GeoPandas 500 m → 200 m partial rerun
+pnpm run verify:phase9       # real 275 m initial goal + 500 m → 200 m partial rerun
 pnpm run check:official-data # verify official source hashes and derived statistics
 pnpm run build:media         # rebuild GIFs from the committed real screenshots
 pnpm run check:scenarios     # prove generated official-data packages are fresh
@@ -148,8 +151,9 @@ pnpm peers check             # confirm exact Harness peer compatibility
 - All seven regression Scenarios use committed, dated NYC Open Data snapshots. Refreshes must be
   explicit: download, hash validation, derivative rebuild, independent oracle and reviewed expected
   statistics must all pass before a source update is accepted.
-- Natural-language revision is deliberately bounded to Scenario 05 distance changes with an
-  explicit number and unit; arbitrary replanning is not claimed.
+- Natural-language routing is deliberately bounded to the seven v1.0 workflows. Explicit road
+  and river distances are accepted in metres or kilometres and injected before the initial run;
+  Scenario 05 also supports distance-only follow-up revisions. Arbitrary replanning is not claimed.
 - No external model credential is stored in this repository. Tool schemas and deterministic GIS
   execution are tested through the real Harness runtime; model wording is not an acceptance
   oracle.

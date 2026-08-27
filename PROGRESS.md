@@ -353,3 +353,34 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   截图并生成可复现 GIF；移除已失效的 `result-1km.jpg`。
 - [x] 最终门禁通过：官方数据/场景/media check、typecheck、peer check、Node 45/45、
   Python 9/9、浏览器 UI 回归和 `git diff --check`。
+
+## GeoHarness 主界面替换与输入驱动首轮执行
+
+状态：完成（2026-08-27）
+
+- [x] 重新核对上游 `ui-layout`、`ui-conversation`、`ui-slots` 与 runtime Slot 实现；确认
+  `conversation` 是公开的 `single + session-maybe` 主槽，single cell 按 priority 升序选取
+  winner。GeoHarness 以 `priority: -100` 替换 `ConversationRoot`，不修改上游源码。
+- [x] 删除标题栏 “GIS 地图” action、`shell.overlay` 抽屉和相关 DOM 开关；刷新 Harness 后
+  中心区域立即是 `main[data-geoharness-plugin="loaded"]`，原 action 数量为 0，仍保留 Harness
+  AppFrame、侧栏、session、Connection 和 DSW 主题风格。
+- [x] 新增 loopback-only `/geoharness/goal/run`：只在七个 v1.0 工作流中路由，解析米/公里
+  明确距离，将参数 patch 到克隆的 Task Graph 后再启动第一步；Example selector 只负责加载
+  示例输入，不再决定后台实际执行场景。
+- [x] `TaskGraphRuntime.runScenario` 支持经验证的初始 step parameter patches 与用户原始 goal；
+  patch 只能修改已存在参数，未知 step、未知参数或非法 patch 会 fail loud。buffer 计划标题
+  在初始执行和后续 revision 后均与当前真实距离同步。
+- [x] 新增非预设 275 m 真实验收：实际 RPC handler、TaskGraphRuntime、Python/GeoPandas
+  provider、官方 Broadway/建筑数据、Map Verification 和独立 UTM 18N oracle 全链执行；仅
+  1 轮 initial history，首轮直接使用 275 m，得到 241 栋，最大候选距离 273.7806 m，未先跑
+  500 m。
+- [x] 完整 Harness Web 实测输入 275 m 后显示 `Create 275 m road buffer`、241 candidates、
+  5/5 success、Map ready、history 1；继续输入“改成 200 米”后显示 205 candidates、history 2、
+  `2 rerun · 3 reused` 与 `Create 200 m road buffer`。
+- [x] 对 200 m 结果的全部六个输入/派生图层逐个设置 0.3–0.8 透明度；每一步保留 972 个
+  SVG map features，地图持续可见，无白屏、React 崩溃或 Layer 丢失。
+- [x] Scenario 01–07 均在新的 `conversation` 主界面中重新执行到 success/Map ready，保存
+  15 张 1280×720 真实 Harness 截图并重建七个 Demo GIF。
+- [x] 最终门禁通过：build、typecheck、official-data check、scenario freshness、media check、
+  peer check、Node 46/46、Python 9/9、完整浏览器回归与 `git diff --check`；预览服务继续运行
+  在 `http://127.0.0.1:31994/`。

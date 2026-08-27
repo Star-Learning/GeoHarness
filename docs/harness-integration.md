@@ -132,7 +132,7 @@ Web 客户端不会扫描 GeoHarness 仓库，也不会因为存在一个前端�
 
 Phase 0 曾用最小 factory 证实发现链和 Slot 注册。Phase 1 起已在 GeoHarness
 仓库内建立独立、类型化、可复现的客户端构建流程；当前 `client.js` 由正式源码、
-样式和六个 Scenario 数据生成，仍遵循同一 lazy-CJS 协议，且不依赖上游仓库内部的
+样式和七个 Scenario 数据生成，仍遵循同一 lazy-CJS 协议，且不依赖上游仓库内部的
 `packages/client/tsdown.client.ts`。
 
 ## Slot 选择
@@ -141,38 +141,34 @@ Slot 是当前 Web UI 的公开组合边界。插件注册顺序与 Slot 声明�
 所以外部插件必须等待声明生命周期：
 
 ```js
-ctx.slots.inject('conversation.session.header.actions', () =>
+ctx.slots.inject('conversation', () =>
   ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'geoharness-gis',
-  }, GeoHarnessHeaderAction),
-)
-ctx.slots.inject('shell.overlay', () =>
-  ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'geoharness-gis-panel',
-  }, GeoHarnessPanel),
+    name: 'conversation',
+    priority: -100,
+  }, GeoHarnessShell),
 )
 ```
 
-GeoHarness v1.0 只使用两个加法型 Slot：
+`conversation` 是 `ui-layout` 声明的 `single + session-maybe` 公共 Slot；上游
+`ui-conversation` 以默认优先级 `0` 注册 `ConversationRoot`。`ui-slots` 当前实现按优先级
+升序选取 single cell 的第一个 live entry，并明确允许不同优先级 shadow。因此
+GeoHarness 使用 `-100` 成为该 Slot 的 winner，直接替换整个中心对话表面；Harness
+AppFrame、左侧栏、profile、session、Connection 与主题系统仍由上游提供。
 
-- `conversation.session.header.actions`：session scope 的 list slot，在 Harness 原对话标题栏
-  增加一个原生风格的“GIS 地图”按钮；
-- `shell.overlay`：root scope 的 list slot，承载由该按钮开关的右侧 GIS 工作区。
-
-GeoHarness 不再注册 `conversation.view`，所以不会新增 `GeoHarness` 标签。按钮和面板均是
-Harness AppFrame 中已有公开 seat 的加法型扩展；面板使用 DSW theme tokens，跟随原页面
-背景、标签、边框、交互和业务蓝色，不复制或长期修改上游 UI 源码。
+GeoHarness 不注册 `conversation.view`、`conversation.session.header.actions` 或
+`shell.overlay`，所以没有新标签、标题栏入口或抽屉。页面启动后中心区域立即是
+GeoHarness。工作区继续使用 DSW theme tokens，跟随原页面背景、文字、边框、交互和
+业务蓝色，不复制或长期修改上游 UI 源码。
 
 不能注册到 `root`。当前 `SlotRegistry` 源码明确警告：`root` 是 single slot，
 由 `ui-layout` 的完整 AppFrame 占用；动态注册的新条目会遮蔽整个应用框架，
 同时让框架声明的所有子 Slot 消失。
 
-当前真实 Web 验证确认，`shell.overlay` 可以在保留原对话页和标题栏的同时容纳三栏
-GIS Workspace、SVG 矢量地图、Layer Panel、Task 状态与 Prompt composer；720p 高度约束
-由 drawer 自身处理。因此 v1.0 不需要独立标签或独立 Web surface，更没有修改上游源码
-或另做无关站点。
+当前真实 Web 验证确认，刷新 `http://127.0.0.1:31994/` 后只有一个
+`main[data-geoharness-plugin="loaded"]` 作为中心表面，旧 GIS action 数量为 0；三栏
+GIS Workspace、SVG 矢量地图、Layer Panel、Task 状态与 Prompt composer 均在
+`conversation` 内正常适配 1280×720。因此 v1.0 不需要独立标签、抽屉或平行 Web
+surface，更没有修改上游源码或另做无关站点。
 
 ## Service 与 Tool 的实际接入（Phase 5）
 
@@ -229,8 +225,9 @@ channel，客户端把 `connection` 加入 Cordis inject 后通过
 `ctx.connection.rpc.call(...)` 调用。没有新增第二个 Web 服务，也没有绕过 Harness
 transport/trust fence。
 
-公开三个 bounded endpoint：`scenario/run` 执行官方 Scenario DAG 并返回 step/layer/map
-projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
+公开四个 bounded endpoint：`goal/run` 从输入文本选择现有 v1.0 工作流、解析明确距离并在
+首轮执行前 patch 克隆后的 Task Graph；`scenario/run` 执行指定官方 Scenario DAG 并返回
+step/layer/map projection，`scenario/latest` 读取同一 workspace + Scenario 的最近结果，
 `scenario/revise` 接受 v1.0 Scenario 05 中有明确数值与单位的距离修订。请求只接受七个
 官方数据 Scenario id 和有界 workspace key；修订 endpoint 进一步限制为 Scenario 05 及
 0–100 km 的正距离。成功执行后 Host 会核对 Registry
@@ -249,8 +246,11 @@ Phase 7 在隔离 profile 中实际 POST 该官方 RPC channel，Scenario 02 返
 `success`、Map Verification `ready`、四项检查全为 true，candidate layer 为 132 个要素；
 浏览器同时成功激活声明 `slots + connection` 的 GeoHarness client。
 
-Phase 9 又通过真实 Connection RPC、TaskGraphRuntime 和 Python/GeoPandas provider 连续执行
-`scenario/run` 与 `scenario/revise`：Scenario 05 从 500 m / 329 个候选更新为
+Phase 9 又通过真实 Connection RPC、TaskGraphRuntime 和 Python/GeoPandas provider 执行
+`goal/run`：输入“Broadway 275 米以内”后只产生一轮 initial history，首轮 buffer 参数与
+计划标题均为 275 m，得到 241 个候选；独立 UTM 18N oracle 确认全部候选距离不超过
+275.5 m，没有隐藏的 500 m 运行。随后通过 `scenario/run` 与 `scenario/revise` 验证
+Scenario 05 从 500 m / 329 个候选更新为
 200 m / 205 个候选，history 为 2 轮；仅
 `buffer_major_roads`、`filter_candidate_buildings` 重跑，三个上游 step 被复用，最终
 Map Verification 仍为 `ready`。
@@ -260,7 +260,7 @@ Map Verification 仍为 `ready`。
 Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 Web profile
 中分别运行七个独立 Scenario，不使用另建的 Chat + Map 页面。浏览器显示的 Plan 来自
 各自 `task-graph.json`，Tools 通过 Host Service 调用 Python GIS provider，派生 Layers
-通过官方 Connection RPC 投影到原对话页内打开的 `shell.overlay` GIS 面板。真实结果为：
+通过官方 Connection RPC 投影到直接占用 `conversation` 的 GeoHarness 主界面。真实结果为：
 
 | Scenario | Harness UI 中确认的结果 |
 | --- | --- |
@@ -281,7 +281,7 @@ Phase 10 在同一 DeepSeek Harness `0.1.1-rc.2`、提交 `b150a551` 的完整 W
 
 ## Scenario 07 聚焦快照
 
-Scenario 07 沿用上述同一 Bundle、标题栏 action + `shell.overlay`、Connection RPC、TaskGraphRuntime、
+Scenario 07 沿用上述同一 Bundle、`conversation` 主槽替换、Connection RPC、TaskGraphRuntime、
 Python provider、Layer Registry 与 Map Verification 链路。输入是独立的
 NYC Open Data `BUILDING`（`5zhs-2jue`）在固定 Lower Manhattan bbox 内的 2026-08-27
 审计快照：133 个 MultiPolygon。官方来源、Socrata 查询、publisher、source update、

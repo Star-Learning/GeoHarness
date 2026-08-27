@@ -23,13 +23,11 @@ declare const __GEOHARNESS_SCENARIOS__: EmbeddedScenario[]
 
 const PACKAGE_NAME = '@geoharness/harness-plugin'
 
-type SlotName = 'conversation.session.header.actions' | 'shell.overlay'
+type SlotName = 'conversation'
 
 interface SlotRegistration {
   name: SlotName
-  id: string
-  order?: number
-  label?: string
+  priority?: number
 }
 
 interface SlotService {
@@ -84,6 +82,23 @@ const SCENARIOS: readonly ScenarioPreview[] = __GEOHARNESS_SCENARIOS__.map(paylo
   payload,
 }))
 
+const BROWSER_WORKSPACE_KEY = 'browser:goal'
+
+type TaskGraphStep = EmbeddedScenario['taskGraph']['steps'][number]
+
+interface GoalRunResult {
+  scenario_id?: string
+  goal?: string
+  steps?: TaskGraphStep[]
+  map_verification?: MapVerification
+  run_history?: Array<{ executed_steps: string[], reused_steps: string[] }>
+  goal_resolution?: {
+    prompt: string
+    scenario_id: string
+    parameters: Record<string, unknown>
+  }
+}
+
 function installStyles() {
   if (typeof document === 'undefined') return
   if (document.querySelector(`style[data-plugin=${JSON.stringify(PACKAGE_NAME)}]`) !== null) return
@@ -91,20 +106,6 @@ function installStyles() {
   style.dataset.plugin = PACKAGE_NAME
   style.textContent = __GE0HARNESS_CSS__
   document.head.appendChild(style)
-}
-
-const PANEL_ID = 'geoharness-gis-panel'
-
-function setGeoHarnessPanelOpen(open: boolean) {
-  if (typeof document === 'undefined') return
-  const panel = document.getElementById(PANEL_ID)
-  if (panel === null) return
-  panel.hidden = !open
-  for (const trigger of document.querySelectorAll<HTMLElement>('[data-geoharness-toggle]')) {
-    trigger.setAttribute('aria-expanded', String(open))
-  }
-  if (open) panel.focus()
-  else document.querySelector<HTMLElement>('[data-geoharness-toggle]')?.focus()
 }
 
 function BrandMark({ small = false }: { small?: boolean }) {
@@ -325,7 +326,14 @@ function GeoMap({
   )
 }
 
-function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
+function isDistanceOnlyRevision(value: string) {
+  const hasDistance = /(\d+(?:\.\d+)?)\s*(公里|千米|km|kilometers?|米|m|meters?)/iu.test(value)
+  const hasRevisionVerb = /改|调整|变成|change|set|instead/iu.test(value)
+  const namesNewWorkflow = /broadway|主要道路|道路|road|hudson|east river|河流|river|建筑|building/iu.test(value)
+  return hasDistance && hasRevisionVerb && !namesNewWorkflow
+}
+
+function GeoHarnessShell() {
   const initialScenario = SCENARIOS[1] ?? SCENARIOS[0]
   const [selectedId, setSelectedId] = React.useState(initialScenario.id)
   const selected = React.useMemo(
@@ -343,6 +351,7 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
   const [revisionSummary, setRevisionSummary] = React.useState<string | null>(null)
+  const [taskSteps, setTaskSteps] = React.useState<TaskGraphStep[]>(initialScenario.payload.taskGraph.steps)
 
   const selectScenario = (id: string) => {
     const next = SCENARIOS.find(scenario => scenario.id === id)
@@ -359,16 +368,14 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
     setSelectedStepId(null)
     setRunHistoryCount(0)
     setRevisionSummary(null)
+    setTaskSteps(next.payload.taskGraph.steps)
   }
 
   const submitGoal = async (event: React.FormEvent) => {
     event.preventDefault()
     const value = prompt.trim()
     if (value === '') return
-    setGoal(value)
-    if (selected.payload.revisionPrompt !== null && verification !== null && runStatus === 'success') {
-      await reviseTaskGraph(value)
-    }
+    await executePrompt(value)
   }
 
   const uploadGeoJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -393,32 +400,35 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
 
   const visibleCount = layers.filter(layer => layer.visible).length
   const featureCount = layers.reduce((total, layer) => total + layer.featureCount, 0)
-  const taskSteps = selected.payload.taskGraph.steps
   const plannedOutputs = taskSteps.flatMap(step => step.outputs)
   const highlightedLayerIds = layerIdsForStep(verification, selectedStepId)
-  const activeBufferDistance = verification?.map_layers.find(layer =>
-    layer.active && layer.aliases.includes('major_road_buffer'))?.metadata.parameters?.distance_m
 
-  const runTaskGraph = async () => {
+  const runGoal = async (goalPrompt: string) => {
     if (clientConnection === undefined || runStatus === 'running') return
+    setGoal(goalPrompt)
     setRunStatus('running')
     setRunError(null)
     setSelectedStepId(null)
     try {
-      const response = await clientConnection.rpc.call('/geoharness', 'scenario/run', {
-        scenario_id: selected.id,
-        workspace_key: `browser:${selected.id}`,
+      const response = await clientConnection.rpc.call('/geoharness', 'goal/run', {
+        goal_prompt: goalPrompt,
+        workspace_key: BROWSER_WORKSPACE_KEY,
       })
       if (!response.ok || response.value === null || typeof response.value !== 'object') {
         throw new Error(response.error?.message ?? 'GeoHarness RPC returned no execution')
       }
-      const result = response.value as { map_verification?: MapVerification, run_history?: unknown[] }
+      const result = response.value as GoalRunResult
       if (result.map_verification === undefined) throw new Error('Task Graph result has no map verification')
       if (result.map_verification.status !== 'ready' || !Object.values(result.map_verification.checks).every(Boolean)) {
         throw new Error(result.map_verification.issues.join('; ') || 'Map verification failed')
       }
-      setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
+      const resolvedId = result.goal_resolution?.scenario_id ?? result.map_verification.scenario_id
+      const resolved = SCENARIOS.find(scenario => scenario.id === resolvedId)
+      if (resolved === undefined) throw new Error(`Goal resolved to unknown Scenario ${resolvedId}`)
+      setSelectedId(resolved.id)
+      setLayers(mergeVerificationLayers(registerScenarioLayers(resolved.payload), result.map_verification))
       setVerification(result.map_verification)
+      setTaskSteps(result.steps ?? resolved.payload.taskGraph.steps)
       setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
       setRunHistoryCount(result.run_history?.length ?? 1)
       setRevisionSummary(null)
@@ -427,7 +437,6 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
       if (result.map_verification.status !== 'ready') {
         setRunError(result.map_verification.issues.join('; ') || 'Map verification failed')
       }
-      if (selected.payload.revisionPrompt !== null) setPrompt(selected.payload.revisionPrompt)
     } catch (error) {
       setRunStatus('failed')
       setRunError(error instanceof Error ? error.message : String(error))
@@ -441,7 +450,7 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
     try {
       const response = await clientConnection.rpc.call('/geoharness', 'scenario/revise', {
         scenario_id: selected.id,
-        workspace_key: `browser:${selected.id}`,
+        workspace_key: BROWSER_WORKSPACE_KEY,
         revision_prompt: revisionPrompt,
       })
       if (!response.ok || response.value === null || typeof response.value !== 'object') {
@@ -457,6 +466,10 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
       }
       setLayers(current => mergeVerificationLayers(current, result.map_verification as MapVerification))
       setVerification(result.map_verification)
+      if (Array.isArray((response.value as GoalRunResult).steps)) {
+        setTaskSteps((response.value as GoalRunResult).steps ?? taskSteps)
+      }
+      setGoal(revisionPrompt)
       setRunStatus(result.map_verification.status === 'ready' ? 'success' : 'failed')
       setRunHistoryCount(result.run_history?.length ?? 0)
       const latestRun = result.run_history?.at(-1)
@@ -473,6 +486,15 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
     }
   }
 
+  async function executePrompt(value: string) {
+    if (verification !== null && runStatus === 'success' && selected.id === '05-parameter-revision'
+      && isDistanceOnlyRevision(value)) {
+      await reviseTaskGraph(value)
+      return
+    }
+    await runGoal(value)
+  }
+
   const stepIcon = (status: TaskStepStatus, index: number) => {
     if (status === 'success') return '✓'
     if (status === 'failed') return '!'
@@ -481,17 +503,17 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
   }
 
   return (
-    <main className="gh-shell" data-geoharness-phase="7">
+    <main className="gh-shell" data-geoharness-plugin="loaded" data-geoharness-phase="10">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
           <span>
-            <strong>GIS Workspace</strong>
-            <small>GeoHarness · official data</small>
+            <strong>GeoHarness</strong>
+            <small>Agentic GIS · official data</small>
           </span>
         </div>
         <div className="gh-launcher">
-          <label htmlFor="gh-scenario">Scenario</label>
+          <label htmlFor="gh-scenario">Example</label>
           <select
             id="gh-scenario"
             value={selectedId}
@@ -505,7 +527,6 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
             ))}
           </select>
           <span className="gh-status"><i /> {layers.length} layers · {featureCount} features</span>
-          {onClose !== undefined && <button type="button" className="gh-drawer-close" onClick={onClose} aria-label="Close GIS workspace">×</button>}
         </div>
       </header>
 
@@ -579,9 +600,6 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
               <ol className="gh-plan-list" data-task-graph={selected.payload.taskGraph.scenario_id}>
                 {taskSteps.map((step, index) => {
                   const status = stepStatus(verification, step.id)
-                  const title = step.id === 'buffer_major_roads' && typeof activeBufferDistance === 'number'
-                    ? `Create ${activeBufferDistance} m road buffer`
-                    : step.title
                   return <li
                   className={`is-${status}${selectedStepId === step.id ? ' is-selected' : ''}`}
                   data-step-id={step.id}
@@ -591,7 +609,7 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
                   <button type="button" className="gh-step-button" onClick={() => setSelectedStepId(step.id)}>
                   <i>{stepIcon(status, index)}</i>
                   <span>
-                    <b>{title}</b>
+                    <b>{step.title}</b>
                     <small>{step.tool} · deps {step.dependencies.length === 0 ? '—' : step.dependencies.join(', ')}</small>
                     {step.outputs.length > 0 && <small>→ {step.outputs.join(', ')}</small>}
                   </span>
@@ -607,8 +625,8 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
               <div><span>History</span><b>{runHistoryCount} run{runHistoryCount === 1 ? '' : 's'}</b></div>
               {revisionSummary !== null && <div><span>Revision</span><b>{revisionSummary}</b></div>}
               <div><span>Map</span><b className="is-teal">{verification?.status ?? 'awaiting run'}</b></div>
-              <button className="gh-run-button" type="button" onClick={runTaskGraph} disabled={clientConnection === undefined || runStatus === 'running'}>
-                {runStatus === 'running' ? 'Running GIS workflow…' : 'Run + verify on map'}
+              <button className="gh-run-button" type="button" onClick={() => { void executePrompt(prompt.trim() || goal) }} disabled={clientConnection === undefined || runStatus === 'running'}>
+                {runStatus === 'running' ? 'Running GIS workflow…' : 'Run current input'}
               </button>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
@@ -625,44 +643,10 @@ function GeoHarnessShell({ onClose }: { onClose?: () => void } = {}) {
           aria-label="Describe your spatial goal"
           placeholder="描述你想解决的空间问题……"
         />
-        <button type="submit" disabled={prompt.trim() === ''}>Set goal <span>↗</span></button>
+        <button type="submit" disabled={prompt.trim() === '' || runStatus === 'running'}>执行 GIS 任务 <span>↗</span></button>
       </form>
     </main>
   )
-}
-
-function GeoHarnessHeaderAction() {
-  return <button
-    type="button"
-    className="gh-header-action"
-    data-geoharness-toggle
-    aria-controls={PANEL_ID}
-    aria-expanded="false"
-    onClick={() => {
-      const panel = typeof document === 'undefined' ? null : document.getElementById(PANEL_ID)
-      setGeoHarnessPanelOpen(panel === null || panel.hidden === true)
-    }}
-  ><BrandMark small /> GIS 地图</button>
-}
-
-function GeoHarnessPanel() {
-  return <section
-    id={PANEL_ID}
-    className="gh-overlay"
-    data-geoharness-plugin="loaded"
-    role="dialog"
-    aria-label="GeoHarness GIS workspace"
-    aria-modal="false"
-    tabIndex={-1}
-    hidden
-    onKeyDown={event => {
-      if (event.key === 'Escape') setGeoHarnessPanelOpen(false)
-    }}
-  >
-    <div className="gh-drawer">
-      <GeoHarnessShell onClose={() => setGeoHarnessPanelOpen(false)} />
-    </div>
-  </section>
 }
 
 export const inject = ['slots', 'connection'] as const
@@ -670,16 +654,10 @@ export const inject = ['slots', 'connection'] as const
 export function apply(ctx: ClientContext) {
   clientConnection = ctx.connection
   installStyles()
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'geoharness-gis',
-    order: 30,
-  }, GeoHarnessHeaderAction))
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
-    id: 'geoharness-gis-panel',
-    order: 30,
-  }, GeoHarnessPanel))
+  ctx.slots.inject('conversation', () => ctx.slots.register({
+    name: 'conversation',
+    priority: -100,
+  }, GeoHarnessShell))
 }
 
 // Kept as a value reference so TypeScript preserves the jsx-runtime external.
