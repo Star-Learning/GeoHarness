@@ -2,6 +2,8 @@
 
 GeoHarness 是 DeepSeek Harness 的 Agentic GIS 插件。直接用自然语言描述空间分析需求，Agent 会选择数据与 GIS 工具，并同步展示执行过程、地图图层和最终结果。
 
+![GeoHarness 主界面](examples/scenarios/05-parameter-revision/screenshots/result-200m.jpg)
+
 ## 安装
 
 环境要求：Node.js `^22.19.0` 或 `>=24.0.0`、pnpm `11.22.0`、Python `>=3.11`。
