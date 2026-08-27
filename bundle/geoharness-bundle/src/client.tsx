@@ -41,6 +41,31 @@ interface ApiResponse<T> {
   result: { ok: true, value: T } | { ok: false, error: { message: string, code?: string } }
 }
 
+interface ModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
+interface ModelCatalogModel {
+  id: string
+  name: string
+  description?: string
+}
+
+interface ModelProviderGroup {
+  id: string
+  name: string
+  models: ModelCatalogModel[]
+}
+
+interface ModelDirectory {
+  routable: boolean
+  current: ModelSelection
+  groups: ModelProviderGroup[]
+  failures: Array<{ id: string, name: string, message: string }>
+}
+
 interface ClientContext {
   slots: SlotService
   connection?: {
@@ -48,10 +73,8 @@ interface ClientContext {
       sessions: {
         create(payload: { sessionId: string }): Promise<ApiResponse<{ sessionId: string }>>
         history(payload: { sessionId: string, maxMessages?: number }): Promise<ApiResponse<{ events: unknown[] }>>
-        models(payload: { sessionId: string }): Promise<ApiResponse<{
-          routable: boolean
-          current: { provider: string, model: string }
-        }>>
+        models(payload: { sessionId: string }): Promise<ApiResponse<ModelDirectory>>
+        selectModel(payload: { sessionId: string } & ModelSelection): Promise<ApiResponse<{ selected: ModelSelection }>>
         prompt(payload: {
           sessionId: string
           mode: 'queue' | 'steer'
@@ -346,7 +369,8 @@ interface GeoHarnessInjected {
   agent: {
     createSession(): Promise<{ sessionId: string }>
     history(): Promise<{ events: unknown[] }>
-    models(): Promise<{ routable: boolean, current: { provider: string, model: string } }>
+    models(): Promise<ModelDirectory>
+    selectModel(selection: ModelSelection): Promise<ModelSelection>
     prompt(text: string): Promise<{ accepted: true }>
     workspace(): Promise<WorkspaceProjection>
     credentialDirectory(): Promise<CredentialDirectory>
@@ -406,7 +430,11 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
   const [taskSteps, setTaskSteps] = React.useState<AgentToolStep[]>([])
   const [agentAnswer, setAgentAnswer] = React.useState('')
-  const [agentModel, setAgentModel] = React.useState('Harness model not checked')
+  const [agentModel, setAgentModel] = React.useState('正在读取 Harness 模型…')
+  const [modelDirectory, setModelDirectory] = React.useState<ModelDirectory | null>(null)
+  const [modelLoading, setModelLoading] = React.useState(false)
+  const [modelSelecting, setModelSelecting] = React.useState(false)
+  const [modelError, setModelError] = React.useState<string | null>(null)
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [settingsLoading, setSettingsLoading] = React.useState(false)
@@ -431,6 +459,25 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
     document.addEventListener('keydown', closeOnEscape)
     return () => document.removeEventListener('keydown', closeOnEscape)
   }, [settingsOpen])
+
+  const refreshModels = async () => {
+    setModelLoading(true)
+    setModelError(null)
+    try {
+      await agent.createSession()
+      const directory = await agent.models()
+      setModelDirectory(directory)
+      setAgentModel(`${directory.current.provider} / ${directory.current.model}`)
+    } catch (error) {
+      setModelError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setModelLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    void refreshModels()
+  }, [])
 
   const refreshCredentialDirectory = async () => {
     setSettingsLoading(true)
@@ -460,6 +507,7 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
       await agent.setCredential(provider.ref, value)
       setCredentialDrafts(current => ({ ...current, [provider.ref]: '' }))
       await refreshCredentialDirectory()
+      await refreshModels()
     } catch (error) {
       setSettingsError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -472,6 +520,35 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
     const value = prompt.trim()
     if (value === '') return
     await executePrompt(value)
+  }
+
+  const changeModel = async (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const encoded = event.currentTarget.value
+    let selection: ModelSelection
+    try {
+      const parsed = JSON.parse(encoded) as unknown
+      if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') {
+        throw new Error('invalid model selection')
+      }
+      selection = { provider: parsed[0], model: parsed[1] }
+    } catch {
+      setModelError('无法识别所选 Harness 模型。')
+      return
+    }
+    setModelSelecting(true)
+    setModelError(null)
+    try {
+      await agent.createSession()
+      const selected = await agent.selectModel(selection)
+      setAgentModel(`${selected.provider} / ${selected.model}`)
+      const directory = await agent.models()
+      setModelDirectory(directory)
+      setAgentModel(`${directory.current.provider} / ${directory.current.model}`)
+    } catch (error) {
+      setModelError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setModelSelecting(false)
+    }
   }
 
   const toggleLayer = (layer: LayerRecord) => {
@@ -548,6 +625,21 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
       || (semanticStepId !== null && layer.generatedBy === semanticStepId))
     .map(layer => layer.id))
   const successfulSteps = taskSteps.filter(step => step.status === 'success')
+  const currentModelValue = modelDirectory === null
+    ? ''
+    : JSON.stringify([modelDirectory.current.provider, modelDirectory.current.model])
+  const currentModelInCatalog = modelDirectory?.groups.some(group => group.id === modelDirectory.current.provider
+    && group.models.some(model => model.id === modelDirectory.current.model)) ?? false
+  const modelStatus = modelError !== null
+    ? modelError
+    : modelLoading
+      ? '正在刷新 Harness 模型…'
+      : modelSelecting
+        ? '正在切换模型…'
+        : modelDirectory?.routable === false
+          ? '当前模型不可路由，请配置 API Key 或切换模型'
+          : 'Native Harness Agent · 自动规划 GIS 工具与图层'
+  const submitLabel = runStatus === 'running' ? 'GIS 任务正在执行' : '执行 GIS 任务'
 
   const stepIcon = (status: AgentToolStep['status'], index: number) => {
     if (status === 'success') return '✓'
@@ -699,18 +791,56 @@ function GeoHarnessShell({ agent }: GeoHarnessInjected) {
         </aside>
       </section>
 
-      <form className="gh-composer" onSubmit={submitGoal}>
-        <BrandMark small />
-        <textarea
-          value={prompt}
-          onChange={event => setPrompt(event.currentTarget.value)}
-          rows={1}
-          aria-label="Describe your spatial goal"
-          placeholder="描述你想解决的空间问题……"
-        />
-        <button type="submit" disabled={prompt.trim() === '' || runStatus === 'running'}>
-          {runStatus === 'running' ? '正在执行…' : '执行 GIS 任务'} <span>↗</span>
-        </button>
+      <form className="gh-composer" data-composer-card onSubmit={submitGoal}>
+        <div className="gh-composer-input">
+          <BrandMark small />
+          <textarea
+            value={prompt}
+            onChange={event => setPrompt(event.currentTarget.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault()
+                event.currentTarget.form?.requestSubmit()
+              }
+            }}
+            rows={2}
+            aria-label="Describe your spatial goal"
+            placeholder="描述你想解决的空间问题……"
+          />
+        </div>
+        <div className="gh-composer-toolbar">
+          <span className={modelError !== null || modelDirectory?.routable === false ? 'gh-composer-status is-error' : 'gh-composer-status'} title={modelStatus}>{modelStatus}</span>
+          <div className="gh-composer-trailing">
+            <select
+              className="gh-model-select"
+              aria-label="切换 Harness 模型"
+              title="切换当前 GeoHarness 会话使用的模型"
+              value={currentModelValue}
+              disabled={runStatus === 'running' || modelLoading || modelSelecting || modelDirectory === null}
+              onChange={event => { void changeModel(event) }}
+            >
+              {modelDirectory === null && <option value="">正在读取模型…</option>}
+              {modelDirectory !== null && !currentModelInCatalog && <optgroup label="当前路由">
+                <option value={currentModelValue}>{modelDirectory.current.provider} / {modelDirectory.current.model}</option>
+              </optgroup>}
+              {modelDirectory?.groups.map(group => <optgroup label={`${group.name} · ${group.id}`} key={group.id}>
+                {group.models.map(model => <option value={JSON.stringify([group.id, model.id])} key={`${group.id}/${model.id}`}>
+                  {model.name}{model.name === model.id ? '' : ` · ${model.id}`}
+                </option>)}
+              </optgroup>)}
+            </select>
+            <button
+              type="submit"
+              aria-label={submitLabel}
+              title={submitLabel}
+              disabled={prompt.trim() === '' || runStatus === 'running' || modelSelecting || modelDirectory?.routable === false}
+            >
+              {runStatus === 'running'
+                ? <span aria-hidden="true">…</span>
+                : <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8.3 1c.4.1.7.2 1 .5l5.4 5.3-1.4 1.4L9 4v11H7V4L2.7 8.2 1.3 6.8l5.4-5.3c.4-.3.9-.5 1.6-.5Z" fill="currentColor" /></svg>}
+            </button>
+          </div>
+        </div>
       </form>
 
       {settingsOpen && <div className="gh-settings-overlay" role="presentation">
@@ -784,6 +914,10 @@ export function apply(ctx: ClientContext) {
           await connection.api.sessions.models({ sessionId: AGENT_SESSION_ID }),
           '读取 Harness 模型配置失败',
         ),
+        selectModel: async selection => resultValue(
+          await connection.api.sessions.selectModel({ sessionId: AGENT_SESSION_ID, ...selection }),
+          '切换 Harness 模型失败',
+        ).selected,
         prompt: async (text: string) => resultValue(await connection.api.sessions.prompt({
           sessionId: AGENT_SESSION_ID,
           mode: 'queue',

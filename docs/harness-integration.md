@@ -91,12 +91,19 @@ Session API，并以固定 Agent session id 管理当前 GIS 工作台会话；�
 ```text
 sessions.create({ sessionId })
 sessions.models({ sessionId })
+sessions.selectModel({ sessionId, provider, model })
 sessions.history({ sessionId })
 sessions.prompt({ sessionId, mode: "queue", content })
 ```
 
 `sessions.models` 用来检查当前 profile 是否存在可路由模型。没有模型时 UI 返回明确配置
 错误；不会调用旧 `goal/start`，也不会回退到固定 Scenario。
+
+底部输入区遵循当前上游 `ui-conversation` 的 composer 布局：多行输入位于上方，工具栏位于
+下方，右侧是模型选择和圆形发送键。模型选项直接来自 `sessions.models.groups`，按 Provider
+分组；用户切换后调用 `sessions.selectModel` 修改 `geoharness-main` Session 的真实选择，再次
+读取目录确认 Host 已接受。模型目录加载或选择失败会在输入区明确显示，不能用客户端本地
+状态伪造成功。API Key 仍由左下角 Harness credential store 入口管理。
 
 提交前记录 history 最大序号，提交后轮询 `sessions.history`。`agent-session.ts` 只投影本轮
 新事件：

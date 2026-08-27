@@ -153,12 +153,22 @@
 .gh-result-trace i { color: var(--gh-success); font-style: normal; }
 .gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }
 
-.gh-composer { margin: 12px 14px 14px; min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 8px 9px 8px 12px; border: 1px solid var(--gh-line-strong); border-radius: 14px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); }
-.gh-composer textarea { min-width: 0; flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--gh-ink); font-size: 14px; line-height: 1.4; }
+.gh-composer { margin: 12px 14px 14px; min-height: 106px; display: grid; padding: 9px 10px 8px; border: 1px solid var(--gh-line-strong); border-radius: 16px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); }
+.gh-composer-input { min-width: 0; display: flex; align-items: flex-start; gap: 10px; padding: 3px 4px 0; }
+.gh-composer-input .gh-brand-mark { margin-top: 1px; }
+.gh-composer textarea { min-width: 0; min-height: 48px; flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--gh-ink); font-size: 14px; line-height: 1.5; }
 .gh-composer textarea::placeholder { color: var(--gh-muted); }
-.gh-composer button { height: 38px; padding: 0 14px; border: 0; border-radius: 9px; background: var(--dsw-alias-button-info-fill); color: var(--dsw-alias-button-info-text); cursor: pointer; box-shadow: 0 1px 1px color-mix(in srgb, black 10%, transparent); font-size: 12px; font-weight: 600; }
+.gh-composer-toolbar { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 2px 0 32px; }
+.gh-composer-status { min-width: 0; overflow: hidden; color: var(--gh-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.gh-composer-status.is-error { color: var(--gh-error); }
+.gh-composer-trailing { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.gh-model-select { max-width: 260px; height: 30px; padding: 0 22px 0 9px; border: 0; border-radius: 8px; outline: none; appearance: none; background-color: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; color: var(--gh-muted); cursor: pointer; font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.gh-model-select:hover:not(:disabled) { background-color: var(--gh-fill-hover); color: var(--gh-ink); }
+.gh-model-select:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 24%, transparent); }
+.gh-model-select:disabled { cursor: default; opacity: .55; }
+.gh-composer button { width: 36px; height: 36px; display: grid; place-items: center; flex: none; padding: 0; border: 0; border-radius: 50%; background: var(--dsw-alias-button-info-fill); color: #fff; cursor: pointer; box-shadow: 0 1px 1px color-mix(in srgb, black 10%, transparent); font-size: 13px; font-weight: 600; }
+.gh-composer button:hover:not(:disabled) { background: var(--dsw-alias-button-info-hover); }
 .gh-composer button:disabled { cursor: default; opacity: .4; }
-.gh-composer button span { margin-left: 4px; }
 
 .gh-settings-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; }
 .gh-settings-mask { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); cursor: default; }
@@ -202,6 +212,9 @@
   .gh-workspace { grid-template-columns: 1fr; }
   .gh-layers { display: none; }
   .gh-composer { margin: 8px; }
+  .gh-composer-toolbar { padding-left: 4px; }
+  .gh-composer-status { display: none; }
+  .gh-model-select { max-width: min(62vw, 240px); }
   .gh-settings-overlay { padding: 12px; }
   .gh-settings-dialog { max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: 16px; }
   .gh-provider-editor { grid-template-columns: 1fr; }

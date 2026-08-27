@@ -464,3 +464,19 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 1170×912 浏览器实测 document 与 viewport 均为 1170×912、无页面溢出；三栏工作台、
   空地图、Agent cards、底部输入和 680 px 凭据弹窗均完整可见。
 - [x] 最终门禁通过：build、typecheck、peer、Node 51/51、Python 9/9 和 `git diff --check`。
+
+## Harness 原生风格输入框与模型切换
+
+状态：完成（2026-08-27）
+
+- [x] 按当前上游 `ui-conversation` composer 结构把底部输入区改为上方多行文本、下方工具栏、
+  模型选择和圆形发送键；继续使用 Harness DSW token，没有恢复无关的会话/项目侧栏。
+- [x] 从真实 `sessions.models.groups` 按 Provider 分组加载模型，并通过
+  `sessions.selectModel({ sessionId, provider, model })` 修改固定 GeoHarness Session 的选择；
+  选择后重新读取 Host 目录确认，错误和不可路由状态在输入区 fail-loud。
+- [x] 保留 Enter 发送、Shift+Enter 换行、运行期锁定模型和单一执行入口；API Key 继续由左下角
+  Harness credential store 入口管理，保存凭据后模型目录同步刷新。
+- [x] 浏览器真实切换 `ustc / deepseek-v4-flash-ascend1` →
+  `deepseek-official / deepseek-v4-flash` 后右侧 Current Step 同步更新，再恢复原模型；
+  1170×912 下 document 与 viewport 完全一致，108 px composer 无溢出。
+- [x] 最终门禁通过：build、typecheck、peer、Node 51/51、Python 9/9 和 `git diff --check`。

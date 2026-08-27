@@ -25,6 +25,7 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
     'GeoHarness', 'Map workspace', 'Layer panel', 'Agent workspace',
     'Describe your spatial goal', 'Native Harness Agent', 'LIVE AGENT TOOL TRACE',
     'HARNESS SETTINGS', 'API keys · model providers',
+    '切换 Harness 模型',
   ]) assert.match(source, new RegExp(label, 'i'))
   assert.match(styles, /grid-template-columns: 236px minmax\(340px, 1fr\) 304px/)
   assert.match(styles, /--dsw-alias-bg-base/)
@@ -41,6 +42,11 @@ test('Phase 1 UI shell surfaces remain present as later phases extend the worksp
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /ctx\.tools|\/api\/geo|FastAPI/i)
   assert.match(source, /connection\.api\.sessions\.prompt/)
+  assert.match(source, /connection\.api\.sessions\.models/)
+  assert.match(source, /connection\.api\.sessions\.selectModel/)
+  assert.match(source, /<optgroup label=/)
+  assert.match(source, /data-composer-card/)
+  assert.match(styles, /\.gh-model-select/)
   assert.match(source, /agent\/workspace/)
   assert.match(source, /AGENT RESULT/)
   assert.match(source, /projectAgentHistory/)
@@ -83,12 +89,18 @@ test('the generated factory replaces the Harness root Slot with the GeoHarness s
   }, ['providers', 'ustc']))), { apiKeyEnv: 'USTC_API_KEY' })
 
   const slots = []
+  let selectedModelPayload
   plugin.apply({
     slots: {
       register: (options, component) => { slots.push({ options, component }); return () => {} },
     },
     connection: {
-      api: { sessions: {} },
+      api: { sessions: {
+        selectModel: async payload => {
+          selectedModelPayload = payload
+          return { result: { ok: true, value: { selected: { provider: payload.provider, model: payload.model } } } }
+        },
+      } },
       rpc: {},
     },
   })
@@ -99,7 +111,16 @@ test('the generated factory replaces the Harness root Slot with the GeoHarness s
   assert.equal(appendedStyles.length, 1)
   assert.match(appendedStyles[0].textContent, /\.gh-shell/)
 
-  const shell = slots[0].component(slots[0].options.inject())
+  const injected = slots[0].options.inject()
+  assert.deepEqual(
+    await injected.agent.selectModel({ provider: 'deepseek-official', model: 'deepseek-v4-flash' }),
+    { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+  )
+  assert.deepEqual(JSON.parse(JSON.stringify(selectedModelPayload)), {
+    sessionId: 'geoharness-main', provider: 'deepseek-official', model: 'deepseek-v4-flash',
+  })
+
+  const shell = slots[0].component(injected)
   assert.equal(shell.props['data-geoharness-plugin'], 'loaded')
   assert.equal(shell.props['data-geoharness-agent'], 'native')
   assert.equal(shell.type, 'main')
