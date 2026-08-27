@@ -28,7 +28,6 @@ const PACKAGE_NAME = '@geoharness/harness-plugin'
 
 type SlotName =
   | 'conversation.session'
-  | 'sidebar.workspaces'
   | 'sidebar.brand.mark'
   | 'sidebar.brand.name'
 
@@ -413,19 +412,19 @@ function renderLayerRow(
   )
 }
 
-function GeoHarnessLayerPanel({ wide }: { wide: boolean }) {
+function GeoHarnessLayerPanel({ onClose }: { onClose: () => void }) {
   const workspace = useLayerWorkspace()
   const inputLayers = workspace.layers.filter(layer => layer.source !== 'derived')
   const derivedLayers = workspace.layers.filter(layer => layer.source === 'derived')
   const visibleCount = workspace.layers.filter(layer => layer.visible).length
-  if (!wide) {
-    return <div className="gh-layer-rail" aria-label="GeoHarness layers"><span aria-hidden="true">▱</span><small>{workspace.layers.length}</small></div>
-  }
   return (
-    <section className="gh-sidebar-layers" aria-label="Layer panel">
+    <section className="gh-sidebar-layers gh-map-layer-panel" aria-label="Layer panel">
       <div className="gh-sidebar-layer-heading">
         <span><b>Layers</b><small>Verified Agent workspace</small></span>
-        <span className="gh-panel-count">{workspace.layers.length}</span>
+        <span className="gh-layer-panel-actions">
+          <span className="gh-panel-count">{workspace.layers.length}</span>
+          <button type="button" className="gh-layer-panel-close" aria-label="关闭图层面板" onClick={onClose}>×</button>
+        </span>
       </div>
       <div className="gh-layer-section-label">Agent-loaded data</div>
       <div className="gh-layer-list">
@@ -462,13 +461,25 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [agentStream, setAgentStream] = React.useState<AgentStreamItem[]>([])
   const [agentAnswer, setAgentAnswer] = React.useState('')
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
+  const [layerPanelOpen, setLayerPanelOpen] = React.useState(false)
   const activeGoalSeq = React.useRef<number | null>(null)
   const lastAutoStepId = React.useRef<string | null>(null)
   const lastRunStatus = React.useRef<'ready' | 'running' | 'success' | 'failed'>('ready')
   const lastWorkspaceSeq = React.useRef<number | null>(null)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
+  const previousLayerCount = React.useRef(0)
   const layerState = useLayerWorkspace()
   const layers = layerState.sessionId === sessionId ? layerState.layers : []
+
+  React.useEffect(() => {
+    previousLayerCount.current = 0
+    setLayerPanelOpen(false)
+  }, [sessionId])
+
+  React.useEffect(() => {
+    if (previousLayerCount.current === 0 && layers.length > 0) setLayerPanelOpen(true)
+    previousLayerCount.current = layers.length
+  }, [layers.length])
 
   const streamRevision = agentStream.map(item => `${item.id}:${item.status}:${item.text.length}`).join('|')
   React.useEffect(() => {
@@ -586,12 +597,26 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       </header>
 
       <section className="gh-workspace">
-        <GeoMap
-          layers={layers}
-          selected={selectedFeature}
-          highlightedLayerIds={highlightedLayerIds}
-          onSelect={setSelectedFeature}
-        />
+        <section className="gh-map-stage">
+          <GeoMap
+            layers={layers}
+            selected={selectedFeature}
+            highlightedLayerIds={highlightedLayerIds}
+            onSelect={setSelectedFeature}
+          />
+          <button
+            type="button"
+            className="gh-map-layers-toggle"
+            aria-expanded={layerPanelOpen}
+            aria-controls="geoharness-layer-panel"
+            onClick={() => setLayerPanelOpen(open => !open)}
+          >
+            <span aria-hidden="true">▱</span> Layers <small>{layers.length}</small>
+          </button>
+          {layerPanelOpen && <div className="gh-map-layer-drawer" id="geoharness-layer-panel">
+            <GeoHarnessLayerPanel onClose={() => setLayerPanelOpen(false)} />
+          </div>}
+        </section>
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
@@ -696,7 +721,6 @@ export function apply(ctx: ClientContext) {
       },
     }),
   }, GeoHarnessShell)
-  ctx.slots.register({ name: 'sidebar.workspaces', priority: -100 }, GeoHarnessLayerPanel)
   ctx.slots.register({ name: 'sidebar.brand.mark', priority: -100 }, GeoHarnessBrandMark)
   ctx.slots.register({ name: 'sidebar.brand.name', priority: -100 }, GeoHarnessBrandName)
 }

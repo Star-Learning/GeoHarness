@@ -17,9 +17,10 @@ source, and it is not a separate Chat + Map website.
 
 - A dual-face Harness plugin/bundle: Host plugin plus browser module, composed through current
   `dsh.bundle`, `dsh.client`, Cordis Service and Harness Slot contracts.
-- A three-column GIS workspace mounted inside the upstream `AppFrame` through
-  `conversation.session`, with GeoHarness branding/workspace seats and the native Harness settings
-  entry, composer and model selector preserved.
+- A GIS workspace mounted inside the upstream `AppFrame` through `conversation.session`, with the
+  native Harness project/session history, settings entry, composer and model selector preserved.
+- A session-scoped Layers drawer inside the map. GeoHarness deliberately does not replace
+  `sidebar.workspaces`, so creating a new session keeps earlier project sessions selectable.
 - The native lower-left **设置** surface, including the upstream Provider and secure credential
   configuration. GeoHarness never reads, renders or stores the secret value itself.
 - 13 Harness defineTool consumers, including `discover_datasets`, with schema validation,
@@ -46,7 +47,7 @@ source, and it is not a separate Chat + Map website.
 
 ```text
 DeepSeek Harness Web AppFrame
-  ├─ native sidebar settings → Provider / credential configuration
+  ├─ native sidebar → projects / session history / Provider settings
   └─ conversation.session → GeoHarness primary GIS workspace
        ├─ native InputBar / ModelSelect → Harness Session → Native Agent
        │    └─ SystemPrompt + ToolRuntime → 13 Harness defineTool consumers
@@ -54,7 +55,7 @@ DeepSeek Harness Web AppFrame
        │              └─ GeoPandas / Shapely / PyProj / GeoPackage
        ├─ sessions.history → synchronized Agent stream / Tool progress
        └─ Connection RPC (/geoharness/agent/workspace)
-            └─ verified Layer Registry projection → interactive map
+            └─ verified Layer Registry projection → map Layers drawer / interactive map
 ```
 
 The Registry is the Layer truth source. Agent text never invents Layer IDs or map state. The map

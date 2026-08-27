@@ -176,3 +176,10 @@ GeoHarness 源码不再调用 `sessions.prompt/models/selectModel`。是否能�
 typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。空会话阶段额外出现的上游
 “探索未至之境 / 预览版”Hero 遮挡已通过 `data-phase="hero"` 精确作用域解决，不影响普通会话
 或任何原生 composer 控件。
+
+### 9. 项目与历史会话导航
+
+已解决，不是活跃阻塞。此前 GeoHarness 注册 `sidebar.workspaces` 后，左侧只显示 Layers，导致
+点击“新建会话”后没有入口返回同一项目中的旧会话。当前插件不再注册该 Slot，项目选择、会话
+创建和历史切换恢复为 Harness 原生实现；Layers 已迁移到地图内可收起面板，仍按 Session ID
+隔离，不需要在“历史导航”和“GIS 图层控制”之间二选一。

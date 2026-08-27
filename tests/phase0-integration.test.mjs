@@ -154,13 +154,13 @@ test('the browser artifact preserves native root chrome and replaces only GeoHar
     registrations.map(({ options }) => ({ name: options.name, priority: options.priority })),
     [
       { name: 'conversation.session', priority: -100 },
-      { name: 'sidebar.workspaces', priority: -100 },
       { name: 'sidebar.brand.mark', priority: -100 },
       { name: 'sidebar.brand.name', priority: -100 },
     ],
   )
   assert.ok(registrations.every(({ options }) => options.children === undefined))
   assert.doesNotMatch(code, /name:\s*["']root["']/)
+  assert.doesNotMatch(code, /name:\s*["']sidebar\.workspaces["']/)
   assert.doesNotMatch(code, /sidebar\.settings|conversation\.input\.model/)
 })
 

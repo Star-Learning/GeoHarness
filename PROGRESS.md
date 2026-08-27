@@ -525,3 +525,20 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 浏览器 1280×720 验收发现原生 composer 高度为 190 px 后，将 Agent 滚动区底部 clearance
   调整为 210 px；滚动到底时完整 Stream 与 composer 保持 12.5 px 间距，页面无溢出或
   console error。
+
+## 恢复原生项目与历史会话导航
+
+状态：完成（2026-08-27）
+
+- [x] 移除 GeoHarness 对 `sidebar.workspaces` 的替换注册，让 Harness 原生 Workspace/Project、
+  新建会话和项目内历史会话列表重新成为左侧主导航；品牌、设置、模型选择和右侧输入框仍是
+  原生装配链。
+- [x] GeoHarness 继续按当前真实 Session ID 渲染 `conversation.session`，所以切换旧会话会恢复
+  该会话自身的 Goal、Agent Stream、Tool Trace 与 Layer Registry，不共享或覆盖其他会话。
+- [x] 将原左侧 Layers 移为地图内可收起 drawer；空会话默认收起，首次产生真实图层时自动展开，
+  仍保留显隐、透明度、派生输出、CRS 和当前步骤高亮。
+- [x] 更新 Phase 0/1 Slot contract 回归和当前 Harness 集成文档，明确 GeoHarness 不再拥有
+  `sidebar.workspaces`。
+- [x] 完整门禁通过：Node 53/53、Python 9/9、client build、TypeScript、peer dependencies 与
+  `git diff --check`。本轮内置浏览器对既有 `127.0.0.1` 标签页的刷新被 URL 安全策略拦截，未以
+  其他自动化方式绕过；服务仍占用 31994，用户手动刷新即可完成最终视觉确认。

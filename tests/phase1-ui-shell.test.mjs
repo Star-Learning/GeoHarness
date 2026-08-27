@@ -27,9 +27,9 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   ]) assert.match(source, new RegExp(label, 'i'))
 
   assert.match(source, /name: 'conversation\.session'/)
-  assert.match(source, /name: 'sidebar\.workspaces'/)
   assert.match(source, /name: 'sidebar\.brand\.mark'/)
   assert.match(source, /name: 'sidebar\.brand\.name'/)
+  assert.doesNotMatch(source, /name: 'sidebar\.workspaces'/)
   assert.doesNotMatch(source, /name:\s*'root'|name:\s*'conversation'/)
   assert.doesNotMatch(source, /sidebar\.settings|conversation\.input\.model/)
   assert.doesNotMatch(source, /children:\s*\{/)
@@ -50,6 +50,8 @@ test('GeoHarness keeps native Harness chrome and contributes only owned inner sl
   assert.match(styles, /data-chain-overlay-fallback="conversation\.composer"/)
   assert.match(styles, /native Harness ConversationRoot still owns the composer/i)
   assert.match(styles, /\.gh-agent-scroll[^}]+padding:\s*11px 11px 210px/s)
+  assert.match(styles, /\.gh-map-layer-drawer/)
+  assert.match(styles, /\.gh-map-layers-toggle/)
   assert.doesNotMatch(styles, /\.gh-composer\s*\{/)
   assert.match(styles, /--dsw-alias-bg-base/)
   assert.match(styles, /--dsw-alias-state-business-primary/)
@@ -109,7 +111,6 @@ test('the generated factory replaces inner views while leaving native settings a
     slots.map(slot => ({ name: slot.options.name, priority: slot.options.priority })),
     [
       { name: 'conversation.session', priority: -100 },
-      { name: 'sidebar.workspaces', priority: -100 },
       { name: 'sidebar.brand.mark', priority: -100 },
       { name: 'sidebar.brand.name', priority: -100 },
     ],

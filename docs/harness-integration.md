@@ -62,24 +62,28 @@ single Slot；`AppFrame` 再渲染 `sidebar` 和 `conversation`。本项目现�
 ```text
 AppFrame(root)
   → SidebarRoot(sidebar)
-      → GeoHarnessLayerPanel(sidebar.workspaces)
+      → Workspace/Project/Session history(sidebar.workspaces) # 原生
       → SettingsRoot(sidebar.settings)             # 原生
   → ConversationRoot(conversation)
       → GeoHarnessShell(conversation.session)
+          → GeoHarnessLayerPanel(map overlay)
       → InputBar(conversation.composer.bar)         # 原生
           → ModelSelect(conversation.input.model)   # 原生
 ```
 
-GeoHarness 的四个注册均只占用已由上游父 Entry 声明的 Slot：
+GeoHarness 的三个注册均只占用已由上游父 Entry 声明的 Slot：
 
 ```ts
 ctx.slots.register({ name: 'conversation.session', priority: -100 }, GeoHarnessShell)
-ctx.slots.register({ name: 'sidebar.workspaces', priority: -100 }, GeoHarnessLayerPanel)
 ctx.slots.register({ name: 'sidebar.brand.mark', priority: -100 }, GeoHarnessBrandMark)
 ctx.slots.register({ name: 'sidebar.brand.name', priority: -100 }, GeoHarnessBrandName)
 ```
 
-这些 Entry 不声明任何 `children`。这是必要约束：`sidebar.settings` 已由原生 `SidebarRoot`
+GeoHarness 刻意不注册 `sidebar.workspaces`，因此项目选择、项目内历史会话、新建会话和旧会话
+切换继续由上游原生 Sidebar 实现；新建会话不会再把旧会话从界面导航中隐藏。GIS Layers 改为
+地图内的可收起面板，并按当前真实 Session ID 隔离，首次产生图层时自动展开。
+
+上述三个 Entry 不声明任何 `children`。这是必要约束：`sidebar.settings` 已由原生 `SidebarRoot`
 声明，`conversation.input.model` 已由原生 `InputBar` 声明；GeoHarness 若在自己的 Entry 重复声明，
 当前 `ui-slots` 会以 `slot "…" is already declared` 拒绝启动。Slot 也有所有权检查，不能从
 GeoHarness Entry 跨父级调用 `renderSlot` 绕过。
