@@ -50,3 +50,4 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Failed Tool, Layer-write, import and export boundaries remove partial files and newly registered Layers.
 - Duplicate Tool delivery replays an identical result without duplicating Layers; conflicting request reuse fails closed.
 - Clean-clone CI no longer requires an adjacent DeepSeek Harness source checkout; source-level audits run when available, while exact peers and the published CLI lifecycle remain mandatory everywhere.
+- Windows clean-profile smoke invokes pnpm through Node's `npm_execpath`, avoiding direct `.cmd` spawning differences.

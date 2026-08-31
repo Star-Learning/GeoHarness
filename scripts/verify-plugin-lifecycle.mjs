@@ -8,10 +8,17 @@ import { fileURLToPath } from 'node:url'
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const bundleRoot = join(repositoryRoot, 'bundle', 'geoharness-bundle')
 const localCli = resolve(repositoryRoot, '..', 'deepseek-harness', 'apps', 'cli', 'lib', 'bin.js')
+const pnpmCli = process.env.npm_execpath
 const dsh = existsSync(localCli)
   ? { command: process.execPath, prefix: [localCli], source: localCli }
+  : pnpmCli && existsSync(pnpmCli)
+    ? {
+        command: process.execPath,
+        prefix: [pnpmCli, 'dlx', '@deepseek-ai/dsh@0.1.1-rc.2'],
+        source: `@deepseek-ai/dsh@0.1.1-rc.2 via ${pnpmCli}`,
+      }
   : {
-      command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+      command: 'pnpm',
       prefix: ['dlx', '@deepseek-ai/dsh@0.1.1-rc.2'],
       source: '@deepseek-ai/dsh@0.1.1-rc.2',
     }

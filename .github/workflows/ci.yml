@@ -48,8 +48,14 @@ jobs:
       - name: Verify TypeScript and peer dependencies
         run: pnpm run typecheck && pnpm peers check
 
-      - name: Build and verify generated artifacts
-        run: pnpm run build && pnpm run check:catalogs && pnpm run check:scenarios
+      - name: Build Bundle
+        run: pnpm run build
+
+      - name: Verify versioned catalogs
+        run: pnpm run check:catalogs
+
+      - name: Verify Scenario packages
+        run: pnpm run check:scenarios
 
       - name: Run Node test suite
         run: node --test tests/*.test.mjs tests/scenarios/*.test.mjs tests/regression/*.test.mjs

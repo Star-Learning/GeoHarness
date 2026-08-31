@@ -30,7 +30,9 @@ test('platform phase 0 includes repository governance and CI gates', async () =>
   assert.match(workflow, /pnpm run check:docs/)
   assert.match(workflow, /node --test tests\/\*\.test\.mjs tests\/scenarios\/\*\.test\.mjs tests\/regression\/\*\.test\.mjs/)
   assert.match(workflow, /pnpm run test:python/)
-  assert.match(workflow, /pnpm run build.*pnpm run check:catalogs.*pnpm run check:scenarios/)
+  assert.match(workflow, /pnpm run build/)
+  assert.match(workflow, /pnpm run check:catalogs/)
+  assert.match(workflow, /pnpm run check:scenarios/)
   assert.match(workflow, /pnpm run check:media/)
 })
 

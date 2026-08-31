@@ -21,6 +21,11 @@ GIS Agent 平台 v1.0 的 Platform Phase 0–7 已完成，Phase 8 实现与本�
 相邻开发检出存在时执行；跨平台 CI 仍强制验证精确 Harness peers、全部本仓库测试以及基于已发布
 CLI 的安装/启动/卸载。CI 的 build/Node/Python 也拆成独立步骤，后续平台差异可以直接定位。
 
+第二轮远程 CI 已确认 Ubuntu clean plugin lifecycle 通过；Windows lifecycle 的直接 `pnpm.cmd`
+启动在 1 秒内失败，已改为 Node 执行当前 pnpm 的 `npm_execpath`。原组合的生成物步骤也进一步拆为
+Bundle build、Catalog freshness 与 Scenario freshness 三项；这仍是发布验证中的普通跨平台修复，
+不是外部阻塞。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、

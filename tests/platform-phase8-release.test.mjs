@@ -85,6 +85,8 @@ test('release artifacts pin compatibility and automate clean Windows/Linux lifec
   assert.match(workflow, /os: \[ubuntu-latest, windows-latest\]/u)
   assert.match(workflow, /verify:plugin-lifecycle/u)
   assert.match(lifecycle, /mkdtemp\(join\(tmpdir\(\), 'geoharness-release-smoke-'/u)
+  assert.match(lifecycle, /process\.env\.npm_execpath/u)
+  assert.match(lifecycle, /command: process\.execPath/u)
   assert.match(lifecycle, /--host', '127\.0\.0\.1', '--port', '0'/u)
   assert.match(lifecycle, /plugin', '--profile', 'web', 'remove'/u)
   assert.match(release, /三个非预设用户上传 E2E/u)
