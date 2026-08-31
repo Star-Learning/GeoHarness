@@ -79,6 +79,13 @@ Provider requests for the same Session Workspace are queued in issue order. This
 Run projection, export and Layer updates from replacing `workspace.json` with an older in-memory
 snapshot. Different Sessions retain independent queues and can execute in parallel.
 
+The local Provider also enforces an independent 120-second process timeout, terminates Python on
+AbortSignal, and exposes a redacted in-memory request diagnostic ring. Bundle configuration may
+override `requestTimeoutMs` (100–600000), `maxLayerFeatures` (default 100000) and `maxLayerBytes`
+(default 256 MB) within their hard ceilings. Semantic Tool `step_id` remains lineage; the unique
+Harness call ID is the persistent idempotency key, so transport retries replay while conversational
+parameter revisions create a new execution.
+
 After each Agent history refresh, the client calls the loopback-only
 `/geoharness` channel's `agent/workspace` RPC. The Host projects canonical Registry GeoJSON only after feature
 counts and parent Layer references validate. The client preserves per-Layer visibility and opacity,
@@ -93,6 +100,13 @@ an indexed export or Run asset ID for the current Session. Python resolves it un
 `runs/`, enforces a 20 MB RPC download ceiling and returns byte count plus SHA256. GeoJSON,
 GeoPackage, CSV and the reasoning-free Run JSON are restored after reload and downloadable without
 exposing server paths.
+
+Map projection is bounded to a 3 MB workspace preview. Each GeoJSON page declares total/returned
+features, offset, next offset, byte limit and full bounds; complete Tool computation continues to
+use canonical GeoPackages. `layer/geojson` and `layer/details` provide bounded pagination. The Agent
+workspace can download a structured diagnostic JSON through `diagnostics/export`; it contains
+runtime/asset counts and redacted request status only, never prompts, credentials, upload content,
+Tool parameters or absolute Workspace paths.
 
 ## Deterministic regression path
 

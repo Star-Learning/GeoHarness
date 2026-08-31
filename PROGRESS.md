@@ -734,3 +734,23 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 最终门禁通过：build、TypeScript、peer dependencies、catalog freshness、文档 56/56
   （108 个本地链接）、Scenario freshness、Node 78/78、Python 30/30、7 个媒体包和
   `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 7
+
+状态：完成（2026-08-31）
+
+- [x] Provider 对请求增加 120 秒独立超时、AbortSignal 取消、4M 输出上限、非零/无效 JSON
+  退出处理和 active-process 回收；真实 Python sleep/exit fixture 验证 timeout、cancel 与清理。
+- [x] Session 目录映射对 `:` 等 collision-shaped ID 加 SHA256 后缀；相同 Workspace 串行、不同
+  Session 并发，Workspace identity、路径与资产索引继续双重隔离。
+- [x] canonical Layer 默认限制为 100,000 要素、256 MB GPKG 和每 Workspace 128 层；注册、导入、
+  导出、Registry 与 Workspace 写入使用临时文件/原子替换，Tool 失败回滚本次半成品 Layer。
+- [x] 属性表支持 100 行 `offset` 分页；GeoJSON 支持要素/字节双重上限、总数、返回数、next offset、
+  full bbox 和超大单要素标记；地图投影固定 3 MB 总预算且完整 Tool 仍读取 canonical GPKG。
+- [x] Harness `callId` / Task Graph attempt 作为持久幂等键，语义 `step_id` 继续承担 lineage；相同
+  请求重放 `ToolResult` 不重复造层，冲突参数 fail closed，500→200 米修订仍使用新请求正常重算。
+- [x] 新增 loopback-only `diagnostics/export` 与右侧下载入口；只包含平台/资产计数、限制、状态、
+  耗时和截断错误，不包含 Prompt、凭据、上传内容、Tool 参数、绝对路径或 stdout 正文，并返回 SHA256。
+- [x] 新增 `docs/architecture/resilience-security.md` 并同步 Bundle/Backend/Changelog；最终门禁通过：
+  build、TypeScript、peer dependencies、catalog/docs/Scenario freshness、Node 82/82、Python 33/33、
+  7 个媒体包和 `git diff --check`。

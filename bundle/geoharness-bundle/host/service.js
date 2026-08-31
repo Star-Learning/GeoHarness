@@ -57,6 +57,14 @@ export class GeoRuntime extends Service {
   execute(request, signal) {
     return this.resolveProvider().execute(request, signal)
   }
+
+  diagnostics(workspaceKey) {
+    const provider = this.resolveProvider()
+    if (typeof provider.diagnostics !== 'function') {
+      throw new GeoServiceError('Configured Geo provider does not expose diagnostics', 'GEO_DIAGNOSTICS_UNAVAILABLE')
+    }
+    return provider.diagnostics(workspaceKey)
+  }
 }
 
 export default GeoRuntime

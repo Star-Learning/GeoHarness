@@ -25,6 +25,13 @@ GeoJSON, Shapefile ZIP, GeoPackage and CSV longitude/latitude inputs are validat
 under `imports/`, then converted to canonical GeoPackage Layers. Failed imports are rolled back;
 the browser cannot request an arbitrary server path.
 
+Canonical registration is bounded to 100,000 features and a 256 MB GeoPackage per Layer by
+default, with 128 Layers per Workspace. Registration and export use temporary files plus atomic
+replace; a failed Tool boundary removes any newly registered partial Layer. Unique request IDs are
+persisted in `tool-executions.json`, so an exact duplicate replays the original structured result
+while a conflicting duplicate is rejected. Semantic `step_id` remains available for lineage and
+may be reused by a later conversational revision with a new request ID.
+
 Run locally from this directory:
 
 ```powershell
@@ -35,4 +42,6 @@ python -m geoharness_geo --workspace ../../.tmp/geo-workspace `
 The HTTP surface binds to `127.0.0.1` by default, restricts imports to explicitly configured
 Scenario roots, and exposes `/health`, `/workspace`, `/layers`, `/layers/{id}/geojson`,
 `/layers/import`, and `/tools/{tool_name}`. Phase 5 connects these operations to the Harness Tool
-pipeline.
+pipeline. The GeoJSON endpoint accepts bounded `offset`/`limit` query parameters and returns
+`geoharness` page metadata; Host loopback RPC additionally caps the complete map projection and
+provides structured diagnostics. See [the verified resilience contract](../../docs/architecture/resilience-security.md).

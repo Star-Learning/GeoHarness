@@ -22,6 +22,8 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Indexed 20 MB-bounded download RPC for GeoJSON, GeoPackage, CSV and reasoning-free Run Manifest assets with SHA256 metadata.
 - Versioned JSON Schema contracts for Dataset catalogs and Tool manifests, plus a generated catalog reference.
 - Catalog-driven registration for all 13 built-in Harness Tools and a tested third-party fixture executor path.
+- Bounded Layer/GeoJSON pagination, persistent Tool idempotency records and redacted structured diagnostics export.
+- Provider-level timeout/Abort/process-exit diagnostics with real subprocess lifecycle tests.
 
 ### Changed
 
@@ -31,6 +33,8 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Agent workspace projection now restores per-Session Layer visibility and opacity from `workspace.json`.
 - Geo provider writes for one Session Workspace are serialized while independent Sessions remain concurrent.
 - Dataset discovery and `list_layers` enums now come from validated deployment catalogs instead of an inline Host list.
+- Map projection now validates paged GeoJSON totals under a 3 MB workspace budget instead of copying every full Layer.
+- Session directory mapping adds a hash suffix for collision-shaped valid IDs while preserving existing safe IDs.
 - GeoHarness Agent workspace now uses clearer semantic map colors and synchronized result focus states.
 - Seven Scenario video prompts and reproducible 1080p recording/encoding scripts are tracked without committing generated MP4 files.
 
@@ -41,3 +45,5 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Unsafe upload names, oversized files, ZIP traversal/symlinks/bombs and incomplete imports are rejected without residue.
 - Python runner stdin/stdout now use explicit UTF-8 so Chinese goals, answers and metadata survive Windows system code pages.
 - Concurrent Run projection and export no longer allow an older Workspace snapshot to overwrite a newer asset index.
+- Failed Tool, Layer-write, import and export boundaries remove partial files and newly registered Layers.
+- Duplicate Tool delivery replays an identical result without duplicating Layers; conflicting request reuse fails closed.

@@ -13,6 +13,17 @@ import geopandas as gpd
 from .models import LayerMetadata
 
 
+DEFAULT_MAX_LAYER_FEATURES = 100_000
+HARD_MAX_LAYER_FEATURES = 2_000_000
+DEFAULT_MAX_LAYER_BYTES = 256 * 1024 * 1024
+HARD_MAX_LAYER_BYTES = 1024 * 1024 * 1024
+DEFAULT_GEOJSON_FEATURES = 10_000
+HARD_GEOJSON_FEATURES = 100_000
+DEFAULT_GEOJSON_BYTES = 2 * 1024 * 1024
+HARD_GEOJSON_BYTES = 8 * 1024 * 1024
+MAX_WORKSPACE_LAYERS = 128
+
+
 class LayerNotFoundError(KeyError):
     pass
 
@@ -20,8 +31,24 @@ class LayerNotFoundError(KeyError):
 class LayerRegistry:
     """Disk-backed canonical vector Layer Registry for one GeoHarness workspace."""
 
-    def __init__(self, root: str | Path):
+    def __init__(
+        self,
+        root: str | Path,
+        *,
+        max_layer_features: int = DEFAULT_MAX_LAYER_FEATURES,
+        max_layer_bytes: int = DEFAULT_MAX_LAYER_BYTES,
+    ):
         self.root = Path(root).resolve()
+        if not 1 <= max_layer_features <= HARD_MAX_LAYER_FEATURES:
+            raise ValueError(
+                f"Layer feature limit must be between 1 and {HARD_MAX_LAYER_FEATURES}"
+            )
+        if not 1024 <= max_layer_bytes <= HARD_MAX_LAYER_BYTES:
+            raise ValueError(
+                f"Layer storage limit must be between 1024 and {HARD_MAX_LAYER_BYTES} bytes"
+            )
+        self.max_layer_features = max_layer_features
+        self.max_layer_bytes = max_layer_bytes
         self.layers_root = self.root / "layers"
         self.exports_root = self.root / "exports"
         self.registry_path = self.root / "registry.json"
@@ -80,6 +107,12 @@ class LayerRegistry:
             raise ValueError("Cannot register a vector layer without a CRS")
         if not name.strip():
             raise ValueError("Layer name must not be empty")
+        if len(self._metadata) >= MAX_WORKSPACE_LAYERS:
+            raise ValueError(f"Workspace Layer limit is {MAX_WORKSPACE_LAYERS}")
+        if len(frame) > self.max_layer_features:
+            raise ValueError(
+                f"Layer contains {len(frame)} features; limit is {self.max_layer_features}"
+            )
 
         layer_id = self._next_layer_id()
         storage = self.layers_root / f"{layer_id}.gpkg"
@@ -87,6 +120,11 @@ class LayerRegistry:
         snapshot = frame.copy()
         try:
             snapshot.to_file(temporary_storage, layer="data", driver="GPKG", engine="pyogrio")
+            storage_bytes = temporary_storage.stat().st_size
+            if storage_bytes > self.max_layer_bytes:
+                raise ValueError(
+                    f"Layer snapshot is {storage_bytes} bytes; limit is {self.max_layer_bytes}"
+                )
             os.replace(temporary_storage, storage)
         finally:
             temporary_storage.unlink(missing_ok=True)
@@ -116,6 +154,28 @@ class LayerRegistry:
             storage.unlink(missing_ok=True)
             raise
         return metadata
+
+    def discard_layers(self, layer_ids: Iterable[str]) -> None:
+        """Rollback only newly-created Layer assets after a failed Tool boundary."""
+        discarded = []
+        for layer_id in layer_ids:
+            metadata = self._metadata.pop(layer_id, None)
+            if metadata is None:
+                continue
+            storage = (self.root / metadata.storage_path).resolve()
+            if not storage.is_relative_to(self.layers_root.resolve()):
+                self._metadata[layer_id] = metadata
+                raise ValueError(f"Unsafe rollback path for Layer {layer_id}")
+            discarded.append(metadata)
+        if discarded:
+            try:
+                self._persist()
+            except Exception:
+                for metadata in discarded:
+                    self._metadata[metadata.layer_id] = metadata
+                raise
+            for metadata in discarded:
+                (self.root / metadata.storage_path).resolve().unlink(missing_ok=True)
 
     def remove(self, layer_id: str) -> None:
         metadata = self.metadata(layer_id)
@@ -149,16 +209,18 @@ class LayerRegistry:
             raise
         return metadata
 
-    def details(self, layer_id: str, *, limit: int = 100) -> dict[str, Any]:
+    def details(self, layer_id: str, *, offset: int = 0, limit: int = 100) -> dict[str, Any]:
+        if not 0 <= offset <= 10_000_000:
+            raise ValueError("Layer preview offset must be between 0 and 10000000")
         if not 1 <= limit <= 100:
             raise ValueError("Layer preview limit must be between 1 and 100")
         metadata = self.metadata(layer_id)
         frame = self.get(layer_id).reset_index(drop=True)
         attribute_columns = [column for column in frame.columns if column != frame.geometry.name]
         preview_columns = attribute_columns[:200]
-        preview = frame.loc[:, preview_columns].head(limit)
+        preview = frame.loc[:, preview_columns].iloc[offset:offset + limit]
         rows = json.loads(preview.to_json(orient="records", date_format="iso", default_handler=str))
-        for index, row in enumerate(rows):
+        for index, row in enumerate(rows, start=offset):
             row["__row_index"] = index
             for key, value in list(row.items()):
                 if isinstance(value, str) and len(value) > 500:
@@ -174,8 +236,12 @@ class LayerRegistry:
         warnings = []
         if len(attribute_columns) > len(preview_columns):
             warnings.append(f"Field preview is limited to 200 of {len(attribute_columns)} fields.")
-        if len(frame) > limit:
-            warnings.append(f"Attribute preview is limited to the first {limit} of {len(frame)} features.")
+        if offset > 0 or offset + len(rows) < len(frame):
+            warnings.append(
+                f"Attribute preview is limited to the first {limit} of {len(frame)} features."
+                if offset == 0
+                else f"Attribute preview returns rows {offset + 1}-{offset + len(rows)} of {len(frame)} features."
+            )
         if null_geometry:
             warnings.append(f"Layer contains {null_geometry} null geometries.")
         if empty_geometry:
@@ -189,11 +255,12 @@ class LayerRegistry:
             "rows": rows,
             "preview": {
                 "limit": limit,
+                "offset": offset,
                 "returned_rows": len(rows),
                 "total_rows": len(frame),
                 "total_fields": len(attribute_columns),
                 "fields_truncated": len(attribute_columns) > len(preview_columns),
-                "rows_truncated": len(frame) > limit,
+                "rows_truncated": offset > 0 or offset + len(rows) < len(frame),
             },
             "quality": {
                 "missing_crs": frame.crs is None,
@@ -227,12 +294,70 @@ class LayerRegistry:
     def list_layers(self) -> list[LayerMetadata]:
         return sorted(self._metadata.values(), key=lambda item: item.layer_id)
 
-    def geojson(self, layer_id: str) -> dict[str, Any]:
+    def geojson(
+        self,
+        layer_id: str,
+        *,
+        offset: int = 0,
+        limit: int = DEFAULT_GEOJSON_FEATURES,
+        max_bytes: int = DEFAULT_GEOJSON_BYTES,
+    ) -> dict[str, Any]:
+        if not 0 <= offset <= 10_000_000:
+            raise ValueError("GeoJSON offset must be between 0 and 10000000")
+        if not 1 <= limit <= HARD_GEOJSON_FEATURES:
+            raise ValueError(f"GeoJSON feature limit must be between 1 and {HARD_GEOJSON_FEATURES}")
+        if not 1024 <= max_bytes <= HARD_GEOJSON_BYTES:
+            raise ValueError(f"GeoJSON byte limit must be between 1024 and {HARD_GEOJSON_BYTES}")
         frame = self.get(layer_id)
         if frame.crs is not None and not frame.crs.is_geographic:
             frame = frame.to_crs("EPSG:4326")
-        # GeoPandas leaves datetime-like attributes as pandas Timestamp values in
-        # its feature dictionaries. The standard JSON encoder cannot serialize
-        # them, so preserve real source dates as readable strings at the canonical
-        # GeoJSON boundary instead of dropping the field.
-        return json.loads(frame.to_json(drop_id=True, default=str))
+        total = len(frame)
+        stop = min(total, offset + limit)
+        requested = frame.iloc[offset:stop]
+        bounds = [] if frame.empty else [
+            float(value) for value in frame.total_bounds.tolist() if math.isfinite(float(value))
+        ]
+
+        def page(count: int, *, skipped_oversize: bool = False) -> dict[str, Any]:
+            # Preserve real source dates as strings at the canonical JSON boundary.
+            payload = json.loads(requested.iloc[:count].to_json(drop_id=True, default=str))
+            returned = len(payload["features"])
+            consumed = returned if returned > 0 else (1 if skipped_oversize else 0)
+            next_offset = offset + consumed
+            payload["geoharness"] = {
+                "schema_version": "1.0",
+                "offset": offset,
+                "limit": limit,
+                "returned_features": returned,
+                "total_features": total,
+                "truncated": offset > 0 or next_offset < total,
+                "next_offset": next_offset if next_offset < total else None,
+                "byte_limit": max_bytes,
+                "bbox": bounds,
+                "skipped_oversize_feature": skipped_oversize,
+            }
+            return payload
+
+        low = 0
+        high = len(requested)
+        selected = page(0)
+        while low <= high:
+            middle = (low + high) // 2
+            candidate = page(middle)
+            encoded = json.dumps(candidate, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            if len(encoded) + 32 <= max_bytes:
+                selected = candidate
+                low = middle + 1
+            else:
+                high = middle - 1
+        if selected["geoharness"]["returned_features"] == 0 and len(requested) > 0:
+            selected = page(0, skipped_oversize=True)
+        selected["geoharness"]["size_bytes"] = 0
+        for _ in range(4):
+            encoded_size = len(json.dumps(
+                selected, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8"))
+            if selected["geoharness"]["size_bytes"] == encoded_size:
+                break
+            selected["geoharness"]["size_bytes"] = encoded_size
+        return selected

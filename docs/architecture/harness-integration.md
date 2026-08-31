@@ -220,9 +220,11 @@ dsh --profile web --no-open
 
 ## 已验证与外部边界
 
-已通过 TypeScript、client build、51 项 Node 测试和 9 项 Python/GeoPandas 测试。真实 provider
+已通过 TypeScript、client build、82 项 Node 测试和 33 项 Python/GeoPandas 测试。真实 provider
 已从 `nyc-core-official` 发现并加载官方数据，500 m 河流缓冲测试返回 132/360；Native
-Session 事件投影和 Agent workspace RPC 也均有回归。
+Session 事件投影和 Agent workspace RPC 也均有回归。Provider timeout/Abort/进程回收、
+Tool 幂等/失败回滚、Layer/GeoJSON 上限、分页投影、并发 Session 和诊断导出的已验证边界见
+[稳定性、安全与性能边界](resilience-security.md)。
 
 当前预览实际使用 `.tmp/dsh-home-preview`，其 `ustc / deepseek-v4-flash-ascend1` route 引用
 `USTC_API_KEY`，Harness 原生设置也确认该 credential 已配置。失败 Session 的真实事件是连续

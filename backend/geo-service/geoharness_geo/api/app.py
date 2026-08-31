@@ -6,7 +6,7 @@ from typing import Iterable
 import geopandas
 import pyproj
 import shapely
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..models import ImportLayerRequest, LayerMetadata, ToolRequest, ToolResult, WorkspaceManifest
@@ -71,9 +71,13 @@ def create_app(
             raise HTTPException(status_code=404, detail=str(error)) from error
 
     @app.get("/layers/{layer_id}/geojson")
-    def layer_geojson(layer_id: str) -> dict:
+    def layer_geojson(
+        layer_id: str,
+        offset: int = Query(default=0, ge=0, le=10_000_000),
+        limit: int = Query(default=10_000, ge=1, le=100_000),
+    ) -> dict:
         try:
-            return registry.geojson(layer_id)
+            return registry.geojson(layer_id, offset=offset, limit=limit)
         except LayerNotFoundError as error:
             raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -91,15 +95,39 @@ def create_app(
 
     @app.post("/tools/{tool_name}", response_model=ToolResult)
     def execute_tool(tool_name: str, request: ToolRequest) -> ToolResult:
-        result = tools.execute(tool_name, step_id=request.step_id, **request.parameters)
-        workspace.sync_layers(registry.list_layers())
-        if result.success and result.tool == "export_layer":
-            workspace.record_export(
-                layer_id=result.inputs[0],
-                format=str(result.data["format"]),
-                relative_path=str(result.data["path"]),
-                feature_count=int(result.data["feature_count"]),
+        replay = workspace.replay_tool_execution(
+            step_id=request.step_id,
+            tool=tool_name,
+            parameters=request.parameters,
+        )
+        if replay is not None:
+            return replay.result
+        before = {item.layer_id for item in registry.list_layers()}
+        try:
+            result = tools.execute(tool_name, step_id=request.step_id, **request.parameters)
+            created = [item.layer_id for item in registry.list_layers() if item.layer_id not in before]
+            if not result.success and created:
+                registry.discard_layers(created)
+            workspace.sync_layers(registry.list_layers())
+            if result.success and result.tool == "export_layer":
+                workspace.record_export(
+                    layer_id=result.inputs[0],
+                    format=str(result.data["format"]),
+                    relative_path=str(result.data["path"]),
+                    feature_count=int(result.data["feature_count"]),
+                )
+            workspace.record_tool_execution(
+                step_id=request.step_id,
+                tool=tool_name,
+                parameters=request.parameters,
+                result=result,
             )
-        return result
+            return result
+        except Exception:
+            registry.discard_layers(
+                item.layer_id for item in registry.list_layers() if item.layer_id not in before
+            )
+            workspace.sync_layers(registry.list_layers())
+            raise
 
     return app

@@ -18,6 +18,19 @@ export interface GeoJsonFeatureCollection {
   name?: string
   crs?: { properties?: { name?: string } }
   features: GeoJsonFeature[]
+  geoharness?: {
+    schema_version: '1.0'
+    offset: number
+    limit: number
+    returned_features: number
+    total_features: number
+    truncated: boolean
+    next_offset: number | null
+    byte_limit: number
+    size_bytes: number
+    bbox: number[]
+    skipped_oversize_feature: boolean
+  }
 }
 
 export interface EmbeddedScenario {
@@ -234,7 +247,13 @@ export function registerWorkspaceProjection(
   const previousById = new Map(previous.map(layer => [layer.id, layer]))
   return value.map(({ metadata, geojson }) => {
     if (!isFeatureCollection(geojson)) throw new Error(`Layer ${metadata.layer_id} has invalid GeoJSON.`)
-    if (geojson.features.length !== metadata.feature_count) {
+    const page = geojson.geoharness
+    const projectionMatches = page === undefined
+      ? geojson.features.length === metadata.feature_count
+      : page.total_features === metadata.feature_count
+        && page.returned_features === geojson.features.length
+        && page.offset === 0
+    if (!projectionMatches) {
       throw new Error(`Layer ${metadata.layer_id} feature count does not match its Registry metadata.`)
     }
     const current = previousById.get(metadata.layer_id)

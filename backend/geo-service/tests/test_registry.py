@@ -70,6 +70,7 @@ def test_layer_details_bounds_rows_fields_values_and_reports_geometry_quality(re
     assert details["schema_version"] == "1.0"
     assert details["preview"] == {
         "limit": 100,
+        "offset": 0,
         "returned_rows": 100,
         "total_rows": 150,
         "total_fields": 205,

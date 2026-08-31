@@ -79,6 +79,7 @@ async function executeBuiltin(ctx, spec, args, exec, datasets) {
     workspaceKey: workspaceKey(exec),
     tool: spec.name,
     step_id: stepId,
+    request_id: String(exec.callId),
     parameters,
   }, exec.signal)
 }

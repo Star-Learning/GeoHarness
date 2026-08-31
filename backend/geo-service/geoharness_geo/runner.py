@@ -14,6 +14,10 @@ from .results import build_result_center, read_result_asset
 from .workspace import WorkspaceStore
 
 
+PROJECTION_GEOJSON_BYTES = 3 * 1024 * 1024
+PROJECTION_GEOJSON_FEATURES = 10_000
+
+
 def _load_scenario(
     registry: LayerRegistry,
     scenario_root: Path,
@@ -30,11 +34,18 @@ def _load_scenario(
     if reset:
         registry.clear()
     if not registry.list_layers():
-        for relative_path in manifest["data"]:
-            source_path = (scenario_path / relative_path).resolve()
-            if not source_path.is_relative_to(scenario_path):
-                raise ValueError(f"Unsafe Scenario data path: {relative_path}")
-            registry.register_file(source_path, name=source_path.stem, source="scenario")
+        before = {item.layer_id for item in registry.list_layers()}
+        try:
+            for relative_path in manifest["data"]:
+                source_path = (scenario_path / relative_path).resolve()
+                if not source_path.is_relative_to(scenario_path):
+                    raise ValueError(f"Unsafe Scenario data path: {relative_path}")
+                registry.register_file(source_path, name=source_path.stem, source="scenario")
+        except Exception:
+            registry.discard_layers(
+                item.layer_id for item in registry.list_layers() if item.layer_id not in before
+            )
+            raise
     return {
         "scenario_id": scenario_id,
         "prompt": (scenario_path / manifest["prompt"]).read_text(encoding="utf-8").strip(),
@@ -59,11 +70,18 @@ def _load_dataset(
     if reset:
         registry.clear()
     if not registry.list_layers():
-        for layer in manifest.layers:
-            source_path = (dataset_path / layer.path).resolve()
-            if not source_path.is_relative_to(examples_root):
-                raise ValueError(f"Unsafe Dataset layer path: {layer.path}")
-            registry.register_file(source_path, name=layer.name, source="scenario")
+        before = {item.layer_id for item in registry.list_layers()}
+        try:
+            for layer in manifest.layers:
+                source_path = (dataset_path / layer.path).resolve()
+                if not source_path.is_relative_to(examples_root):
+                    raise ValueError(f"Unsafe Dataset layer path: {layer.path}")
+                registry.register_file(source_path, name=layer.name, source="scenario")
+        except Exception:
+            registry.discard_layers(
+                item.layer_id for item in registry.list_layers() if item.layer_id not in before
+            )
+            raise
     return {
         "dataset_id": dataset_id,
         "title": manifest.title,
@@ -79,7 +97,11 @@ def dispatch(payload: dict[str, Any]) -> Any:
         workspace_id=str(payload.get("workspace_id", workspace_root.name)),
         session_id=str(payload.get("session_id", payload.get("workspace_id", workspace_root.name))),
     )
-    registry = LayerRegistry(workspace_root)
+    registry = LayerRegistry(
+        workspace_root,
+        max_layer_features=int(payload.get("max_layer_features", 100_000)),
+        max_layer_bytes=int(payload.get("max_layer_bytes", 256 * 1024 * 1024)),
+    )
     workspace.sync_layers(registry.list_layers())
     action = payload.get("action")
     if action == "load_scenario":
@@ -109,20 +131,47 @@ def dispatch(payload: dict[str, Any]) -> Any:
         workspace.sync_layers(registry.list_layers())
         return value
     if action == "tool":
-        result = GeoTools(registry).execute(
-            str(payload["tool"]),
-            step_id=payload.get("step_id"),
-            **dict(payload.get("parameters", {})),
+        tool = str(payload["tool"])
+        step_id = payload.get("step_id")
+        request_id = payload.get("request_id", step_id)
+        parameters = dict(payload.get("parameters", {}))
+        replay = workspace.replay_tool_execution(
+            step_id=request_id,
+            tool=tool,
+            parameters=parameters,
         )
-        workspace.sync_layers(registry.list_layers())
-        if result.success and result.tool == "export_layer":
-            workspace.record_export(
-                layer_id=result.inputs[0],
-                format=str(result.data["format"]),
-                relative_path=str(result.data["path"]),
-                feature_count=int(result.data["feature_count"]),
+        if replay is not None:
+            return replay.result.model_dump(mode="json")
+        before = {item.layer_id for item in registry.list_layers()}
+        try:
+            result = GeoTools(registry).execute(tool, step_id=step_id, **parameters)
+            created = [
+                item.layer_id for item in registry.list_layers() if item.layer_id not in before
+            ]
+            if not result.success and created:
+                registry.discard_layers(created)
+            workspace.sync_layers(registry.list_layers())
+            if result.success and result.tool == "export_layer":
+                workspace.record_export(
+                    layer_id=result.inputs[0],
+                    format=str(result.data["format"]),
+                    relative_path=str(result.data["path"]),
+                    feature_count=int(result.data["feature_count"]),
+                )
+            workspace.record_tool_execution(
+                step_id=request_id,
+                tool=tool,
+                parameters=parameters,
+                result=result,
             )
-        return result.model_dump(mode="json")
+            return result.model_dump(mode="json")
+        except Exception:
+            created = [
+                item.layer_id for item in registry.list_layers() if item.layer_id not in before
+            ]
+            registry.discard_layers(created)
+            workspace.sync_layers(registry.list_layers())
+            raise
     if action == "import_capabilities":
         return import_capabilities(int(payload.get("max_upload_bytes", 20 * 1024 * 1024)))
     if action == "import_upload":
@@ -161,7 +210,11 @@ def dispatch(payload: dict[str, Any]) -> Any:
         workspace.reset_assets()
         return workspace.manifest().model_dump(mode="json")
     if action == "layer_details":
-        value = registry.details(str(payload["layer_id"]), limit=int(payload.get("limit", 100)))
+        value = registry.details(
+            str(payload["layer_id"]),
+            offset=int(payload.get("offset", 0)),
+            limit=int(payload.get("limit", 100)),
+        )
         import_warnings = [
             warning
             for asset in workspace.manifest().imports
@@ -191,14 +244,25 @@ def dispatch(payload: dict[str, Any]) -> Any:
     if action == "layers":
         return [item.model_dump(mode="json") for item in registry.list_layers()]
     if action == "geojson":
-        return registry.geojson(str(payload["layer_id"]))
+        return registry.geojson(
+            str(payload["layer_id"]),
+            offset=int(payload.get("offset", 0)),
+            limit=int(payload.get("limit", 10_000)),
+            max_bytes=int(payload.get("max_bytes", 2 * 1024 * 1024)),
+        )
     if action == "projection":
+        layers = registry.list_layers()
+        layer_budget = max(1024, PROJECTION_GEOJSON_BYTES // max(1, len(layers)))
         return [
             {
                 "metadata": item.model_dump(mode="json"),
-                "geojson": registry.geojson(item.layer_id),
+                "geojson": registry.geojson(
+                    item.layer_id,
+                    limit=PROJECTION_GEOJSON_FEATURES,
+                    max_bytes=layer_budget,
+                ),
             }
-            for item in registry.list_layers()
+            for item in layers
         ]
     if action == "regression":
         return ScenarioRegression(

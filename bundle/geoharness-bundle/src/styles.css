@@ -261,6 +261,9 @@
 .gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }
 .gh-current-step > div span { color: var(--gh-muted); }
 .gh-current-step .is-teal { color: var(--gh-success); }
+.gh-diagnostics-button { width: 100%; padding: 7px 9px; border: 1px solid var(--gh-border); border-radius: 7px; background: var(--gh-fill); color: var(--gh-text); font: 600 10px/1.2 var(--dsw-font-sans), sans-serif; cursor: pointer; }
+.gh-diagnostics-button:hover { border-color: var(--gh-accent); color: var(--gh-accent); }
+.gh-diagnostics-button:disabled { cursor: wait; opacity: .58; }
 .gh-agent-result { position: relative; display: grid; gap: 8px; transition: border-color .2s ease, box-shadow .2s ease; }
 .gh-agent-result.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }
 .gh-agent-result.is-success { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); animation: gh-result-panel 1.8s ease-out 2; }

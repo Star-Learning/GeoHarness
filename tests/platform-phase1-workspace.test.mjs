@@ -82,18 +82,17 @@ test('one Harness Session keeps one persistent workspace across Provider recreat
   }
 })
 
-test('safe path collisions fail closed instead of leaking another Session workspace', async () => {
+test('safe path mapping isolates collision-shaped Session ids and rejects invalid ids', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-platform-phase1-collision-'))
   try {
     const provider = new LocalPythonGeoProvider(providerOptions(temporary))
     await provider.execute({ action: 'workspace_manifest', workspaceKey: 'session:a' })
-    await assert.rejects(
-      provider.execute({ action: 'workspace_manifest', workspaceKey: 'session/a' }),
-      /Workspace identity mismatch/,
-    )
+    const isolated = await provider.execute({ action: 'workspace_manifest', workspaceKey: 'session-a' })
+    assert.equal(isolated.session_id, 'session-a')
+    assert.notEqual(provider.workspaceFor('session:a'), provider.workspaceFor('session-a'))
     await assert.rejects(
       provider.execute({ action: 'workspace_manifest', workspaceKey: '.' }),
-      /Unsafe Geo workspace path/,
+      /Invalid Geo workspace Session id/,
     )
   } finally {
     await rm(temporary, { recursive: true, force: true })

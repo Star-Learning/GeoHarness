@@ -95,6 +95,10 @@ function coordinateArrays(value: unknown, target: [number, number][]) {
 function layerBounds(layers: readonly LayerRecord[]) {
   const coordinates: [number, number][] = []
   for (const layer of layers) {
+    const bbox = layer.data.geoharness?.bbox
+    if (bbox !== undefined && bbox.length === 4) {
+      coordinates.push([bbox[0], bbox[1]], [bbox[2], bbox[3]])
+    }
     for (const feature of layer.data.features) coordinateArrays(feature.geometry.coordinates, coordinates)
   }
   if (coordinates.length === 0) return [-74.02, 40.69, -73.95, 40.73] as const
@@ -338,6 +342,7 @@ interface LayerDetails {
   rows: ({ __row_index: number } & Record<string, unknown>)[]
   preview: {
     limit: number
+    offset: number
     returned_rows: number
     total_rows: number
     total_fields: number
@@ -429,7 +434,7 @@ interface ResultCenter {
 
 interface ResultDownload {
   schema_version: '1.0'
-  asset_type: 'export' | 'run'
+  asset_type: 'export' | 'run' | 'diagnostic'
   asset_id: string
   file_name: string
   format: string
@@ -544,6 +549,7 @@ interface GeoHarnessInjected {
     runs(): Promise<AgentRunManifest[]>
     result(runId?: string): Promise<ResultCenter | null>
     download(assetType: 'export' | 'run', assetId: string): Promise<ResultDownload>
+    diagnostics(): Promise<ResultDownload>
   }
 }
 
@@ -1260,6 +1266,19 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     }
   }
 
+  const downloadDiagnostics = async () => {
+    if (downloadingAsset !== null) return
+    setDownloadingAsset('diagnostic')
+    setDownloadError(null)
+    try {
+      saveResultDownload(await agent.diagnostics())
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDownloadingAsset(null)
+    }
+  }
+
   const stepIcon = (status: AgentToolStep['status'], index: number) => {
     if (status === 'success') return '✓'
     if (status === 'failed') return '!'
@@ -1416,6 +1435,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               <div><span>Turns</span><b>{runHistoryCount}</b></div>
               <div><span>Session</span><b>{sessionId.slice(0, 8)}</b></div>
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
+              <button type="button" className="gh-diagnostics-button" disabled={downloadingAsset !== null} onClick={() => { void downloadDiagnostics() }}>
+                {downloadingAsset === 'diagnostic' ? '正在生成诊断…' : '导出结构化诊断'}
+              </button>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
             <ResultCenterPanel
@@ -1582,6 +1604,15 @@ export function apply(ctx: ClientContext) {
           })
           if (!response.ok || response.value === null || typeof response.value !== 'object') {
             throw new Error(response.error?.message ?? 'Result asset download failed')
+          }
+          return response.value as ResultDownload
+        },
+        diagnostics: async () => {
+          const response = await connection.rpc.call('/geoharness', 'diagnostics/export', {
+            workspace_key: sessionId,
+          })
+          if (!response.ok || response.value === null || typeof response.value !== 'object') {
+            throw new Error(response.error?.message ?? 'Structured diagnostics export failed')
           }
           return response.value as ResultDownload
         },

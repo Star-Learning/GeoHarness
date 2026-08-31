@@ -63,6 +63,14 @@ class ToolRequest(BaseModel):
     parameters: dict[str, Any] = Field(default_factory=dict)
 
 
+class WorkspaceToolExecution(BaseModel):
+    step_id: str = Field(min_length=1, max_length=180)
+    tool: str = Field(min_length=1, max_length=180)
+    request_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    result: ToolResult
+    created_at: str
+
+
 class ImportLayerRequest(BaseModel):
     path: str
     name: str | None = None

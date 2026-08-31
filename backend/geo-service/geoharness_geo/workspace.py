@@ -19,10 +19,12 @@ from .models import (
     WorkspaceLayerAsset,
     WorkspaceManifest,
     WorkspaceRunAsset,
+    WorkspaceToolExecution,
 )
 
 
 RUN_ID = re.compile(r"^[A-Za-z0-9._-]{1,120}$")
+MAX_TOOL_EXECUTIONS = 1000
 
 
 def utc_now() -> str:
@@ -63,10 +65,87 @@ class WorkspaceStore:
         self.manifest_path = self.root / "workspace.json"
         self.imports_root = self.root / "imports"
         self.runs_root = self.root / "runs"
+        self.tool_executions_path = self.root / "tool-executions.json"
         self.root.mkdir(parents=True, exist_ok=True)
         self.imports_root.mkdir(parents=True, exist_ok=True)
         self.runs_root.mkdir(parents=True, exist_ok=True)
         self._manifest = self._load_or_create()
+
+    @staticmethod
+    def _tool_request_hash(tool: str, parameters: dict[str, Any]) -> str:
+        canonical = json.dumps(
+            {"tool": tool, "parameters": parameters},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _tool_executions(self) -> list[WorkspaceToolExecution]:
+        if not self.tool_executions_path.exists():
+            return []
+        payload = json.loads(self.tool_executions_path.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != "1.0" or not isinstance(payload.get("executions"), list):
+            raise ValueError("Unsupported Tool execution index")
+        return [WorkspaceToolExecution.model_validate(item) for item in payload["executions"]]
+
+    def replay_tool_execution(
+        self,
+        *,
+        step_id: str | None,
+        tool: str,
+        parameters: dict[str, Any],
+    ) -> WorkspaceToolExecution | None:
+        if step_id is None:
+            return None
+        if not step_id or len(step_id) > 180:
+            raise ValueError("Tool step_id must be 1-180 characters")
+        executions = self._tool_executions()
+        execution = next((item for item in executions if item.step_id == step_id), None)
+        if execution is None:
+            if len(executions) >= MAX_TOOL_EXECUTIONS:
+                raise ValueError(f"Workspace Tool execution limit is {MAX_TOOL_EXECUTIONS}")
+            return None
+        request_hash = self._tool_request_hash(tool, parameters)
+        if execution.tool != tool or execution.request_hash != request_hash:
+            raise ValueError(
+                f"Tool idempotency conflict for step_id {step_id}: request parameters changed"
+            )
+        return execution
+
+    def record_tool_execution(
+        self,
+        *,
+        step_id: str | None,
+        tool: str,
+        parameters: dict[str, Any],
+        result: Any,
+    ) -> WorkspaceToolExecution | None:
+        if step_id is None:
+            return None
+        existing = self.replay_tool_execution(
+            step_id=step_id,
+            tool=tool,
+            parameters=parameters,
+        )
+        if existing is not None:
+            return existing
+        executions = self._tool_executions()
+        if len(executions) >= MAX_TOOL_EXECUTIONS:
+            raise ValueError(f"Workspace Tool execution limit is {MAX_TOOL_EXECUTIONS}")
+        execution = WorkspaceToolExecution(
+            step_id=step_id,
+            tool=tool,
+            request_hash=self._tool_request_hash(tool, parameters),
+            result=result,
+            created_at=utc_now(),
+        )
+        executions.append(execution)
+        atomic_write_json(self.tool_executions_path, {
+            "schema_version": "1.0",
+            "executions": [item.model_dump(mode="json") for item in executions],
+        })
+        return execution
 
     def _load_or_create(self) -> WorkspaceManifest:
         if self.manifest_path.exists():
@@ -299,6 +378,7 @@ class WorkspaceStore:
         """Clear bounded import/run assets and reset indexes without deleting the workspace root."""
         self._clear_directory(self.imports_root)
         self._clear_directory(self.runs_root)
+        self.tool_executions_path.unlink(missing_ok=True)
         self._manifest.active_dataset = None
         self._manifest.active_scenario = None
         self._manifest.imports = []

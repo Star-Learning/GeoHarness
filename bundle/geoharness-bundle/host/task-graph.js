@@ -188,6 +188,7 @@ export class TaskGraphExecution {
     try {
       const result = await this.executor({
         id: step.id,
+        requestId: `${step.id}:${this.sequence}`,
         tool: step.tool,
         parameters,
         signal,
@@ -369,6 +370,7 @@ export class TaskGraphRuntime extends Service {
         workspaceKey,
         tool: step.tool,
         step_id: step.id,
+        request_id: step.requestId,
         parameters: step.parameters,
       }, step.signal),
     })
@@ -421,7 +423,10 @@ export class TaskGraphRuntime extends Service {
       const metadata = item.metadata
       const featureCountMatches = item.geojson?.type === 'FeatureCollection'
         && Array.isArray(item.geojson.features)
-        && item.geojson.features.length === metadata.feature_count
+        && (item.geojson.geoharness === undefined
+          ? item.geojson.features.length === metadata.feature_count
+          : item.geojson.geoharness.total_features === metadata.feature_count
+            && item.geojson.geoharness.returned_features === item.geojson.features.length)
       if (!featureCountMatches) issues.push(`Feature count mismatch for ${metadata.layer_id}`)
       const parentsPresent = metadata.parents.every(parent => metadataById.has(parent))
       if (!parentsPresent) issues.push(`Missing parent Layer for ${metadata.layer_id}`)

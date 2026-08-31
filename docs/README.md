@@ -14,8 +14,9 @@
 8. [Native Agent Run Manifest](architecture/run-manifest.md)：查看 Session 事件投影、运行恢复、错误分类和五类通用修订。
 9. [Result Center 与安全导出](architecture/result-center.md)：查看权威统计、来源、最终 Layer、三格式导出与受限下载。
 10. [Tool / Dataset 扩展契约](architecture/extension-contract.md)与[自动生成 Catalog 清单](architecture/catalog-reference.md)：查看 schema、第三方 executor、缺失能力和版本冲突门禁。
-11. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
-12. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
+11. [稳定性、安全与性能边界](architecture/resilience-security.md)：查看文件/Layer 上限、分页、幂等、回滚、进程退出和诊断导出。
+12. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
+13. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
 
 安装与普通使用请先看仓库根目录的 [README](../README.md)；当前开发进度和已知问题分别记录在 [PROGRESS](../PROGRESS.md) 与 [BLOCKERS](../BLOCKERS.md)。
 

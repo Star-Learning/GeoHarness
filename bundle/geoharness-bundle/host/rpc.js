@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { SCENARIO_IDS } from './tools.js'
 import { HARD_UPLOAD_BYTES } from './provider.js'
 
@@ -11,6 +12,10 @@ const SAFE_UPLOAD_NAME = /^[^<>:"/\\|?*\u0000-\u001f]{1,180}$/u
 const SUPPORTED_UPLOAD_EXTENSION = /\.(?:geojson|json|zip|gpkg|csv)$/iu
 const DISTANCE_PATTERN = /(-?\d+(?:\.\d+)?)\s*(公里|千米|km|kilometers?|米|m|meters?)/giu
 
+function validWorkspaceKey(value) {
+  return typeof value === 'string' && WORKSPACE_KEY.test(value) && value !== '.' && value !== '..'
+}
+
 function badRequest(message) {
   return {
     ok: false,
@@ -23,7 +28,7 @@ function scenarioRequestPayload(payload) {
   const scenarioId = payload.scenario_id
   const workspaceKey = payload.workspace_key ?? `browser:${scenarioId}`
   if (typeof scenarioId !== 'string' || !SCENARIOS.has(scenarioId)) return null
-  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  if (!validWorkspaceKey(workspaceKey)) return null
   return { scenarioId, workspaceKey }
 }
 
@@ -32,14 +37,14 @@ function goalRequestPayload(payload) {
   const prompt = typeof payload.goal_prompt === 'string' ? payload.goal_prompt.trim() : ''
   const workspaceKey = payload.workspace_key ?? 'browser:goal'
   if (prompt === '' || prompt.length > MAX_GOAL_LENGTH) return null
-  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  if (!validWorkspaceKey(workspaceKey)) return null
   return { prompt, workspaceKey }
 }
 
 function agentWorkspacePayload(payload) {
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return null
   const workspaceKey = payload.workspace_key
-  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  if (!validWorkspaceKey(workspaceKey)) return null
   return { workspaceKey }
 }
 
@@ -72,7 +77,7 @@ function importRequestPayload(payload) {
   const workspaceKey = payload.workspace_key
   const fileName = payload.file_name
   const contentBase64 = payload.content_base64
-  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  if (!validWorkspaceKey(workspaceKey)) return null
   if (typeof fileName !== 'string' || !SAFE_UPLOAD_NAME.test(fileName)
     || !SUPPORTED_UPLOAD_EXTENSION.test(fileName)
     || fileName !== fileName.trim().replace(/[. ]+$/u, '') || fileName === '.' || fileName === '..') return null
@@ -95,6 +100,16 @@ function layerRequestPayload(payload) {
   return { ...workspace, layerId: payload.layer_id }
 }
 
+function layerPagePayload(payload, { maxLimit }) {
+  const layer = layerRequestPayload(payload)
+  if (layer === null) return null
+  const offset = payload.offset ?? 0
+  const limit = payload.limit ?? maxLimit
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10_000_000) return null
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > maxLimit) return null
+  return { ...layer, offset, limit }
+}
+
 function verifyWorkspaceProjection(projection, preferences = {}) {
   const ids = new Set(projection.map(item => item.metadata?.layer_id))
   const issues = []
@@ -103,7 +118,12 @@ function verifyWorkspaceProjection(projection, preferences = {}) {
     const featureCount = item.geojson?.type === 'FeatureCollection' && Array.isArray(item.geojson.features)
       ? item.geojson.features.length
       : -1
-    if (featureCount !== metadata.feature_count) issues.push(`Feature count mismatch for ${metadata.layer_id ?? 'unknown layer'}`)
+    const page = item.geojson?.geoharness
+    const totalFeatures = page?.total_features ?? featureCount
+    const returnedFeatures = page?.returned_features ?? featureCount
+    if (totalFeatures !== metadata.feature_count || returnedFeatures !== featureCount) {
+      issues.push(`Feature count mismatch for ${metadata.layer_id ?? 'unknown layer'}`)
+    }
     if (!Array.isArray(metadata.parents) || metadata.parents.some(parent => !ids.has(parent))) {
       issues.push(`Missing parent Layer for ${metadata.layer_id ?? 'unknown layer'}`)
     }
@@ -294,6 +314,46 @@ export function registerGeoRpc(ctx) {
         return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
       }
     }
+    if (endpoint === 'diagnostics/export') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      try {
+        const manifest = await ctx.geo.execute({
+          action: 'workspace_manifest', workspaceKey: request.workspaceKey,
+        }, signal)
+        const report = {
+          schema_version: '1.0',
+          generated_at: new Date().toISOString(),
+          runtime: { node: process.version, platform: process.platform, arch: process.arch },
+          workspace: {
+            workspace_id: manifest.workspace_id,
+            session_id: manifest.session_id,
+            active_dataset: manifest.active_dataset,
+            active_scenario: manifest.active_scenario,
+            input_layers: manifest.input_layers.length,
+            derived_layers: manifest.derived_layers.length,
+            imports: manifest.imports.length,
+            exports: manifest.exports.length,
+            runs: manifest.runs.length,
+          },
+          geo_provider: ctx.geo.diagnostics(request.workspaceKey),
+        }
+        const content = Buffer.from(`${JSON.stringify(report, null, 2)}\n`, 'utf8')
+        return { ok: true, value: {
+          schema_version: '1.0',
+          asset_type: 'diagnostic',
+          asset_id: `diagnostic_${Date.now()}`,
+          file_name: `geoharness-diagnostics-${manifest.workspace_id}.json`,
+          format: 'json',
+          mime_type: 'application/json;charset=utf-8',
+          size_bytes: content.length,
+          sha256: createHash('sha256').update(content).digest('hex'),
+          content_base64: content.toString('base64'),
+        } }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
     if (endpoint === 'data/import-capabilities') {
       const request = agentWorkspacePayload(payload)
       if (request === null) return badRequest('A valid workspace_key is required')
@@ -318,11 +378,25 @@ export function registerGeoRpc(ctx) {
       }
     }
     if (endpoint === 'layer/details') {
-      const request = layerRequestPayload(payload)
+      const request = layerPagePayload(payload, { maxLimit: 100 })
       if (request === null) return badRequest('A valid workspace_key and layer_id are required')
       try {
         const value = await ctx.geo.execute({
-          action: 'layer_details', workspaceKey: request.workspaceKey, layer_id: request.layerId, limit: 100,
+          action: 'layer_details', workspaceKey: request.workspaceKey, layer_id: request.layerId,
+          offset: request.offset, limit: request.limit,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'layer/geojson') {
+      const request = layerPagePayload(payload, { maxLimit: 10_000 })
+      if (request === null) return badRequest('A valid paged Layer request is required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'geojson', workspaceKey: request.workspaceKey, layer_id: request.layerId,
+          offset: request.offset, limit: request.limit, max_bytes: 2 * 1024 * 1024,
         }, signal)
         return { ok: true, value }
       } catch (error) {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -525,14 +527,21 @@ class GeoTools:
         base_name = file_name or self.registry.metadata(input_layer).name
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(base_name).stem).strip(".-") or input_layer
         destination = self.registry.exports_root / f"{safe_name}{extensions[normalized_format]}"
-        if normalized_format == "geojson":
-            exported = frame.to_crs("EPSG:4326") if frame.crs is not None and not frame.crs.is_geographic else frame
-            exported.to_file(destination, driver="GeoJSON", engine="pyogrio")
-        elif normalized_format == "gpkg":
-            frame.to_file(destination, layer="data", driver="GPKG", engine="pyogrio")
-        else:
-            table = frame.drop(columns=[frame.geometry.name]).copy()
-            table.to_csv(destination, index=False)
+        temporary = self.registry.exports_root / (
+            f".{safe_name}.{uuid.uuid4().hex}.tmp{extensions[normalized_format]}"
+        )
+        try:
+            if normalized_format == "geojson":
+                exported = frame.to_crs("EPSG:4326") if frame.crs is not None and not frame.crs.is_geographic else frame
+                exported.to_file(temporary, driver="GeoJSON", engine="pyogrio")
+            elif normalized_format == "gpkg":
+                frame.to_file(temporary, layer="data", driver="GPKG", engine="pyogrio")
+            else:
+                table = frame.drop(columns=[frame.geometry.name]).copy()
+                table.to_csv(temporary, index=False)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
         relative = destination.relative_to(self.registry.root).as_posix()
         return self._success(
             "export_layer",
