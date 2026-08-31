@@ -2,6 +2,7 @@
 .gh-shell * { box-sizing: border-box; }
 
 .gh-shell button,
+.gh-shell input,
 .gh-shell select,
 .gh-shell textarea { font: inherit; }
 
@@ -12,7 +13,7 @@
   --gh-line-strong: var(--dsw-alias-border-l3); --gh-ink: var(--dsw-alias-label-primary);
   --gh-muted: var(--dsw-alias-label-tertiary); --gh-accent: var(--dsw-alias-state-business-primary);
   --gh-success: var(--dsw-alias-state-success-primary); --gh-error: var(--dsw-alias-state-error-primary);
-  width: 100%; min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 56px minmax(0, 1fr);
+  position: relative; width: 100%; min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 56px minmax(0, 1fr);
   overflow: hidden; background: var(--gh-bg); color: var(--gh-ink);
   font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; font-size: 14px;
 }
@@ -40,6 +41,48 @@
 .gh-launcher select:focus { border-color: var(--gh-accent); }
 .gh-status { gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid var(--gh-line); border-radius: 999px; background: var(--gh-raised); color: var(--gh-muted); box-shadow: var(--dsw-shadow-lv1); font-size: 12px; }
 .gh-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--gh-success); }
+.gh-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.gh-import-button { height: 32px; padding: 0 11px; display: flex; align-items: center; gap: 6px; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 42%, var(--gh-line)); border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); color: var(--gh-accent); cursor: pointer; }
+.gh-import-button:hover { background: color-mix(in srgb, var(--gh-accent) 12%, var(--gh-bg)); }
+.gh-import-button:disabled { cursor: progress; opacity: .6; }
+.gh-import-summary { max-width: 250px; overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.gh-import-summary.is-success { color: var(--gh-success); }
+.gh-import-summary.is-error { color: var(--gh-error); }
+
+.gh-import-backdrop { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, #000 28%, transparent); backdrop-filter: blur(2px); }
+.gh-import-dialog { width: min(500px, 100%); max-height: min(680px, calc(100% - 24px)); overflow: auto; padding: 0 18px 16px; border: 1px solid var(--gh-line-strong); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv3, 0 18px 50px rgba(0, 0, 0, .2)); }
+.gh-import-dialog > header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); }
+.gh-import-dialog > header > span { display: grid; gap: 2px; }
+.gh-import-dialog > header b { font-size: 15px; }
+.gh-import-dialog > header small, .gh-import-dialog > footer > small { color: var(--gh-muted); font-size: 10px; }
+.gh-import-dialog > header button { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--gh-muted); font-size: 19px; cursor: pointer; }
+.gh-import-dialog > header button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }
+.gh-import-file { margin: 15px 0 12px; padding: 11px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-raised); }
+.gh-import-file > span:first-child { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 10%, var(--gh-fill)); color: var(--gh-accent); }
+.gh-import-file > span:last-child { min-width: 0; display: grid; }
+.gh-import-file b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.gh-import-file small { color: var(--gh-muted); font-size: 10px; }
+.gh-import-dialog > label, .gh-import-grid label { margin-top: 10px; display: grid; gap: 5px; color: var(--gh-muted); font-size: 11px; }
+.gh-import-dialog input { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--gh-line); border-radius: 8px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px; }
+.gh-import-dialog input:focus { border-color: var(--gh-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 10%, transparent); }
+.gh-import-dialog input:disabled { opacity: .7; }
+.gh-import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.gh-import-grid label:last-child { grid-column: 1 / -1; }
+.gh-import-progress { margin-top: 13px; padding: 10px; display: grid; gap: 6px; border-radius: 9px; background: var(--gh-raised); }
+.gh-import-progress > span { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }
+.gh-import-progress > span i { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .2s ease; }
+.gh-import-progress.is-success > span i { background: var(--gh-success); }
+.gh-import-progress.is-error > span i { background: var(--gh-error); }
+.gh-import-progress p { margin: 0; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.gh-import-progress.is-error p { color: var(--gh-error); }
+.gh-import-progress small { color: var(--gh-muted); font-size: 10px; }
+.gh-import-dialog > footer { margin-top: 15px; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--gh-line); }
+.gh-import-dialog > footer > small { max-width: 270px; line-height: 1.4; }
+.gh-import-dialog > footer > span { display: flex; gap: 7px; }
+.gh-import-dialog > footer button { height: 32px; padding: 0 12px; border: 1px solid var(--gh-line); border-radius: 8px; cursor: pointer; }
+.gh-import-cancel { background: var(--gh-bg); color: var(--gh-muted); }
+.gh-import-submit { border-color: var(--gh-accent) !important; background: var(--gh-accent); color: white; }
+.gh-import-dialog > footer button:disabled { cursor: progress; opacity: .6; }
 
 .gh-workspace { --gh-agent-column-width: 390px; min-height: 0; display: grid; grid-template-columns: minmax(400px, 1fr) var(--gh-agent-column-width); gap: 12px; padding: 12px 14px 14px; }
 .gh-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv1); }
@@ -250,11 +293,13 @@
   .gh-workspace { --gh-agent-column-width: 340px; grid-template-columns: minmax(340px, 1fr) var(--gh-agent-column-width); }
   [data-conversation-scroll]:has([data-geoharness-plugin="loaded"]) { --gh-agent-column-width: 340px; }
   .gh-launcher .gh-status { display: none; }
+  .gh-import-summary { max-width: 180px; }
 }
 @media (max-width: 720px) {
   .gh-shell { grid-template-rows: auto minmax(0, 1fr); }
   .gh-topbar { padding: 9px 10px; align-items: stretch; flex-direction: column; gap: 7px; }
   .gh-launcher select { min-width: 0; flex: 1; }
+  .gh-import-summary { display: none; }
   .gh-workspace { --gh-agent-column-width: 330px; grid-template-columns: minmax(300px, 1fr) var(--gh-agent-column-width); padding-inline: 8px; }
   [data-conversation-scroll]:has([data-geoharness-plugin="loaded"]) { --gh-agent-column-width: 330px; }
   [data-conversation-scroll]:has([data-geoharness-plugin="loaded"]) > [data-composer-seat] { right: 18px; width: calc(var(--gh-agent-column-width) - 18px); }

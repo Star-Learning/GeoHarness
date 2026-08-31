@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .operations import GeoTools
+from .imports import import_capabilities, import_uploaded_layer
 from .regression import ScenarioRegression
 from .registry import LayerRegistry
 from .workspace import WorkspaceStore
@@ -120,6 +121,21 @@ def dispatch(payload: dict[str, Any]) -> Any:
                 feature_count=int(result.data["feature_count"]),
             )
         return result.model_dump(mode="json")
+    if action == "import_capabilities":
+        return import_capabilities(int(payload.get("max_upload_bytes", 20 * 1024 * 1024)))
+    if action == "import_upload":
+        return import_uploaded_layer(
+            registry,
+            workspace,
+            file_name=str(payload["file_name"]),
+            content_base64=str(payload["content_base64"]),
+            name=payload.get("name"),
+            source_layer=payload.get("source_layer"),
+            longitude_field=payload.get("longitude_field"),
+            latitude_field=payload.get("latitude_field"),
+            crs=payload.get("crs"),
+            max_upload_bytes=int(payload.get("max_upload_bytes", 20 * 1024 * 1024)),
+        )
     if action == "workspace_manifest":
         return workspace.sync_layers(registry.list_layers()).model_dump(mode="json")
     if action == "workspace_record_run":

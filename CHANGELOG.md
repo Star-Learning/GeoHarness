@@ -11,11 +11,14 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Automated local Markdown link validation.
 - Versioned, atomic Session Workspace manifests with canonical Layer, export and run asset indexes.
 - Provider-restart recovery, Session isolation and bounded Workspace reset validation.
+- Session-scoped browser import for GeoJSON, Shapefile ZIP, GeoPackage and CSV longitude/latitude data.
+- Canonical import asset indexing, format-aware UI progress and real user-data Agent Tool E2E coverage.
 
 ### Changed
 
 - Development documentation is separated into planning, architecture, testing and media sections.
 - Dataset and Scenario selection no longer changes the Session Workspace path or depends on Provider memory.
+- Layer registration now uses temporary GeoPackage snapshots and rollback-safe manifest persistence.
 - GeoHarness Agent workspace now uses clearer semantic map colors and synchronized result focus states.
 - Seven Scenario video prompts and reproducible 1080p recording/encoding scripts are tracked without committing generated MP4 files.
 
@@ -23,3 +26,4 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 
 - Documentation and tests now match the native Harness AppFrame, Session, settings, model selection and composer integration.
 - Media tests reflect the current multi-keyframe Scenario GIFs and concise root README.
+- Unsafe upload names, oversized files, ZIP traversal/symlinks/bombs and incomplete imports are rejected without residue.

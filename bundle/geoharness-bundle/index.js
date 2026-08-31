@@ -23,6 +23,7 @@ export function apply(ctx, config = {}) {
     scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')),
     datasetRoot: resolve(config.datasetRoot ?? packagedDatasetRoot),
     workspaceRoot: resolve(config.workspaceRoot ?? resolve(process.cwd(), '.geoharness/workspaces')),
+    uploadMaxBytes: config.uploadMaxBytes,
   }))
   new TaskGraphRuntime(ctx, { scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')) })
   registerGeoTools(ctx)

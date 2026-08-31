@@ -13,6 +13,7 @@ from typing import Any, Iterable
 from .models import (
     LayerMetadata,
     WorkspaceExportAsset,
+    WorkspaceImportAsset,
     WorkspaceLayerAsset,
     WorkspaceManifest,
     WorkspaceRunAsset,
@@ -163,6 +164,44 @@ class WorkspaceStore:
         self._touch()
         return self.manifest()
 
+    def record_import(
+        self,
+        *,
+        asset_id: str,
+        file_name: str,
+        format: str,
+        relative_path: str,
+        size_bytes: int,
+        layer_id: str,
+        source_layer: str | None,
+        warnings: list[str],
+    ) -> WorkspaceManifest:
+        if RUN_ID.fullmatch(asset_id) is None:
+            raise ValueError("Import asset id must be a safe 1-120 character identifier")
+        source = (self.root / relative_path).resolve()
+        if not source.is_relative_to(self.imports_root) or not source.is_file():
+            raise ValueError("Import asset is outside this Workspace or does not exist")
+        normalized_format = format.lower()
+        if normalized_format not in {"geojson", "shapefile", "gpkg", "csv"}:
+            raise ValueError(f"Unsupported import asset format: {format}")
+        asset = WorkspaceImportAsset(
+            asset_id=asset_id,
+            file_name=file_name,
+            format=normalized_format,
+            path=source.relative_to(self.root).as_posix(),
+            size_bytes=size_bytes,
+            layer_id=layer_id,
+            source_layer=source_layer,
+            created_at=utc_now(),
+            warnings=warnings,
+        )
+        self._manifest.imports = [
+            item for item in self._manifest.imports if item.asset_id != asset_id
+        ] + [asset]
+        self._manifest.imports.sort(key=lambda item: item.asset_id)
+        self._touch()
+        return self.manifest()
+
     def record_run(self, run_id: str, payload: dict[str, Any]) -> WorkspaceManifest:
         if RUN_ID.fullmatch(run_id) is None:
             raise ValueError("Run id must be a safe 1-120 character identifier")
@@ -204,6 +243,7 @@ class WorkspaceStore:
         self._clear_directory(self.runs_root)
         self._manifest.active_dataset = None
         self._manifest.active_scenario = None
+        self._manifest.imports = []
         self._manifest.input_layers = []
         self._manifest.derived_layers = []
         self._manifest.exports = []

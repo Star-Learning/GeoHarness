@@ -7,9 +7,9 @@
 未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
 完成 planning smoke test，详见下方“外部模型连接”。
 
-GIS Agent 平台 v1.0 的 Platform Phase 0–1 已完成，没有活跃代码阻塞。Session Workspace
-现在可跨 Provider 重建恢复并通过隔离、碰撞拒绝、原子写入和受限清理测试。下一阶段是用户
-矢量数据导入；若 GitHub Actions 远端环境暴露平台差异，按普通 CI 兼容问题修复。
+GIS Agent 平台 v1.0 的 Platform Phase 0–2 已完成，没有活跃代码阻塞。Session Workspace
+与四种用户矢量格式导入已经通过真实格式、安全、无残留和非预设 275 米 Agent Tool E2E。
+下一阶段是数据与 Layer 工作台；若 GitHub Actions 远端环境暴露平台差异，按普通 CI 兼容问题修复。
 
 ## Phase 0
 
@@ -195,3 +195,14 @@ typecheck、peer、51/51 Node、9/9 Python 和 `git diff --check`。空会话阶
 Result。内置浏览器的本地 URL 安全策略仍阻止自动重放并重新截取 `127.0.0.1` 的逐 Tool 瞬时
 状态，因此本轮没有把裁切视图伪装成新的实时执行截图。构建器已支持 storyboard；未来获得真实
 中间截图后只需把 `step-*.jpg` 加入对应 storyboard，无需重做 GIF 管线。
+
+### 11. Platform Phase 2 自动浏览器视觉验收
+
+Phase 2 的预览 Harness 已从当前源码 Bundle 成功启动在 `127.0.0.1:31994`，Host 进程未报告
+插件激活错误。按浏览器测试技能连接现有应用内标签页后，刷新该 localhost URL 被当前 Browser
+Use URL 安全策略明确拒绝；规则禁止改用其他浏览器自动化或原始 CDP 绕过，所以没有伪造视觉
+验收结果。
+
+这是非阻塞的环境限制：导入 UI 已通过 TypeScript、可复现 client build、源码/样式契约测试；
+四格式 Python、loopback RPC 与 275 米真实空间 E2E 均通过。用户可在已打开的本地标签页手动
+刷新检查布局；后续若 URL 策略允许，再补一轮文件选择器与 1280×720 截图回归。

@@ -63,6 +63,18 @@ class WorkspaceExportAsset(BaseModel):
     created_at: str
 
 
+class WorkspaceImportAsset(BaseModel):
+    asset_id: str
+    file_name: str
+    format: Literal["geojson", "shapefile", "gpkg", "csv"]
+    path: str
+    size_bytes: int = Field(ge=0)
+    layer_id: str
+    source_layer: str | None = None
+    created_at: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class WorkspaceRunAsset(BaseModel):
     run_id: str
     status: str
@@ -79,6 +91,7 @@ class WorkspaceManifest(BaseModel):
     updated_at: str
     active_dataset: str | None = None
     active_scenario: str | None = None
+    imports: list[WorkspaceImportAsset] = Field(default_factory=list)
     input_layers: list[WorkspaceLayerAsset] = Field(default_factory=list)
     derived_layers: list[WorkspaceLayerAsset] = Field(default_factory=list)
     exports: list[WorkspaceExportAsset] = Field(default_factory=list)

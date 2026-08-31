@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs'
 import { delimiter, resolve, sep } from 'node:path'
 
 const OUTPUT_LIMIT = 4 * 1024 * 1024
+const DEFAULT_UPLOAD_BYTES = 20 * 1024 * 1024
+const HARD_UPLOAD_BYTES = 100 * 1024 * 1024
 
 function safeSegment(value) {
   const normalized = String(value).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
@@ -22,6 +24,12 @@ export class LocalPythonGeoProvider {
     this.scenarioRoot = resolve(options.scenarioRoot)
     this.datasetRoot = resolve(options.datasetRoot)
     this.workspaceRoot = resolve(options.workspaceRoot)
+    this.uploadMaxBytes = Number(options.uploadMaxBytes ?? DEFAULT_UPLOAD_BYTES)
+    if (!Number.isSafeInteger(this.uploadMaxBytes)
+      || this.uploadMaxBytes < 1
+      || this.uploadMaxBytes > HARD_UPLOAD_BYTES) {
+      throw new Error(`Geo uploadMaxBytes must be between 1 and ${HARD_UPLOAD_BYTES}`)
+    }
   }
 
   available() {
@@ -49,6 +57,7 @@ export class LocalPythonGeoProvider {
       workspace_root: this.workspaceFor(sessionId),
       workspace_id: workspaceId,
       session_id: sessionId,
+      max_upload_bytes: this.uploadMaxBytes,
       scenario_root: this.scenarioRoot,
       dataset_root: this.datasetRoot,
     }
@@ -114,3 +123,5 @@ export class LocalPythonGeoProvider {
 }
 
 export default LocalPythonGeoProvider
+
+export { DEFAULT_UPLOAD_BYTES, HARD_UPLOAD_BYTES }

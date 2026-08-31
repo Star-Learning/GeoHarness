@@ -304,10 +304,10 @@ function GeoMap({
       {layers.length === 0 && <div className="gh-map-empty-card">
         <span className="gh-eyebrow">MAP WORKSPACE</span>
         <strong>No registered layers</strong>
-        <p>在右侧原生 Harness 对话框描述空间目标后，Agent 会发现真实数据、选择 Geo Tools，并把产生的图层逐步加载到这里。</p>
+        <p>点击顶部“导入数据”上传自己的矢量文件，或在右侧原生 Harness 对话框让 Agent 发现可用数据。</p>
       </div>}
       <div className="gh-map-scale"><span /> {zoom.toFixed(1)}×</div>
-      <div className="gh-map-attribution">{layers.length > 0 ? 'Official NYC Open Data' : 'Agent workspace awaiting data'} · OGC:CRS84</div>
+      <div className="gh-map-attribution">{layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · map CRS84</div>
       {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
         <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
         <span className="gh-eyebrow">FEATURE INSPECTION</span>
@@ -329,10 +329,76 @@ interface WorkspaceProjection {
   layers: WorkspaceProjectionItem[]
 }
 
+interface ImportCapabilities {
+  schema_version: '1.0'
+  max_file_bytes: number
+  hard_max_file_bytes: number
+  formats: string[]
+  extensions: string[]
+}
+
+interface ImportRequest {
+  fileName: string
+  contentBase64: string
+  name?: string
+  sourceLayer?: string
+  longitudeField?: string
+  latitudeField?: string
+  crs?: string
+}
+
+interface ImportResult {
+  metadata: {
+    layer_id: string
+    name: string
+    feature_count: number
+    geometry: string
+    crs: string
+  }
+  format: string
+  source_layer: string | null
+  fields: { name: string, type: string }[]
+  warnings: string[]
+}
+
+interface ImportDraft {
+  file: File
+  extension: string
+  name: string
+  sourceLayer: string
+  longitudeField: string
+  latitudeField: string
+  crs: string
+}
+
+function readFileAsBase64(file: File, onProgress: (progress: number) => void): Promise<string> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const reader = new FileReader()
+    reader.onprogress = event => {
+      if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total)
+    }
+    reader.onerror = () => rejectPromise(reader.error ?? new Error('读取文件失败'))
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return rejectPromise(new Error('浏览器没有返回可上传的文件内容'))
+      const comma = reader.result.indexOf(',')
+      if (comma < 0) return rejectPromise(new Error('浏览器文件编码失败'))
+      onProgress(1)
+      resolvePromise(reader.result.slice(comma + 1))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function fileSizeLabel(bytes: number) {
+  return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 interface GeoHarnessInjected {
   agent: {
     history(): Promise<{ events: unknown[] }>
     workspace(): Promise<WorkspaceProjection>
+    importCapabilities(): Promise<ImportCapabilities>
+    importData(request: ImportRequest): Promise<ImportResult>
   }
 }
 
@@ -462,7 +528,7 @@ function GeoHarnessLayerPanel({ onClose }: { onClose: () => void }) {
           <button type="button" className="gh-layer-panel-close" aria-label="关闭图层面板" onClick={onClose}>×</button>
         </span>
       </div>
-      <div className="gh-layer-section-label">Agent-loaded data</div>
+      <div className="gh-layer-section-label">Workspace input data</div>
       <div className="gh-layer-list">
         {inputLayers.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds))}
       </div>
@@ -498,6 +564,19 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [agentAnswer, setAgentAnswer] = React.useState('')
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
   const [layerPanelOpen, setLayerPanelOpen] = React.useState(false)
+  const [importCapabilities, setImportCapabilities] = React.useState<ImportCapabilities>({
+    schema_version: '1.0',
+    max_file_bytes: 20 * 1024 * 1024,
+    hard_max_file_bytes: 100 * 1024 * 1024,
+    formats: ['geojson', 'shapefile_zip', 'gpkg', 'csv_lon_lat'],
+    extensions: ['.geojson', '.json', '.zip', '.gpkg', '.csv'],
+  })
+  const [importDraft, setImportDraft] = React.useState<ImportDraft | null>(null)
+  const [importPhase, setImportPhase] = React.useState<'idle' | 'reading' | 'uploading' | 'success' | 'error'>('idle')
+  const [importProgress, setImportProgress] = React.useState(0)
+  const [importMessage, setImportMessage] = React.useState('')
+  const [importWarnings, setImportWarnings] = React.useState<string[]>([])
+  const fileInput = React.useRef<HTMLInputElement | null>(null)
   const activeGoalSeq = React.useRef<number | null>(null)
   const lastAutoStepId = React.useRef<string | null>(null)
   const lastRunStatus = React.useRef<'ready' | 'running' | 'success' | 'failed'>('ready')
@@ -510,7 +589,20 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   React.useEffect(() => {
     previousLayerCount.current = 0
     setLayerPanelOpen(false)
+    setImportDraft(null)
+    setImportPhase('idle')
+    setImportProgress(0)
+    setImportMessage('')
+    setImportWarnings([])
   }, [sessionId])
+
+  React.useEffect(() => {
+    let disposed = false
+    void agent.importCapabilities()
+      .then(value => { if (!disposed) setImportCapabilities(value) })
+      .catch(() => {})
+    return () => { disposed = true }
+  }, [agent, sessionId])
 
   React.useEffect(() => {
     if (previousLayerCount.current === 0 && layers.length > 0) setLayerPanelOpen(true)
@@ -618,6 +710,76 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     layerWorkspace.highlight(sessionId, highlightedLayerIds)
   }, [sessionId, highlightedLayerKey])
   const successfulSteps = taskSteps.filter(step => step.status === 'success')
+  const importBusy = importPhase === 'reading' || importPhase === 'uploading'
+
+  const selectImportFile = (file: File) => {
+    const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`
+    if (!importCapabilities.extensions.includes(extension)) {
+      setImportDraft(null)
+      setImportPhase('error')
+      setImportMessage(`不支持 ${extension || '无扩展名'}；请选择 GeoJSON、Shapefile ZIP、GeoPackage 或 CSV。`)
+      return
+    }
+    if (file.size === 0 || file.size > importCapabilities.max_file_bytes) {
+      setImportDraft(null)
+      setImportPhase('error')
+      setImportMessage(`文件必须大于 0 且不超过 ${fileSizeLabel(importCapabilities.max_file_bytes)}。`)
+      return
+    }
+    setImportDraft({
+      file,
+      extension,
+      name: file.name.replace(/\.(?:geojson|json|zip|gpkg|csv)$/iu, ''),
+      sourceLayer: '',
+      longitudeField: extension === '.csv' ? 'longitude' : '',
+      latitudeField: extension === '.csv' ? 'latitude' : '',
+      crs: extension === '.csv' ? 'EPSG:4326' : '',
+    })
+    setImportPhase('idle')
+    setImportProgress(0)
+    setImportMessage('')
+    setImportWarnings([])
+  }
+
+  const submitImport = async () => {
+    const draft = importDraft
+    if (draft === null || importBusy) return
+    try {
+      setImportPhase('reading')
+      setImportProgress(2)
+      setImportMessage('正在读取本地文件…')
+      setImportWarnings([])
+      const contentBase64 = await readFileAsBase64(draft.file, progress => {
+        setImportProgress(Math.round(5 + progress * 55))
+      })
+      setImportPhase('uploading')
+      setImportProgress(70)
+      setImportMessage('正在校验并注册 canonical Layer…')
+      const result = await agent.importData({
+        fileName: draft.file.name,
+        contentBase64,
+        name: draft.name.trim() || undefined,
+        sourceLayer: draft.sourceLayer.trim() || undefined,
+        longitudeField: draft.extension === '.csv' ? draft.longitudeField.trim() || undefined : undefined,
+        latitudeField: draft.extension === '.csv' ? draft.latitudeField.trim() || undefined : undefined,
+        crs: draft.extension === '.csv' ? draft.crs.trim() || undefined : undefined,
+      })
+      const workspace = await agent.workspace()
+      if (workspace.status !== 'ready') throw new Error(workspace.issues.join('; ') || '导入后 Workspace 校验失败')
+      layerWorkspace.project(sessionId, workspace.layers)
+      lastWorkspaceSeq.current = null
+      setWorkspaceStatus(`${workspace.layers.length} verified layers`)
+      setLayerPanelOpen(true)
+      setImportProgress(100)
+      setImportPhase('success')
+      setImportWarnings(result.warnings)
+      setImportMessage(`${result.metadata.name} 已导入：${result.metadata.feature_count} 个 ${result.metadata.geometry} 要素 · ${result.metadata.crs}`)
+    } catch (error) {
+      setImportPhase('error')
+      setImportProgress(0)
+      setImportMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   const stepIcon = (status: AgentToolStep['status'], index: number) => {
     if (status === 'success') return '✓'
@@ -631,12 +793,62 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
-          <span><strong>GeoHarness</strong><small>Agentic GIS · official data</small></span>
+          <span><strong>GeoHarness</strong><small>Agentic GIS · local workspace</small></span>
         </div>
         <div className="gh-launcher">
+          {importPhase !== 'idle' && <span className={`gh-import-summary is-${importPhase}`}>{importPhase === 'success' ? '✓' : importBusy ? '…' : '!'} {importMessage}</span>}
           <span className="gh-status"><i /> Native Harness Agent · {layers.length} layers · {featureCount} features</span>
+          <button type="button" className="gh-import-button" onClick={() => fileInput.current?.click()} disabled={importBusy}>
+            <span aria-hidden="true">⇧</span> 导入数据
+          </button>
+          <input
+            ref={fileInput}
+            className="gh-file-input"
+            type="file"
+            accept=".geojson,.json,.zip,.gpkg,.csv"
+            onChange={event => {
+              const file = event.currentTarget.files?.[0]
+              event.currentTarget.value = ''
+              if (file !== undefined) selectImportFile(file)
+            }}
+          />
         </div>
       </header>
+
+      {importDraft !== null && <div className="gh-import-backdrop">
+        <section className="gh-import-dialog" role="dialog" aria-modal="true" aria-label="导入矢量数据">
+          <header>
+            <span><b>导入矢量数据</b><small>注册到当前 Harness Session Workspace</small></span>
+            <button type="button" aria-label="关闭导入" disabled={importBusy} onClick={() => setImportDraft(null)}>×</button>
+          </header>
+          <div className="gh-import-file">
+            <span aria-hidden="true">▱</span>
+            <span><b>{importDraft.file.name}</b><small>{fileSizeLabel(importDraft.file.size)} · {importDraft.extension.slice(1).toUpperCase()}</small></span>
+          </div>
+          <label>图层名称<input disabled={importBusy || importPhase === 'success'} value={importDraft.name} maxLength={120} onChange={event => setImportDraft({ ...importDraft, name: event.currentTarget.value })} /></label>
+          {(importDraft.extension === '.gpkg' || importDraft.extension === '.zip') && <label>
+            {importDraft.extension === '.gpkg' ? '源图层名称（多图层时必填）' : 'Shapefile 名称（压缩包多图层时必填）'}
+            <input disabled={importBusy || importPhase === 'success'} value={importDraft.sourceLayer} maxLength={180} placeholder="单图层文件可留空" onChange={event => setImportDraft({ ...importDraft, sourceLayer: event.currentTarget.value })} />
+          </label>}
+          {importDraft.extension === '.csv' && <div className="gh-import-grid">
+            <label>经度字段<input disabled={importBusy || importPhase === 'success'} value={importDraft.longitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value })} /></label>
+            <label>纬度字段<input disabled={importBusy || importPhase === 'success'} value={importDraft.latitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value })} /></label>
+            <label>源 CRS<input disabled={importBusy || importPhase === 'success'} value={importDraft.crs} maxLength={80} onChange={event => setImportDraft({ ...importDraft, crs: event.currentTarget.value })} /></label>
+          </div>}
+          {importPhase !== 'idle' && <div className={`gh-import-progress is-${importPhase}`}>
+            <span><i style={{ width: `${importProgress}%` }} /></span>
+            <p>{importMessage}</p>
+            {importWarnings.map(warning => <small key={warning}>⚠ {warning}</small>)}
+          </div>}
+          <footer>
+            <small>支持 GeoJSON、Shapefile ZIP、GeoPackage、CSV lon/lat · 上限 {fileSizeLabel(importCapabilities.max_file_bytes)}</small>
+            <span>
+              <button type="button" className="gh-import-cancel" disabled={importBusy} onClick={() => setImportDraft(null)}>{importPhase === 'success' ? '完成' : '取消'}</button>
+              {importPhase !== 'success' && <button type="button" className="gh-import-submit" disabled={importBusy} onClick={() => { void submitImport() }}>{importPhase === 'error' ? '重试' : '导入'}</button>}
+            </span>
+          </footer>
+        </section>
+      </div>}
 
       <section className="gh-workspace">
         <section className={`gh-map-stage is-${runStatus}${highlightedLayerIds.size > 0 ? ' has-focus' : ''}`}>
@@ -760,6 +972,31 @@ export function apply(ctx: ClientContext) {
             throw new Error(response.error?.message ?? 'Agent workspace projection is unavailable')
           }
           return response.value as WorkspaceProjection
+        },
+        importCapabilities: async () => {
+          const response = await connection.rpc.call('/geoharness', 'data/import-capabilities', {
+            workspace_key: sessionId,
+          })
+          if (!response.ok || response.value === null || typeof response.value !== 'object') {
+            throw new Error(response.error?.message ?? 'Data import capabilities are unavailable')
+          }
+          return response.value as ImportCapabilities
+        },
+        importData: async request => {
+          const response = await connection.rpc.call('/geoharness', 'data/import', {
+            workspace_key: sessionId,
+            file_name: request.fileName,
+            content_base64: request.contentBase64,
+            name: request.name,
+            source_layer: request.sourceLayer,
+            longitude_field: request.longitudeField,
+            latitude_field: request.latitudeField,
+            crs: request.crs,
+          })
+          if (!response.ok || response.value === null || typeof response.value !== 'object') {
+            throw new Error(response.error?.message ?? 'Data import failed')
+          }
+          return response.value as ImportResult
         },
       },
     }),

@@ -34,9 +34,10 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @geoharness/harness-
 
 1. 打开左下角“设置”，配置 LLM Provider、Base URL 和 API Key。
 2. 新建或选择一个项目与会话。
-3. 在右侧对话框输入 GIS 需求，例如：`找出距离 Broadway 275 米内的建筑，展示相关图层并报告数量。`
-4. GeoHarness 会根据输入自动发现数据、规划步骤并调用 GIS 工具，不需要选择预设案例。
-5. 右侧可查看 Agent 的流式输出和执行进度；中间地图会同步显示图层与结果，可拖动、缩放和查看要素。
+3. 可点击顶部“导入数据”上传 GeoJSON、Shapefile ZIP、GeoPackage 或 CSV 经纬度文件；也可让 Agent 使用部署的数据目录。
+4. 在右侧对话框输入 GIS 需求，例如：`找出距离 Broadway 275 米内的建筑，展示相关图层并报告数量。`
+5. GeoHarness 会根据输入自动发现数据、规划步骤并调用 GIS 工具，不需要选择预设案例。
+6. 右侧可查看 Agent 的流式输出和执行进度；中间地图会同步显示图层与结果，可拖动、缩放和查看要素。
 
 ## 案例
 

@@ -15,6 +15,11 @@ The versioned `workspace.json` binds those layers plus exports and run assets to
 Session. Provider recreation restores the same workspace without relying on in-memory Dataset or
 Scenario selection.
 
+The Harness Provider additionally accepts bounded browser uploads through the Python runner.
+GeoJSON, Shapefile ZIP, GeoPackage and CSV longitude/latitude inputs are validated and retained
+under `imports/`, then converted to canonical GeoPackage Layers. Failed imports are rolled back;
+the browser cannot request an arbitrary server path.
+
 Run locally from this directory:
 
 ```powershell

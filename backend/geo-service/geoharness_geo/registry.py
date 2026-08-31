@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -81,8 +83,13 @@ class LayerRegistry:
 
         layer_id = self._next_layer_id()
         storage = self.layers_root / f"{layer_id}.gpkg"
+        temporary_storage = self.layers_root / f".{layer_id}.{uuid.uuid4().hex}.gpkg"
         snapshot = frame.copy()
-        snapshot.to_file(storage, layer="data", driver="GPKG", engine="pyogrio")
+        try:
+            snapshot.to_file(temporary_storage, layer="data", driver="GPKG", engine="pyogrio")
+            os.replace(temporary_storage, storage)
+        finally:
+            temporary_storage.unlink(missing_ok=True)
         geometry_types = sorted(set(snapshot.geom_type.dropna().tolist()))
         bounds = [] if snapshot.empty else [
             float(value) for value in snapshot.total_bounds.tolist() if math.isfinite(float(value))
@@ -102,8 +109,26 @@ class LayerRegistry:
             bbox=bounds,
         )
         self._metadata[layer_id] = metadata
-        self._persist()
+        try:
+            self._persist()
+        except Exception:
+            self._metadata.pop(layer_id, None)
+            storage.unlink(missing_ok=True)
+            raise
         return metadata
+
+    def remove(self, layer_id: str) -> None:
+        metadata = self.metadata(layer_id)
+        storage = (self.root / metadata.storage_path).resolve()
+        if not storage.is_relative_to(self.layers_root.resolve()):
+            raise ValueError(f"Unsafe storage path for layer {layer_id}")
+        self._metadata.pop(layer_id)
+        try:
+            self._persist()
+        except Exception:
+            self._metadata[layer_id] = metadata
+            raise
+        storage.unlink(missing_ok=True)
 
     def register_file(self, path: str | Path, *, name: str | None = None, source: str = "scenario") -> LayerMetadata:
         source_path = Path(path).resolve()

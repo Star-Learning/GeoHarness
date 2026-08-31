@@ -43,6 +43,14 @@ returns no routable model, the UI fails loudly with model-provider configuration
 
 ## Data and tools
 
+The native GeoHarness conversation surface also provides a bounded **Import data** action. GeoJSON,
+Shapefile ZIP, GeoPackage and CSV longitude/latitude files travel through the loopback-only
+Connection RPC into the current Session's `imports/` directory, then GeoPandas registers a
+canonical GeoPackage Layer. The browser never submits a server path. Default upload size is 20 MB
+(configurable up to a 100 MB hard ceiling); ZIP traversal, symlinks, suspicious compression and
+unbounded extraction are rejected. Imported Layer IDs are immediately visible to `list_layers`
+and the map.
+
 `discover_datasets` exposes the reusable `nyc-core-official` catalog. `list_layers` can activate it
 and returns canonical Layer IDs for official NYC buildings, roads, rivers, districts and Lower
 Manhattan buildings. The catalog describes data capabilities only; it does not prescribe an

@@ -616,3 +616,30 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   1 个 export 与 1 个 run；另一 Session 为空，切换 Scenario 后根目录不变且旧资产被受限清理。
 - [x] 最终门禁通过：build、TypeScript、peer dependencies、文档 50/50（96 个本地链接）、
   Scenario freshness、Node 59/59、Python 12/12 和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 2
+
+状态：完成（2026-08-31）
+
+- [x] 在现有 `conversation.session` 顶部增加格式感知的“导入数据”入口，不创建独立页面；支持
+  GeoJSON/JSON、Shapefile ZIP、GeoPackage 和 CSV 经纬度文件及读取/上传/校验/成功/失败进度。
+- [x] 新增 loopback-only `data/import-capabilities` 与 `data/import` RPC；浏览器只发送当前
+  Session、普通文件名、base64 内容和格式选项，不接受任意服务器路径。
+- [x] 默认单文件上限 20 MB，Bundle `uploadMaxBytes` 可配置，100 MB 为硬上限；Host 和 Python
+  分别检查 envelope 与真实解码字节数，UI 从 Provider 读取实际限制。
+- [x] Python 导入器真实支持单/多层 GeoPackage 选择、单/多 Shapefile 选择、CSV lon/lat 字段与
+  CRS；返回 canonical Layer metadata、字段 dtype、warning 和 import asset。
+- [x] ZIP 拒绝路径穿越、Windows drive path、symlink、非 Shapefile sidecar、超过 512 entries、
+  异常压缩比和过量解压；普通文件名同时拒绝目录字符、控制符与 Windows 设备名。
+- [x] Layer 注册改为唯一临时 GeoPackage + 原子替换；导入 staging、canonical Layer 和
+  `workspace.json` 任一环节失败会回滚，不注册或遗留半成品。
+- [x] Python 用真实 GeoPandas/Pyogrio 文件验证 GeoJSON、Shapefile ZIP、双层 GeoPackage 和
+  带无效坐标的 CSV；恶意 ZIP、超限、坏 GeoJSON、多层未选择均确认零 Layer/零 import 残留。
+- [x] Host E2E 将真实 NYC Buildings/Roads 作为用户上传数据导入未激活 Dataset/Scenario 的
+  Session，Agent `list_layers` 发现两个 `source=upload` Layer，并真实执行 major road filter、
+  UTM 18N、275 米 buffer 和 intersects，独立结果为 241 栋建筑。
+- [x] 新增 `docs/architecture/user-data-import.md` 并同步 README、Bundle、Backend 与 Workspace
+  契约；完整门禁通过：build、TypeScript、peer dependencies、文档 51 份/97 links、Scenario
+  freshness、Node 63/63、Python 19/19、7 个媒体包和 `git diff --check`。
+- [x] 预览 Harness 已成功启动在 `127.0.0.1:31994`；内置浏览器在刷新 localhost 时被当前 URL
+  安全策略拒绝，因此本轮自动视觉截图未执行，详见 `BLOCKERS.md`。该限制不影响编译或真实 E2E。

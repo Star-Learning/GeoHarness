@@ -1,8 +1,12 @@
 import { SCENARIO_IDS } from './tools.js'
+import { HARD_UPLOAD_BYTES } from './provider.js'
 
 const SCENARIOS = new Set(SCENARIO_IDS)
 const WORKSPACE_KEY = /^[A-Za-z0-9._:-]{1,120}$/
 const MAX_GOAL_LENGTH = 2_000
+const MAX_BASE64_LENGTH = Math.ceil(HARD_UPLOAD_BYTES / 3) * 4 + 4
+const SAFE_UPLOAD_NAME = /^[^<>:"/\\|?*\u0000-\u001f]{1,180}$/u
+const SUPPORTED_UPLOAD_EXTENSION = /\.(?:geojson|json|zip|gpkg|csv)$/iu
 const DISTANCE_PATTERN = /(-?\d+(?:\.\d+)?)\s*(公里|千米|km|kilometers?|米|m|meters?)/giu
 
 function badRequest(message) {
@@ -35,6 +39,35 @@ function agentWorkspacePayload(payload) {
   const workspaceKey = payload.workspace_key
   if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
   return { workspaceKey }
+}
+
+function optionalString(value, maxLength) {
+  if (value === undefined || value === null || value === '') return undefined
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized.length > 0 && normalized.length <= maxLength ? normalized : null
+}
+
+function importRequestPayload(payload) {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const workspaceKey = payload.workspace_key
+  const fileName = payload.file_name
+  const contentBase64 = payload.content_base64
+  if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
+  if (typeof fileName !== 'string' || !SAFE_UPLOAD_NAME.test(fileName)
+    || !SUPPORTED_UPLOAD_EXTENSION.test(fileName)
+    || fileName !== fileName.trim().replace(/[. ]+$/u, '') || fileName === '.' || fileName === '..') return null
+  if (typeof contentBase64 !== 'string' || contentBase64.length === 0 || contentBase64.length > MAX_BASE64_LENGTH) return null
+  const options = {}
+  for (const [key, limit] of [
+    ['name', 120], ['source_layer', 180], ['longitude_field', 120],
+    ['latitude_field', 120], ['crs', 80],
+  ]) {
+    const value = optionalString(payload[key], limit)
+    if (value === null) return null
+    if (value !== undefined) options[key] = value
+  }
+  return { workspaceKey, fileName, contentBase64, options }
 }
 
 function verifyWorkspaceProjection(projection) {
@@ -196,6 +229,29 @@ export function registerGeoRpc(ctx) {
       if (request === null) return badRequest('A valid workspace_key is required')
       const projection = await ctx.geo.execute({ action: 'projection', workspaceKey: request.workspaceKey }, signal)
       return { ok: true, value: verifyWorkspaceProjection(projection) }
+    }
+    if (endpoint === 'data/import-capabilities') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      const value = await ctx.geo.execute({ action: 'import_capabilities', workspaceKey: request.workspaceKey }, signal)
+      return { ok: true, value }
+    }
+    if (endpoint === 'data/import') {
+      const request = importRequestPayload(payload)
+      if (request === null) return badRequest('A valid bounded upload payload is required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'import_upload',
+          workspaceKey: request.workspaceKey,
+          file_name: request.fileName,
+          content_base64: request.contentBase64,
+          ...request.options,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return badRequest(message.slice(0, 800))
+      }
     }
     if (endpoint === 'goal/run' || endpoint === 'goal/start') {
       const request = goalRequestPayload(payload)

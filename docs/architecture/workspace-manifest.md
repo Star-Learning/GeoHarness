@@ -42,6 +42,7 @@ Manifest 至少包含：
   "updated_at": "2026-08-31T00:00:00+00:00",
   "active_dataset": null,
   "active_scenario": null,
+  "imports": [],
   "input_layers": [],
   "derived_layers": [],
   "exports": [],
@@ -49,6 +50,7 @@ Manifest 至少包含：
 }
 ```
 
+- `imports` 索引 `imports/` 下经过安全校验的原始用户文件及其 canonical Layer ID；
 - `input_layers` 索引 Scenario、Dataset 或用户上传形成的 canonical Layer；
 - `derived_layers` 索引真实 GIS Tool 生成且带 lineage 的 Layer；
 - `exports` 只接受 `exports/` 下已经存在的 GeoJSON、GeoPackage 或 CSV；
