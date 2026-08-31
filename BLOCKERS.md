@@ -7,14 +7,18 @@
 未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
 完成 planning smoke test，详见下方“外部模型连接”。
 
-GIS Agent 平台 v1.0 的 Platform Phase 0–7 已完成，Phase 8 实现与本地发布门禁已完成，没有
-活跃代码阻塞。Session Workspace、
+GIS Agent 平台 v1.0 的 Platform Phase 0–8 与本地发布门禁均已完成，没有活跃代码阻塞。
+Session Workspace、
 四种用户矢量格式导入、canonical 数据/Layer 工作台、Native Session Run Manifest、五类
 对话式修订、Result Center、安全导出以及 Tool / Dataset 扩展契约已经通过真实格式、边界、
 安全、恢复、第三方 fixture、超时/取消/进程退出、幂等回放、分页/截断、并发隔离和 GeoPandas
 验证。三个非预设用户上传 E2E、全新 Harness profile 的安装/启动/卸载和本地完整门禁也已通过。
-当前只等待新提交的 GitHub Actions Windows/Linux 结果，成功后即可创建 `v1.0.0` Tag/Release；
-这属于发布状态而不是代码阻塞，若远端暴露平台差异则按普通 CI 兼容问题修复。
+按 2026-08-31 的发布决策，本轮不再 push、不创建远程 Tag 或 GitHub Release；远程部署与
+跨平台 Actions 延后处理，因此既不是当前完成条件，也不是活跃阻塞。
+
+## 延后的远程部署
+
+以下 GitHub Actions 记录只保留为后续部署诊断历史，不影响已经通过的本地 v1.0 验收。
 
 首轮 Phase 8 远程 CI 暴露了一个已解决的 clean-clone 门禁错误：Phase 0 的源码审计测试曾强制
 读取仓库外的 `../deepseek-harness`。正式 GitHub checkout 不应复制上游源码，因此该项现在只在
@@ -23,13 +27,12 @@ CLI 的安装/启动/卸载。CI 的 build/Node/Python 也拆成独立步骤，�
 
 第二轮远程 CI 已确认 Ubuntu clean plugin lifecycle 通过；Windows lifecycle 的直接 `pnpm.cmd`
 启动在 1 秒内失败，已改为 Node 执行当前 pnpm 的 `npm_execpath`。原组合的生成物步骤也进一步拆为
-Bundle build、Catalog freshness 与 Scenario freshness 三项；这仍是发布验证中的普通跨平台修复，
-不是外部阻塞。
+Bundle build、Catalog freshness 与 Scenario freshness 三项。
 
 第三轮精确门禁确认两套 Ubuntu 的 Bundle build 与 Catalog freshness 均通过，失败项只有 Scenario
 freshness。原因是先前将平台相关的 GEOS/PROJ 派生几何 JSON 做逐字节比较。现在原始来源 SHA/数量、
-属性/ID/统计仍精确，几何改用严格空间容差并增加真实篡改回归；生成文本也固定为 LF。等待远程
-矩阵复验，不把等价空间结果的序列化差异记录为产品阻塞。
+属性/ID/统计仍精确，几何改用严格空间容差并增加真实篡改回归；生成文本也固定为 LF，不把等价
+空间结果的序列化差异记录为产品阻塞。
 
 Scenario 修复后的远程 Ubuntu 已通过 Bundle、Catalog、Scenario 与全部 Node E2E，Python 阶段暴露
 新增篡改 fixture 在不同 Shapely 构建上的错误分类差异：只移动闭合环首点可能先改变 validity。

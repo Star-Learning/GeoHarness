@@ -35,7 +35,7 @@ python -m pytest backend/geo-service/tests/test_platform_acceptance.py -q
 → dump-config 确认已移除
 ```
 
-本地若有相邻的 DeepSeek Harness 官方源码构建，脚本使用其 `apps/cli/lib/bin.js`；干净 CI 使用固定版本 `@deepseek-ai/dsh@0.1.1-rc.2`。Linux 和 Windows 的 GitHub Actions 都执行同一流程。
+本地若有相邻的 DeepSeek Harness 官方源码构建，脚本使用其 `apps/cli/lib/bin.js`；否则使用固定版本 `@deepseek-ai/dsh@0.1.1-rc.2`。当前版本以 Windows 本地执行结果为发布门禁；仓库中的 Linux/Windows GitHub Actions 留待后续部署阶段验证。
 
 ```sh
 pnpm run verify:plugin-lifecycle

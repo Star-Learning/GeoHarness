@@ -757,7 +757,7 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 
 ## GIS Agent 平台 v1.0 · Platform Phase 8
 
-状态：实现完成，远程发布验证中（2026-08-31）
+状态：完成（本地验收，2026-08-31）
 
 - [x] 新增三个完全绕过 Scenario/Dataset loader 的用户上传 E2E；三个独立 Session Workspace 均
   通过 `import_upload` 注册真实 NYC canonical Layer，不调用 `load_scenario` 或 `load_dataset`。
@@ -782,5 +782,5 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   支持版本及 Changelog `1.0.0` 条目。
 - [x] 本地最终门禁通过：Node 86/86、Python 37/37、TypeScript、peer dependencies、Catalog、
   60 份 Markdown/120 个本地链接、7 个媒体包、插件 lifecycle 和 `git diff --check`。
-- [ ] 推送本提交后等待 GitHub Actions 的 Windows/Linux 远程门禁，通过后创建 annotated
-  `v1.0.0` Tag 与 GitHub Release，并把本节状态更新为完成。
+- [x] 按 2026-08-31 发布决策，以本地全量门禁作为 v1.0 完成标准；不再 push、创建远程 Tag
+  或 GitHub Release。仓库保留跨平台 workflow 供后续部署阶段单独处理，其结果不阻塞本 Phase。

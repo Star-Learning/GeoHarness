@@ -200,13 +200,16 @@ v1.0 做实扩展契约，不做完整 Marketplace：
 必须包含：
 
 - MIT License（与当前上游许可一致）；
-- GitHub Actions：Node build/typecheck/test、Python test、Scenario/media/docs checks；
+- 可在本地一次执行的 Node build/typecheck/test、Python test、Scenario/media/docs checks；
 - `CONTRIBUTING.md`、`SECURITY.md`、`CHANGELOG.md`；
 - 文件上传和 Workspace 路径安全测试；
 - Tool timeout、AbortSignal、失败清理和并发 Workspace 隔离测试；
-- Windows 主验收，Linux CI 验收；
-- 干净克隆安装、插件添加、启动、卸载检查；
-- 发布 `v1.0.0` Tag 和 Release Notes。
+- Windows 本地完整验收；
+- 隔离 `DSH_HOME` 下的插件添加、启动、HTTP 探测和卸载检查；
+- `v1.0.0` Release Notes 与兼容矩阵。
+
+仓库保留 Windows/Linux GitHub Actions 作为后续部署参考，但按 2026-08-31 的发布决策，远程
+CI、Tag 和 GitHub Release 不属于当前本地 v1.0 的完成门禁，待后续单独处理。
 
 ---
 
@@ -368,18 +371,20 @@ Browser Upload
 
 完成标准：失败不会留下已注册的半成品 Layer，不会越界读写，也不会让其他会话看到数据。
 
-### Platform Phase 8：平台 E2E 与 v1.0.0 发布
+### Platform Phase 8：平台 E2E 与 v1.0.0 本地验收
 
 交付：
 
-- Windows 与 Linux CI；
-- 干净克隆安装和卸载；
+- Windows 本地完整门禁；
+- 隔离 Harness profile 的安装、启动、HTTP 探测和卸载；
 - 至少 3 个用户上传数据的非预设 E2E；
 - 现有 7 个 Scenario 全部继续通过；
-- README、Release Notes、兼容矩阵和 v1.0.0 Tag；
+- README、Release Notes 和兼容矩阵；
 - 多案例视频仅作为不同 GIS 方法的展示。
 
 完成标准：满足第 1.1 节全部核心判断，并通过本文第 7 节验收矩阵。
+
+远程 Linux/Windows CI、`v1.0.0` Tag 与 GitHub Release 延后到部署阶段，不阻塞本 Phase。
 
 ---
 
