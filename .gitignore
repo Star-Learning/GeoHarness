@@ -13,6 +13,7 @@ output/
 promo-video/*.mp4
 promo-video/*.recording.json
 !promo-video/geoharness-agent-flow-hd-fixed.recording.json
+examples/topics/*/media/*.mp4
 
 # Superseded interactive presentation prototype kept only as a local experiment.
 promo-video/presentation/

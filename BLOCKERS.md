@@ -4,8 +4,9 @@
 
 代码实现没有活跃阻塞。Phase 0–10、Native Agent 改造和完整 Agent Stream 均已实现。此前
 模型 E2E 的 `Connection error` 已确认是旧 Harness 服务进程的出站网络权限问题，不是 API Key
-未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
-完成 planning smoke test，详见下方“外部模型连接”。
+未配置；服务已在允许联网的进程中重启。2026-08-31 的真实“曼哈顿历史建筑更新优先区”新会话
+已验证同一 Provider/credential 可完成流式推理、真实 Geo Tool Call 与两轮修订，详见下方
+“外部模型连接”。
 
 GIS Agent 平台 v1.0 的 Platform Phase 0–8 与本地发布门禁均已完成，没有活跃代码阻塞。
 Session Workspace、
@@ -177,10 +178,12 @@ Node 均能到达相同 Provider Base URL；无凭据请求按预期返回 HTTP 
 路径可用。根因因此收敛为旧 Harness 进程的网络限制。旧进程已停止，并使用相同 profile、
 DSH_HOME 与 credential store 在允许联网的进程中重启 31994 服务。
 
-尚未主动代用户产生一次可能计费的模型调用，所以不能仅凭“已配置”断言 Provider 已接受该
-API Key。下一次由用户提交真实 Prompt 后，应确认没有新的 `TRANSPORT`/认证错误，并观察模型
-自主产生 Geo Tool Call；该验收不能用固定 Scenario fallback 替代。空间正确性仍以确定性
-Scenario/oracle 为准，不能依赖模型措辞。
+2026-08-31 已在用户要求的真实录制中完成一次新会话模型调用：初次旧进程仍出现五次
+`TRANSPORT` retry，精确停止该进程并在允许联网的环境中使用相同 profile、DSH_HOME 和
+credential store 重启后，`deepseek-v4-flash-ascend1` 成功产生 Native Agent 流式输出、真实
+Geo Tool Call、15 个 Registry Layer、11 个最终候选、分区统计和两份导出；同会话 follow-up
+也成功完成。由此确认 Provider 已接受当前凭据，外部模型连接不再是待验收项。空间正确性仍以
+确定性 Scenario/oracle 和 Tool Result 为准，不能只依赖模型措辞。
 
 ### 6. 左下角原生 Harness 设置入口
 

@@ -784,3 +784,19 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   60 份 Markdown/120 个本地链接、7 个媒体包、插件 lifecycle 和 `git diff --check`。
 - [x] 按 2026-08-31 发布决策，以本地全量门禁作为 v1.0 完成标准；不再 push、创建远程 Tag
   或 GitHub Release。仓库保留跨平台 workflow 供后续部署阶段单独处理，其结果不阻塞本 Phase。
+
+## GIS 矢量空间分析 Topic · 曼哈顿历史建筑更新优先区
+
+状态：完成（2026-08-31）
+
+- [x] 新建独立 `examples/topics/01-historic-building-renewal`，Prompt 不引用 Scenario ID 或预设
+  答案；真实 Agent 自主完成数据发现、属性筛选、400 m 道路缓冲、600 m 河流避让、空间叠加、
+  EPSG:32618 面积计算、Community District 聚合和 GeoJSON/CSV 导出。
+- [x] 真实漏斗为 360 → 69 → 15 → 11 栋，最终总面积 4426.92 m²；CD 101/102/103 分别为
+  6/4/1 栋。Agent 自主修正 `aggregate_by_region` 输入语义，并通过 Turn 2 停止无效的跨
+  Workspace 路径搜索，明确以 Result Center/Asset 索引交付导出。
+- [x] 允许联网的 Harness 进程验证 `deepseek-v4-flash-ascend1` Provider、已配置凭据、流式输出和
+  follow-up 均可用；此前 `TRANSPORT` 问题正式关闭。
+- [x] 保存 4248 个连续真实 UI 帧并编码为 1920×1080、30 fps、H.264 High、17:42 的本地 MP4；
+  第 15 分钟编码帧与源帧 SSIM 为 0.998184，确认后半段无清晰度退化，结尾对 Result 与 Map
+  增加动态描边。MP4 按仓库策略仅保存在本地，不进入 Git 历史。
