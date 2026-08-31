@@ -94,13 +94,48 @@ export interface WorkspaceProjectionItem {
 }
 
 const STYLE_BY_NAME: Record<string, LayerStyle> = {
-  buildings: { color: '#d76945', fillOpacity: 0.64, lineWidth: 1.2 },
-  roads: { color: '#26383d', fillOpacity: 0, lineWidth: 3.2 },
-  rivers: { color: '#3b8fa1', fillOpacity: 0.48, lineWidth: 1.6 },
-  districts: { color: '#c49a45', fillOpacity: 0.16, lineWidth: 2.2 },
+  buildings: { color: '#718096', fillOpacity: 0.34, lineWidth: 1.05 },
+  roads: { color: '#334155', fillOpacity: 0, lineWidth: 2.8 },
+  rivers: { color: '#0284c7', fillOpacity: 0.34, lineWidth: 1.8 },
+  districts: { color: '#a16207', fillOpacity: 0.12, lineWidth: 2.1 },
 }
 
-const DEFAULT_STYLE: LayerStyle = { color: '#147d78', fillOpacity: 0.5, lineWidth: 1.8 }
+const DEFAULT_STYLE: LayerStyle = { color: '#64748b', fillOpacity: 0.42, lineWidth: 1.7 }
+
+const SEMANTIC_STYLES: Array<{ matches: (name: string) => boolean, style: LayerStyle }> = [
+  {
+    matches: name => /(^|_)(final|intersection|result)(_|$)/.test(name) || /buildings_both/.test(name),
+    style: { color: '#e11d48', fillOpacity: 0.9, lineWidth: 3.1 },
+  },
+  {
+    matches: name => /(^|_)(bldgs?_)?within_?300m?_?broadway/.test(name) || /near.*broadway|broadway.*near/.test(name) || /(^|_)c1(_|$)/.test(name) || /road_candidates?/.test(name),
+    style: { color: '#f59e0b', fillOpacity: 0.76, lineWidth: 2.35 },
+  },
+  {
+    matches: name => /atleast_?800m?_?rivers?/.test(name) || /far.*river|river.*far/.test(name) || /river_safe/.test(name) || /(^|_)c2(_|$)/.test(name),
+    style: { color: '#0d9488', fillOpacity: 0.72, lineWidth: 2.35 },
+  },
+  {
+    matches: name => /broadway.*(buffer|300m)|(buffer|300m).*broadway/.test(name) || /major_road_buffer/.test(name),
+    style: { color: '#f97316', fillOpacity: 0.18, lineWidth: 2.35 },
+  },
+  {
+    matches: name => /(river|rivers).*(buffer|800m)|(buffer|800m).*(river|rivers)/.test(name),
+    style: { color: '#38bdf8', fillOpacity: 0.16, lineWidth: 2.35 },
+  },
+  {
+    matches: name => /broadway/.test(name),
+    style: { color: '#7c3aed', fillOpacity: 0, lineWidth: 3.5 },
+  },
+  {
+    matches: name => /(^|_)(river|rivers)(_|$)/.test(name),
+    style: { color: '#0284c7', fillOpacity: 0.32, lineWidth: 2 },
+  },
+  {
+    matches: name => /candidate|selected|accessible/.test(name),
+    style: { color: '#14b8a6', fillOpacity: 0.72, lineWidth: 2.25 },
+  },
+]
 
 function stableLayerId(prefix: string, name: string) {
   return `layer-${prefix}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-')
@@ -118,7 +153,11 @@ function crsName(collection: GeoJsonFeatureCollection) {
 }
 
 function styleForLayer(name: string): LayerStyle {
-  return { ...(STYLE_BY_NAME[name.toLowerCase()] ?? DEFAULT_STYLE) }
+  const normalized = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const semantic = SEMANTIC_STYLES.find(candidate => candidate.matches(normalized))
+  if (semantic !== undefined) return { ...semantic.style }
+  const canonical = Object.keys(STYLE_BY_NAME).find(key => normalized === key || normalized.startsWith(`${key}_`))
+  return { ...(canonical === undefined ? DEFAULT_STYLE : STYLE_BY_NAME[canonical]) }
 }
 
 export function isFeatureCollection(value: unknown): value is GeoJsonFeatureCollection {

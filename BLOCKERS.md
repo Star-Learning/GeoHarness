@@ -161,7 +161,7 @@ credential store 管理。当前外部模型问题继续按上一项单独保留
 
 ### 7. Agent 测试 Prompt 与页面字体
 
-已解决，不是活跃阻塞。测试输入已集中到 `docs/agent-test-prompts.md`，并通过自动门禁确认
+已解决，不是活跃阻塞。测试输入已集中到 `docs/testing/agent-test-prompts.md`，并通过自动门禁确认
 不会向 Agent 注入内部 Scenario/Layer 标识。全局字号提高后，1170×912 浏览器验收确认页面
 尺寸与 viewport 一致、凭据弹窗在视口内，未出现三栏溢出、地图白屏或输入区截断。
 

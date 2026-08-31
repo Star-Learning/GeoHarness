@@ -150,13 +150,13 @@ for (const scenario of expectedScenarios) {
   })
 }
 
-test('the root README presents the complete v1.0 integration and verification path', async () => {
+test('the root README presents the concise installation, usage and Scenario path', async () => {
   const readme = await readFile(join(repositoryRoot, 'README.md'), 'utf8')
   for (const scenario of expectedScenarios) assert.match(readme, new RegExp(scenario.id))
   for (const marker of [
-    'GeoHarness v1.0', '0.1.1-rc.2', 'conversation.session', 'native lower-left **设置**',
-    'Agent Stream', '13 Harness defineTool', 'Native Harness Agent', 'pnpm test',
-    'verify:phase10', 'v1.0 boundaries',
+    'GeoHarness', 'DeepSeek Harness', '0.1.1-rc.2', 'pnpm install',
+    'plugin --profile web add', '配置 LLM Provider', '流式输出',
+    '不需要选择预设案例', 'docs/README.md',
   ]) assert.ok(readme.includes(marker), `root README is missing ${marker}`)
   assert.doesNotMatch(readme, /currently at Phase 0|contains no GIS backend/u)
 })

@@ -157,11 +157,13 @@ function GeoMap({
   layers,
   selected,
   highlightedLayerIds,
+  runStatus,
   onSelect,
 }: {
   layers: readonly LayerRecord[]
   selected: SelectedFeature | null
   highlightedLayerIds: ReadonlySet<string>
+  runStatus: 'ready' | 'running' | 'success' | 'failed'
   onSelect: (value: SelectedFeature | null) => void
 }) {
   const [zoom, setZoom] = React.useState(1)
@@ -187,6 +189,21 @@ function GeoMap({
     const order: Record<string, number> = { districts: 0, rivers: 1, roads: 2, buildings: 3 }
     return (order[left.name] ?? 4) - (order[right.name] ?? 4)
   })
+  const highlightedLayers = visibleLayers.filter(layer => highlightedLayerIds.has(layer.id))
+  const focusFrame = highlightedLayers.length === 0 ? null : (() => {
+    const [minX, minY, maxX, maxY] = layerBounds(highlightedLayers)
+    const [left, bottom] = project([minX, minY])
+    const [right, top] = project([maxX, maxY])
+    const padding = 17
+    const x = Math.max(8, Math.min(left, right) - padding)
+    const y = Math.max(8, Math.min(top, bottom) - padding)
+    return {
+      x,
+      y,
+      width: Math.min(992 - x, Math.abs(right - left) + padding * 2),
+      height: Math.min(692 - y, Math.abs(bottom - top) + padding * 2),
+    }
+  })()
 
   return (
     <section className="gh-map" aria-label="Map workspace">
@@ -268,6 +285,20 @@ function GeoMap({
               })}
             </g>
           }))}
+          {focusFrame !== null && <g className={`gh-map-result-focus is-${runStatus}`} aria-hidden="true">
+            <rect
+              x={focusFrame.x}
+              y={focusFrame.y}
+              width={focusFrame.width}
+              height={focusFrame.height}
+              rx="9"
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              d={`M${focusFrame.x},${focusFrame.y + 32}V${focusFrame.y}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y}H${focusFrame.x + focusFrame.width} M${focusFrame.x},${focusFrame.y + focusFrame.height - 32}V${focusFrame.y + focusFrame.height}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y + focusFrame.height}H${focusFrame.x + focusFrame.width}V${focusFrame.y + focusFrame.height - 32}`}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>}
         </g>
       </svg>
       {layers.length === 0 && <div className="gh-map-empty-card">
@@ -383,7 +414,12 @@ function renderLayerRow(
   outputStatus?: AgentToolStep['status'],
 ) {
   return (
-    <article className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'} key={layer.id}>
+    <article
+      className={highlightedLayerIds.has(layer.id) ? 'gh-layer-row is-step-highlighted' : 'gh-layer-row'}
+      data-layer-id={layer.id}
+      data-layer-name={layer.name}
+      key={layer.id}
+    >
       <button
         type="button"
         className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
@@ -565,9 +601,15 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const derivedLayers = layers.filter(layer => layer.source === 'derived')
   const selectedStep = taskSteps.find(step => step.id === selectedStepId)
   const selectedOutputs = new Set(selectedStep?.outputs ?? [])
+  const selectedInputs = new Set(Object.values(selectedStep?.arguments ?? {}).flatMap(value => {
+    if (typeof value === 'string') return [value]
+    if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
+    return []
+  }))
   const semanticStepId = typeof selectedStep?.arguments.step_id === 'string' ? selectedStep.arguments.step_id : null
   const highlightedLayerIds = new Set(layers
-    .filter(layer => selectedOutputs.has(layer.id)
+    .filter(layer => selectedInputs.has(layer.id)
+      || selectedOutputs.has(layer.id)
       || layer.generatedBy === selectedStepId
       || (semanticStepId !== null && layer.generatedBy === semanticStepId))
     .map(layer => layer.id))
@@ -597,11 +639,12 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       </header>
 
       <section className="gh-workspace">
-        <section className="gh-map-stage">
+        <section className={`gh-map-stage is-${runStatus}${highlightedLayerIds.size > 0 ? ' has-focus' : ''}`}>
           <GeoMap
             layers={layers}
             selected={selectedFeature}
             highlightedLayerIds={highlightedLayerIds}
+            runStatus={runStatus}
             onSelect={setSelectedFeature}
           />
           <button
@@ -661,7 +704,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
-            <section className="gh-agent-block gh-agent-result" aria-label="Agent result">
+            <section className={`gh-agent-block gh-agent-result is-${runStatus}`} aria-label="Agent result">
               <div className="gh-stream-heading">
                 <span className="gh-eyebrow">AGENT STREAM</span>
                 <small>{runStatus === 'running' ? 'LIVE' : runStatus.toUpperCase()} · {successfulSteps.length}/{taskSteps.length} tools</small>

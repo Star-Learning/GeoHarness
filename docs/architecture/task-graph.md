@@ -1,5 +1,7 @@
 # GeoHarness Task Graph
 
+> **文档状态**：当前确定性 Scenario DAG 的定义与执行契约。
+
 Phase 6 uses one executable DAG per Scenario. The canonical definition lives beside that
 Scenario's prompt, data and expected results in `examples/scenarios/<id>/task-graph.json`.
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const documentUrl = new URL('../docs/agent-test-prompts.md', import.meta.url)
+const documentUrl = new URL('../docs/testing/agent-test-prompts.md', import.meta.url)
 
 test('agent test prompt catalog covers real autonomous GIS workflows', async () => {
   const source = await readFile(documentUrl, 'utf8')

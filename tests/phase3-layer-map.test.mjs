@@ -82,6 +82,26 @@ test('uploaded GeoJSON is validated before registration', async () => {
   assert.throws(() => registry.registerUploadedLayer('bad.json', { type: 'FeatureCollection' }), /valid GeoJSON/)
 })
 
+test('Layer Registry assigns legible semantic colors to buffers, candidates and final results', async () => {
+  const registry = await loadRegistryModule()
+  const scenario = await loadScenario('01-building-data-inspection')
+  const collection = scenario.data.buildings
+  const names = [
+    'buildings_32618',
+    'broadway_32618',
+    'broadway_300m_buffer',
+    'rivers_800m_buffer',
+    'bldgs_within_300m_broadway',
+    'bldgs_atleast_800m_rivers',
+    'final_buildings_intersection',
+  ]
+  const colors = names.map(name => registry.registerUploadedLayer(`${name}.geojson`, { ...collection, name }).style.color)
+  assert.equal(new Set(colors).size, colors.length)
+  assert.equal(colors.at(-1), '#e11d48')
+  assert.equal(registry.registerUploadedLayer('near_broadway.geojson', { ...collection, name: 'near_broadway' }).style.color, '#f59e0b')
+  assert.equal(registry.registerUploadedLayer('far_from_river.geojson', { ...collection, name: 'far_from_river' }).style.color, '#0d9488')
+})
+
 test('the production client renders live Agent workspace layers without embedding Scenario fixtures', async () => {
   const [source, output] = await Promise.all([
     readFile(join(bundleRoot, 'src', 'client.tsx'), 'utf8'),
@@ -104,6 +124,9 @@ test('the production client renders live Agent workspace layers without embeddin
   assert.doesNotMatch(source, /name: 'sidebar\.workspaces'/)
   assert.match(source, /gh-map-layers-toggle/)
   assert.match(source, /gh-map-layer-drawer/)
+  assert.match(source, /gh-map-result-focus/)
+  assert.match(source, /data-layer-id=/)
+  assert.match(source, /selectedInputs/)
   assert.doesNotMatch(source, /name: 'root'/)
   assert.doesNotMatch(source, /conversation\.session\.header\.actions|shell\.overlay/)
   assert.doesNotMatch(source, /name: 'conversation\.view'/)

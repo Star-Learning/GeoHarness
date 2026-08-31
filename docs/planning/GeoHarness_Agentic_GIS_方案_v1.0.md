@@ -1,6 +1,8 @@
 # GeoHarness v1.0
 ## 面向 AI Agent 时代的需求驱动型遥感 / GIS 工作空间
 
+> **文档状态**：v1.0 产品与实施规划基线。本文保留最初的目标、范围和 Phase 设计；当前已经验证的 DeepSeek Harness API 与实际运行架构，请以 [`docs/architecture/harness-integration.md`](../architecture/harness-integration.md) 为准。
+
 > **项目定位**：基于 DeepSeek Harness 构建的 Agentic Geospatial Workspace  
 > **版本**：v1.0  
 > **核心范式**：**Goal-driven → Agent-planned → Map-verifiable → Human-revisable**  
@@ -1508,7 +1510,9 @@ GIS 计算全部由 Geo Backend 完成。
 
 ---
 
-# 28. 推荐仓库结构
+# 28. 初始推荐仓库结构（规划快照）
+
+> 下列结构是 v1.0 启动时的规划草图，不代表当前仓库的逐项目录。当前文档布局请查看 [`docs/README.md`](../README.md)，当前代码结构以仓库实际内容为准。
 
 ```text
 geoharness/

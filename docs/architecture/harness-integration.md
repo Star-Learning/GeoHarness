@@ -1,7 +1,9 @@
 # GeoHarness 与 DeepSeek Harness 的真实集成方式
 
+> **文档状态**：当前实现事实与上游兼容性基线；上游版本变化后必须重新核对。
+
 本文记录当前仓库实际使用的 Harness API。结论来自 `../deepseek-harness` 当前源码，不把
-`GeoHarness_Agentic_GIS_方案_v1.0.md` 中的示意名称当作现行接口。
+[`GeoHarness_Agentic_GIS_方案_v1.0.md`](../planning/GeoHarness_Agentic_GIS_方案_v1.0.md) 中的示意名称当作现行接口。
 
 ## 已核对基线
 

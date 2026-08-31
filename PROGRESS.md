@@ -4,7 +4,7 @@
 
 状态：完成（2026-08-27）
 
-- [x] 完整阅读 `GeoHarness_Agentic_GIS_方案_v1.0.md`，并将执行范围限制在
+- [x] 完整阅读 `docs/planning/GeoHarness_Agentic_GIS_方案_v1.0.md`，并将执行范围限制在
   Phase 0。
 - [x] 确认 `../deepseek-harness` 可读；记录真实版本、提交和工具链版本。
 - [x] 阅读 architecture、plugin、bundle、profile、web、slot、service、tool
@@ -14,7 +14,7 @@
 - [x] 初始化独立 pnpm workspace、忽略规则、根 README 和测试入口。
 - [x] 创建最小 `@geoharness/harness-plugin` Bundle：Host 端为空，Client
   端只注入诊断视图和加载标记。
-- [x] 创建 `docs/harness-integration.md`，记录经源码和运行时验证的集成方式。
+- [x] 创建 `docs/architecture/harness-integration.md`，记录经源码和运行时验证的集成方式。
 - [x] 建立 4 个 Phase 0 集成测试，覆盖上游基线、Bundle manifest/patch、
   client factory/Slot 注册以及“不 vendoring 上游源码”。
 - [x] 在隔离 `DSH_HOME` 中完成本地 Bundle 安装、profile 配置组合、Web
@@ -107,7 +107,7 @@ Layer Registry、Geo Backend、Geo Tools 和 Task Graph 按后续 Phase 顺序�
 - [x] 所有 Tool 返回统一 `ToolResult`；错误也结构化返回且不注册半成品图层。
 - [x] 实现 `/health`、Layer 导入/列表/元数据/GeoJSON 和 Tool 执行 API；导入路径
   限制在显式 Scenario roots，CORS 限制为 localhost。
-- [x] 创建 `docs/tool-spec.md`，记录真实工具、Layer 和 HTTP 契约及 CRS 规则。
+- [x] 创建 `docs/architecture/tool-spec.md`，记录真实工具、Layer 和 HTTP 契约及 CRS 规则。
 - [x] 7 项 Python 测试覆盖全部 12 个工具、持久化、API、安全边界和失败原子性；
   固定工作流验证 Scenario 02=132、Scenario 03=162/40/158、Scenario 06=249→27。
 
@@ -454,7 +454,7 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 
 状态：完成（2026-08-27）
 
-- [x] 新增 `docs/agent-test-prompts.md`，提供 12 类可直接复制的全 Agent 测试，覆盖官方数据
+- [x] 新增 `docs/testing/agent-test-prompts.md`，提供 12 类可直接复制的全 Agent 测试，覆盖官方数据
   发现、质量检查、200/275/500 米动态参数、分区统计、多约束、最近要素、导出、同会话修订
   和数据能力边界；测试输入不包含内部 Scenario/Layer 标识，也不预设 Task Graph。
 - [x] 新增 Prompt 文档回归门禁，校验 13 个独立输入块（含连续修订第二轮）以及真实数据、
@@ -559,3 +559,17 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   获得真实 `step-*.jpg` 时可直接在 storyboard 中按顺序加入。
 - [x] Scenario 生成器、6 个生成 README、官方数据 Scenario README 和 Phase 10 回归均已同步；
   `verify:phase10` 完整通过，包含 build、Scenario freshness、7 个 GIF 媒体验证和 8/8 测试。
+
+## 开发文档分层整理
+
+状态：完成（2026-08-31）
+
+- [x] 新增 `docs/README.md`，明确推荐阅读顺序、文档事实优先级和后续放置规则。
+- [x] 将 v1.0 原始方案移入 `docs/planning/`，并标注为产品与实施规划基线；当前 Harness API
+  和运行架构以 `docs/architecture/harness-integration.md` 为准。
+- [x] 将已验证的 Harness、Tool、Task Graph、Map Verification 与 Revision 契约归入
+  `docs/architecture/`，测试说明归入 `docs/testing/`，录屏与宣传内容归入 `docs/media/`。
+- [x] 保留根目录 `README.md`、`PROGRESS.md`、`BLOCKERS.md` 作为入口与开发流水记录；Scenario
+  专属文档继续与各自数据、测试和 Demo 共置。
+- [x] 修复 README、进度、阻塞记录、媒体 Prompt 和测试中的相对路径；本地 Markdown 链接校验
+  无缺失，`tests/agent-test-prompts.test.mjs` 通过。

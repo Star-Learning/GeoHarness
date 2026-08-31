@@ -1,5 +1,7 @@
 # Task Step ↔ Layer ↔ Map verification
 
+> **文档状态**：当前 Scenario 回归链路中的地图投影与验证契约。
+
 Phase 7 adds a verified projection between the Host Task Graph and the browser map. It does not
 infer map state from model prose.
 

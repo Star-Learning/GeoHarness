@@ -67,7 +67,7 @@
 .gh-output-list { max-height: none; flex: 1 1 auto; }
 .gh-layer-row { min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; }
 .gh-layer-row:hover { background: var(--gh-fill-hover); }
-.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); }
+.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }
 .gh-layer-toggle { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); cursor: pointer; }
 .gh-layer-toggle span { width: 10px; height: 10px; border-radius: 2px; opacity: .25; }
 .gh-layer-toggle.is-visible span { opacity: 1; }
@@ -114,7 +114,14 @@
 .gh-map-canvas:active { cursor: grabbing; }
 .gh-map-feature { cursor: pointer; transition: filter .12s ease, opacity .12s ease; }
 .gh-map-feature:hover { filter: brightness(.88) saturate(1.15); }
-.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: drop-shadow(0 0 5px var(--gh-accent)); }
+.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: brightness(1.05) saturate(1.18) drop-shadow(0 0 4px var(--gh-accent)); }
+.gh-map-result-focus { pointer-events: none; color: var(--gh-accent); }
+.gh-map-result-focus rect { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-dasharray: 12 7; opacity: .88; animation: gh-map-dash 1.1s linear infinite; }
+.gh-map-result-focus path { fill: none; stroke: currentColor; stroke-width: 4.2; stroke-linecap: round; opacity: .95; }
+.gh-map-result-focus.is-success { color: #e11d48; }
+.gh-map-result-focus.is-success rect { stroke-width: 3; animation: gh-map-dash 1.15s linear infinite, gh-result-stroke 1.8s ease-out 2; }
+.gh-map-stage.has-focus .gh-map { border-color: color-mix(in srgb, var(--gh-accent) 50%, var(--gh-line)); }
+.gh-map-stage.is-success.has-focus .gh-map { border-color: color-mix(in srgb, #e11d48 58%, var(--gh-line)); box-shadow: var(--dsw-shadow-lv1), 0 0 0 3px color-mix(in srgb, #e11d48 10%, transparent); }
 .gh-map-toolbar { position: absolute; z-index: 2; top: 14px; left: 14px; display: grid; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; box-shadow: var(--dsw-shadow-lv2); }
 .gh-map-toolbar button { width: 30px; height: 29px; border: 0; border-bottom: 1px solid var(--gh-line); background: var(--gh-bg); color: var(--gh-ink); cursor: pointer; }
 .gh-map-toolbar button:last-child { border-bottom: 0; }
@@ -138,8 +145,8 @@
 .gh-feature-inspector dd { margin: 0; overflow-wrap: anywhere; font-family: var(--dsw-font-mono), monospace; }
 
 .gh-agent-state { padding: 3px 7px; border-radius: 10px; background: var(--gh-fill); color: var(--gh-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; }
-.gh-agent-state.is-running { color: var(--gh-accent); }
-.gh-agent-state.is-success { color: var(--gh-success); }
+.gh-agent-state.is-running { color: var(--gh-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-accent) 35%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }
+.gh-agent-state.is-success { color: var(--gh-success); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-success) 30%, transparent); }
 .gh-agent-state.is-failed { color: var(--gh-error); }
 .gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px 11px 210px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }
 .gh-agent-block { padding: 12px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 35%, transparent); }
@@ -154,13 +161,16 @@
 .gh-plan-list b { color: var(--gh-ink); font-size: 12px; font-weight: 500; }
 .gh-plan-list small { font-size: 10px; }
 .gh-plan-list .is-running i { border-color: var(--gh-accent); color: var(--gh-accent); }
+.gh-plan-list .is-running .gh-step-button { outline: 1px solid color-mix(in srgb, var(--gh-accent) 50%, transparent); background: color-mix(in srgb, var(--gh-accent) 7%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }
 .gh-plan-list .is-success i { border-color: var(--gh-success); color: var(--gh-success); font-weight: 600; }
 .gh-plan-list .is-failed i { border-color: var(--gh-error); color: var(--gh-error); font-weight: 600; }
 .gh-current-step { display: grid; gap: 8px; background: var(--gh-raised); }
 .gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }
 .gh-current-step > div span { color: var(--gh-muted); }
 .gh-current-step .is-teal { color: var(--gh-success); }
-.gh-agent-result { display: grid; gap: 8px; }
+.gh-agent-result { position: relative; display: grid; gap: 8px; transition: border-color .2s ease, box-shadow .2s ease; }
+.gh-agent-result.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }
+.gh-agent-result.is-success { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); animation: gh-result-panel 1.8s ease-out 2; }
 .gh-stream-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .gh-stream-heading small { color: var(--gh-muted); font: 600 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .25px; }
 .gh-stream-list { display: grid; gap: 8px; }
@@ -175,6 +185,13 @@
 .gh-stream-retry { padding: 7px 9px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 8%, var(--gh-fill)); color: var(--gh-error); font: 500 10px/1.4 var(--dsw-font-mono), monospace; }
 .gh-stream-cursor { display: inline-block; width: 5px; height: 13px; margin-left: 2px; vertical-align: -2px; border-radius: 1px; background: var(--gh-accent); animation: gh-stream-blink .8s steps(1, end) infinite; }
 @keyframes gh-stream-blink { 50% { opacity: 0; } }
+@keyframes gh-focus-soft { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-accent) 12%, transparent); } }
+@keyframes gh-map-dash { to { stroke-dashoffset: -19; } }
+@keyframes gh-result-panel {
+  0%, 100% { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); }
+  38% { border-color: var(--gh-success); box-shadow: 0 0 0 5px color-mix(in srgb, var(--gh-success) 14%, transparent); }
+}
+@keyframes gh-result-stroke { 0%, 100% { stroke-opacity: .88; } 38% { stroke-opacity: 1; } }
 .gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }
 .gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }
 .gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }
@@ -183,6 +200,14 @@
 .gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }
 .gh-result-trace i { color: var(--gh-success); font-style: normal; }
 .gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gh-layer-row.is-step-highlighted,
+  .gh-agent-state.is-running,
+  .gh-plan-list .is-running .gh-step-button,
+  .gh-agent-result.is-success,
+  .gh-map-result-focus rect { animation: none; }
+}
 
 
 /* The native Harness ConversationRoot still owns the composer and its model

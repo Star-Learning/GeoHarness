@@ -1,5 +1,7 @@
 # Seven official-data Scenario regression gates
 
+> **文档状态**：当前自动化 Scenario 回归门禁说明。
+
 Phase 8 executes every Scenario from its own folder and its own temporary workspace. Each test
 loads that folder's `expected-plan.json`, `expected-result.json` and executable Task Graph, then
 enforces four independent gates:

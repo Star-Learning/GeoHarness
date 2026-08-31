@@ -2,6 +2,8 @@
 
 GeoHarness 是 DeepSeek Harness 的 Agentic GIS 插件。直接用自然语言描述空间分析需求，Agent 会选择数据与 GIS 工具，并同步展示执行过程、地图图层和最终结果。
 
+开发者可从 [文档导航](docs/README.md) 开始阅读；其中区分了 [v1.0 规划基线](docs/planning/GeoHarness_Agentic_GIS_方案_v1.0.md)、[当前 Harness 集成方式](docs/architecture/harness-integration.md)、技术契约、测试说明和发布素材。
+
 ![GeoHarness 主界面](examples/scenarios/05-parameter-revision/screenshots/result-200m.jpg)
 
 ## 安装

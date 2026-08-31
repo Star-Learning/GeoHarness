@@ -84,7 +84,7 @@ test('official NYC Demo keeps auditable source metadata and real Harness media',
 
   const gif = await readFile(join(scenarioRoot, 'media', 'demo.gif'))
   assert.ok(gif.length > 100_000, 'official-data Demo GIF is unexpectedly small')
-  assert.deepEqual(gifMetadata(gif), { width: 960, height: 540, frames: 2 })
+  assert.deepEqual(gifMetadata(gif), { width: 960, height: 540, frames: 25 })
 
   const readme = await readFile(join(scenarioRoot, 'README.md'), 'utf8')
   assert.match(readme, /screenshots\/initial\.jpg/)

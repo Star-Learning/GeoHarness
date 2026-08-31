@@ -1,5 +1,7 @@
 # GeoHarness v1.0 Geo Tool Contract
 
+> **文档状态**：当前 Geo Backend、Layer Registry 与 Tool 的实现契约。
+
 ## Runtime boundary
 
 Geo computation lives in `backend/geo-service`; the Harness client never performs authoritative

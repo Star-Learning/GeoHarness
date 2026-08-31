@@ -1,5 +1,7 @@
 # Scenario 05 conversational revision
 
+> **文档状态**：当前 Scenario 05 确定性修订回归的实现说明；正式 UI 使用 Native Harness Agent 会话。
+
 An initial natural-language request is first sent to `/geoharness/goal/start`, then observed through
 `/geoharness/scenario/progress`. The bounded router
 selects one of the seven v1.0 workflows, extracts explicit metres or kilometres and patches the
