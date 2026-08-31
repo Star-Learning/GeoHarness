@@ -573,3 +573,24 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   专属文档继续与各自数据、测试和 Demo 共置。
 - [x] 修复 README、进度、阻塞记录、媒体 Prompt 和测试中的相对路径；本地 Markdown 链接校验
   无缺失，`tests/agent-test-prompts.test.mjs` 通过。
+
+## GIS Agent 平台 v1.0 · Platform Phase 0
+
+状态：完成（2026-08-31）
+
+- [x] 新增 `docs/planning/geoharness-platform-v1.0.md`，把当前成果定义为平台技术基线，并将
+  Workspace、用户矢量导入、Run Manifest、Result Center、扩展契约和发布工程划分为 9 个
+  必须真实验收的 Platform Phase。
+- [x] 明确 v1.0 继续聚焦本地优先 Vector GIS；GeoTIFF/GEE、路网、3D、Multi-Agent、多租户
+  和完整 Marketplace 不以 TODO 骨架混入本次版本。
+- [x] 新增 MIT `LICENSE`、`CONTRIBUTING.md`、`SECURITY.md` 和 `CHANGELOG.md`；许可与当前
+  DeepSeek Harness 上游 MIT 基线一致。
+- [x] 新增 Windows/Linux、Node 22.19/24、Python 3.11 的 GitHub Actions CI，覆盖依赖安装、
+  docs、typecheck、peer、Node/Python、Scenario 和媒体门禁。
+- [x] 新增 `scripts/check-doc-links.mjs` 与 `pnpm run check:docs`，并将其接入 `pnpm test`；当前
+  49 份 Markdown 的 95 个本地链接全部可解析。
+- [x] 修正 Bundle README 中已过时的 root/自制设置描述，记录真实的 AppFrame、原生
+  `sidebar.workspaces`、`sidebar.settings`、`conversation.composer.bar` 和
+  `conversation.session` 装配关系。
+- [x] 新增平台计划/治理/CI/Bundle 文档门禁。最终验证通过：TypeScript、peer dependencies、
+  Node 57/57、Python 9/9、7 个媒体包和 `git diff --check`。

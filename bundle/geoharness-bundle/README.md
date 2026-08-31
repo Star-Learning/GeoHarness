@@ -11,21 +11,28 @@ application.
 
 ## Production interaction path
 
-The browser plugin registers the public `root` single Slot at priority `-100`. It therefore replaces
-the upstream AppFrame, including the session/project sidebar, with one GeoHarness workspace as soon
-as Harness opens. The workspace uses Harness DSW theme tokens and injects only the official
-Connection client service.
-
-The left panel retains a compact settings dock for model credentials. It discovers current routes
-through `settings.describe` and `llm.providers`, checks only redacted credential state through
-`credentials.describe`, and saves a typed replacement through `credentials.set`. Existing keys are
-never returned to the browser or stored by GeoHarness.
-
-The bottom composer is the only execution entry. It uses the real Session API:
+The browser plugin keeps the upstream AppFrame and contributes only Slots owned by their native
+parents:
 
 ```text
-sessions.create → sessions.models → sessions.history → sessions.prompt
+AppFrame(root)
+  → SidebarRoot(sidebar)
+      → sidebar.workspaces                 # native project/session history
+      → sidebar.settings                   # native model/provider/API Key settings
+  → ConversationRoot(conversation)
+      → conversation.session               # GeoHarness workspace
+      → conversation.composer.bar          # native InputBar
+          → conversation.input.model       # native ModelSelect
 ```
+
+GeoHarness registers `conversation.session` plus brand mark/name entries. It does not replace
+`root`, register `sidebar.workspaces`, duplicate `sidebar.settings`, implement a credential dialog,
+or read secret values. The workspace uses Harness DSW theme tokens and injects only the official
+Connection client service.
+
+The native composer remains the only execution entry. GeoHarness observes the real Session through
+`sessions.history({ sessionId })`; prompt submission, model routing, queue/steer, stop and errors stay
+owned by the upstream conversation modules.
 
 The Native Harness Agent receives GeoHarness prompt guidance and 13 model-facing Geo Tools. It
 discovers available datasets, selects the required tools and parameters from the user's actual
@@ -48,7 +55,7 @@ analysis and export. All are registered with Harness `defineTool`, schema valida
 to a cancellable Python/GeoPandas provider and persistent workspace Layer Registry.
 
 After each Agent history refresh, the client calls the loopback-only
-`/geoharness/agent/workspace` RPC. The Host projects canonical Registry GeoJSON only after feature
+`/geoharness` channel's `agent/workspace` RPC. The Host projects canonical Registry GeoJSON only after feature
 counts and parent Layer references validate. The client preserves per-Layer visibility and opacity,
 and renders pointer pan, fit bounds, toolbar zoom, 0.7×–5× mouse-wheel zoom and feature inspection.
 

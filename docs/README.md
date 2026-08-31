@@ -4,11 +4,12 @@
 
 ## 推荐阅读顺序
 
-1. [GeoHarness v1.0 产品与实施方案](planning/GeoHarness_Agentic_GIS_方案_v1.0.md)：理解产品目标、范围、Scenario 原则和 Phase 规划。
-2. [DeepSeek Harness 真实集成方式](architecture/harness-integration.md)：查看当前上游版本、Bundle、Slot、Service、Tool、Session 与 Web 的真实接入方式。
-3. [Geo Tool 契约](architecture/tool-spec.md)：查看 Geo Backend、Layer Registry、工具输入输出与 CRS 规则。
-4. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解可执行 DAG、Step/Layer/Map 绑定和局部重算。
-5. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
+1. [GIS Agent 平台 v1.0 开发文档](planning/geoharness-platform-v1.0.md)：当前主开发计划、平台范围、Phase 和验收矩阵。
+2. [GeoHarness 最初产品与实施方案](planning/GeoHarness_Agentic_GIS_方案_v1.0.md)：理解初始目标、Scenario 原则和已完成的原始 Phase 规划。
+3. [DeepSeek Harness 真实集成方式](architecture/harness-integration.md)：查看当前上游版本、Bundle、Slot、Service、Tool、Session 与 Web 的真实接入方式。
+4. [Geo Tool 契约](architecture/tool-spec.md)：查看 Geo Backend、Layer Registry、工具输入输出与 CRS 规则。
+5. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
+6. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
 
 安装与普通使用请先看仓库根目录的 [README](../README.md)；当前开发进度和已知问题分别记录在 [PROGRESS](../PROGRESS.md) 与 [BLOCKERS](../BLOCKERS.md)。
 
@@ -40,4 +41,3 @@
 - 宣传文章、视频脚本、录屏 Prompt 和平台文案放入 `media/`。
 - 只属于某个 Scenario 的 Prompt、数据来源、预期结果和素材继续放在 `examples/scenarios/<id>/` 内，不搬到这里。
 - 只属于某个代码包的使用说明保留在对应包内，例如 `backend/geo-service/README.md` 和 `bundle/geoharness-bundle/README.md`。
-
