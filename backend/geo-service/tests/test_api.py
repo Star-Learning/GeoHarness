@@ -15,6 +15,10 @@ def test_geo_service_health_import_layer_tool_and_geojson(tmp_path: Path, scenar
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
     assert health.json()["tools"] == list(TOOL_NAMES)
+    workspace = client.get("/workspace")
+    assert workspace.status_code == 200
+    assert workspace.json()["schema_version"] == "1.0"
+    assert workspace.json()["input_layers"] == []
 
     forbidden = client.post("/layers/import", json={"path": str(tmp_path / "outside.geojson")})
     assert forbidden.status_code == 403
@@ -23,6 +27,7 @@ def test_geo_service_health_import_layer_tool_and_geojson(tmp_path: Path, scenar
     imported = client.post("/layers/import", json={"path": str(source), "name": "buildings"})
     assert imported.status_code == 200
     layer_id = imported.json()["layer_id"]
+    assert [item["layer_id"] for item in client.get("/workspace").json()["input_layers"]] == [layer_id]
 
     inspected = client.post(
         "/tools/inspect_dataset",

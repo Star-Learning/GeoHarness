@@ -594,3 +594,25 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   `conversation.session` 装配关系。
 - [x] 新增平台计划/治理/CI/Bundle 文档门禁。最终验证通过：TypeScript、peer dependencies、
   Node 57/57、Python 9/9、7 个媒体包和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 1
+
+状态：完成（2026-08-31）
+
+- [x] 新增版本化 `workspace.json`，记录稳定的 Workspace/Session 身份、激活 Dataset/Scenario、
+  input/derived canonical Layers、exports 和 runs；Layer 数据继续由 `registry.json` 与 GeoPackage
+  作为权威来源。
+- [x] 将 Provider 路径从 `session/package` 改为固定的 `workspaceRoot/<safe-session-id>/`，移除
+  `activePackages` 内存映射；Provider 重建以及 Dataset/Scenario 切换后仍使用同一目录。
+- [x] Manifest 使用同目录临时文件、`fsync` 与原子替换；Python schema 恢复时同时核对原始
+  Session ID，路径规范化碰撞会 fail closed，不会读取另一 Session 的资产。
+- [x] 新增 `imports/`、`runs/` 以及 `workspace_manifest`、`workspace_record_run`、
+  `workspace_reset` runner 动作；Layer 注册、派生 Tool 和 export Tool 会同步真实资产索引。
+- [x] HTTP Geo Service 增加 `/workspace`，上传、Tool 派生和导出均与同一 Manifest 同步；新增
+  `docs/architecture/workspace-manifest.md` 记录已实现的目录、schema、恢复和清理契约。
+- [x] Scenario reset 只清当前 Session 的 Layer、Export、Import 与 Run 资产；相邻 Session
+  sentinel 测试确认不受影响，Workspace 身份与创建时间保留。
+- [x] Host 真实 Provider 测试确认重建后恢复 5 个 Dataset input Layers、1 个 derived Layer、
+  1 个 export 与 1 个 run；另一 Session 为空，切换 Scenario 后根目录不变且旧资产被受限清理。
+- [x] 最终门禁通过：build、TypeScript、peer dependencies、文档 50/50（96 个本地链接）、
+  Scenario freshness、Node 59/59、Python 12/12 和 `git diff --check`。

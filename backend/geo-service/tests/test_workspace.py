@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import geopandas as gpd
+from shapely.geometry import Point
+
+from geoharness_geo import LayerRegistry, WorkspaceStore
+
+
+def point_frame(name: str) -> gpd.GeoDataFrame:
+    return gpd.GeoDataFrame(
+        {"name": [name]},
+        geometry=[Point(-74.01, 40.71)],
+        crs="EPSG:4326",
+    )
+
+
+def test_workspace_manifest_indexes_layers_exports_and_runs_and_restores(tmp_path: Path):
+    root = tmp_path / "workspaces" / "session-a"
+    registry = LayerRegistry(root)
+    workspace = WorkspaceStore(root, workspace_id="session-a", session_id="session:a")
+
+    source = registry.register("source", point_frame("source"), source="upload")
+    derived = registry.register(
+        "derived",
+        point_frame("derived"),
+        source="derived",
+        generated_by="transform",
+        parents=[source.layer_id],
+    )
+    workspace.sync_layers(registry.list_layers())
+
+    exported = registry.exports_root / "derived.geojson"
+    exported.write_text('{"type":"FeatureCollection","features":[]}\n', encoding="utf-8")
+    workspace.record_export(
+        layer_id=derived.layer_id,
+        format="geojson",
+        relative_path="exports/derived.geojson",
+        feature_count=1,
+    )
+    workspace.record_run("run-001", {"status": "success", "goal": "inspect the uploaded point"})
+
+    restored = WorkspaceStore(root, workspace_id="session-a", session_id="session:a").manifest()
+    assert restored.schema_version == "1.0"
+    assert restored.workspace_id == "session-a"
+    assert restored.session_id == "session:a"
+    assert [item.layer_id for item in restored.input_layers] == [source.layer_id]
+    assert [item.layer_id for item in restored.derived_layers] == [derived.layer_id]
+    assert restored.exports[0].path == "exports/derived.geojson"
+    assert restored.exports[0].size_bytes == exported.stat().st_size
+    assert restored.runs[0].path == "runs/run-001.json"
+    assert json.loads((root / restored.runs[0].path).read_text(encoding="utf-8"))["goal"] == "inspect the uploaded point"
+    assert list(root.glob(".workspace.json.*.tmp")) == []
+
+
+def test_workspace_reset_is_bounded_to_one_resolved_session(tmp_path: Path):
+    workspaces = tmp_path / "workspaces"
+    root = workspaces / "session-a"
+    sibling = workspaces / "session-b"
+    sibling.mkdir(parents=True)
+    sentinel = sibling / "keep.txt"
+    sentinel.write_text("keep", encoding="utf-8")
+
+    registry = LayerRegistry(root)
+    registry.register("source", point_frame("source"), source="upload")
+    workspace = WorkspaceStore(root, workspace_id="session-a", session_id="session-a")
+    workspace.sync_layers(registry.list_layers())
+    (workspace.imports_root / "nested").mkdir()
+    (workspace.imports_root / "nested" / "upload.geojson").write_text("{}", encoding="utf-8")
+    workspace.record_run("run-001", {"status": "failed"})
+
+    registry.clear()
+    reset = workspace.reset_assets()
+
+    assert sentinel.read_text(encoding="utf-8") == "keep"
+    assert list(workspace.imports_root.iterdir()) == []
+    assert list(workspace.runs_root.iterdir()) == []
+    assert reset.input_layers == []
+    assert reset.derived_layers == []
+    assert reset.exports == []
+    assert reset.runs == []
+    assert WorkspaceStore(root, workspace_id="session-a", session_id="session-a").manifest() == reset
+
+
+def test_workspace_identity_mismatch_is_rejected(tmp_path: Path):
+    root = tmp_path / "same-safe-segment"
+    WorkspaceStore(root, workspace_id="same-safe-segment", session_id="session:a")
+
+    try:
+        WorkspaceStore(root, workspace_id="same-safe-segment", session_id="session/a")
+    except ValueError as error:
+        assert "identity mismatch" in str(error)
+    else:
+        raise AssertionError("A colliding Session id must not expose the existing workspace")

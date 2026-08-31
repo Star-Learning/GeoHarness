@@ -7,9 +7,9 @@
 未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
 完成 planning smoke test，详见下方“外部模型连接”。
 
-GIS Agent 平台 v1.0 的 Platform Phase 0 已完成，没有活跃代码阻塞。GitHub Actions 工作流
-将在本次 Phase 提交推送后首次由远端 Windows/Linux runner 验证；若远端环境暴露平台差异，
-按普通 CI 兼容问题修复，不影响进入 Workspace Manifest 开发。
+GIS Agent 平台 v1.0 的 Platform Phase 0–1 已完成，没有活跃代码阻塞。Session Workspace
+现在可跨 Provider 重建恢复并通过隔离、碰撞拒绝、原子写入和受限清理测试。下一阶段是用户
+矢量数据导入；若 GitHub Actions 远端环境暴露平台差异，按普通 CI 兼容问题修复。
 
 ## Phase 0
 

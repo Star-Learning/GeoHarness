@@ -22,7 +22,6 @@ export class LocalPythonGeoProvider {
     this.scenarioRoot = resolve(options.scenarioRoot)
     this.datasetRoot = resolve(options.datasetRoot)
     this.workspaceRoot = resolve(options.workspaceRoot)
-    this.activePackages = new Map()
   }
 
   available() {
@@ -31,36 +30,33 @@ export class LocalPythonGeoProvider {
       && existsSync(this.datasetRoot)
   }
 
-  workspaceFor(workspaceKey, packageId) {
-    const workspace = resolve(this.workspaceRoot, safeSegment(workspaceKey), safeSegment(packageId ?? 'manual'))
-    if (workspace !== this.workspaceRoot && !workspace.startsWith(`${this.workspaceRoot}${sep}`)) {
+  workspaceFor(workspaceKey) {
+    const workspace = resolve(this.workspaceRoot, safeSegment(workspaceKey))
+    if (workspace === this.workspaceRoot || !workspace.startsWith(`${this.workspaceRoot}${sep}`)) {
       throw new Error(`Unsafe Geo workspace path: ${workspace}`)
     }
     return workspace
   }
 
   async execute(request, signal) {
-    const workspaceKey = safeSegment(request.workspaceKey ?? 'direct')
-    let packageId = this.activePackages.get(workspaceKey)
-    if (request.action === 'load_scenario') {
-      packageId = safeSegment(request.scenarioId)
-      this.activePackages.set(workspaceKey, packageId)
-    }
-    if (request.action === 'load_dataset') {
-      packageId = safeSegment(request.datasetId)
-      this.activePackages.set(workspaceKey, packageId)
-    }
+    const sessionId = String(request.workspaceKey ?? 'direct')
+    if (sessionId.length === 0 || sessionId.length > 120) throw new Error('Invalid Geo workspace Session id')
+    const workspaceId = safeSegment(sessionId)
+    const scenarioId = request.action === 'load_scenario' ? safeSegment(request.scenarioId) : undefined
+    const datasetId = request.action === 'load_dataset' ? safeSegment(request.datasetId) : undefined
     const payload = {
       ...request,
-      workspace_root: this.workspaceFor(workspaceKey, packageId),
+      workspace_root: this.workspaceFor(sessionId),
+      workspace_id: workspaceId,
+      session_id: sessionId,
       scenario_root: this.scenarioRoot,
       dataset_root: this.datasetRoot,
     }
     delete payload.workspaceKey
     delete payload.scenarioId
     delete payload.datasetId
-    if (request.action === 'load_scenario') payload.scenario_id = packageId
-    if (request.action === 'load_dataset') payload.dataset_id = packageId
+    if (request.action === 'load_scenario') payload.scenario_id = scenarioId
+    if (request.action === 'load_dataset') payload.dataset_id = datasetId
     return this.run(payload, signal)
   }
 

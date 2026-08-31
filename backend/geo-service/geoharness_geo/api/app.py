@@ -9,9 +9,10 @@ import shapely
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from ..models import ImportLayerRequest, LayerMetadata, ToolRequest, ToolResult
+from ..models import ImportLayerRequest, LayerMetadata, ToolRequest, ToolResult, WorkspaceManifest
 from ..operations import TOOL_NAMES, GeoTools
 from ..registry import LayerNotFoundError, LayerRegistry
+from ..workspace import WorkspaceStore
 
 
 def create_app(
@@ -19,7 +20,14 @@ def create_app(
     *,
     allowed_import_roots: Iterable[str | Path] = (),
 ) -> FastAPI:
-    registry = LayerRegistry(workspace_root)
+    resolved_workspace = Path(workspace_root).resolve()
+    workspace = WorkspaceStore(
+        resolved_workspace,
+        workspace_id=resolved_workspace.name,
+        session_id=resolved_workspace.name,
+    )
+    registry = LayerRegistry(resolved_workspace)
+    workspace.sync_layers(registry.list_layers())
     tools = GeoTools(registry)
     allowed_roots = [Path(root).resolve() for root in allowed_import_roots]
     app = FastAPI(title="GeoHarness Geo Service", version="1.0.0")
@@ -31,6 +39,7 @@ def create_app(
         allow_headers=["content-type"],
     )
     app.state.registry = registry
+    app.state.workspace = workspace
     app.state.tools = tools
 
     @app.get("/health")
@@ -49,6 +58,10 @@ def create_app(
     @app.get("/layers", response_model=list[LayerMetadata])
     def list_layers() -> list[LayerMetadata]:
         return registry.list_layers()
+
+    @app.get("/workspace", response_model=WorkspaceManifest)
+    def workspace_manifest() -> WorkspaceManifest:
+        return workspace.sync_layers(registry.list_layers())
 
     @app.get("/layers/{layer_id}", response_model=LayerMetadata)
     def layer_metadata(layer_id: str) -> LayerMetadata:
@@ -70,12 +83,23 @@ def create_app(
         if not allowed_roots or not any(source_path.is_relative_to(root) for root in allowed_roots):
             raise HTTPException(status_code=403, detail="Import path is outside configured Scenario roots")
         try:
-            return registry.register_file(source_path, name=request.name, source=request.source)
+            metadata = registry.register_file(source_path, name=request.name, source=request.source)
+            workspace.sync_layers(registry.list_layers())
+            return metadata
         except (FileNotFoundError, ValueError) as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
     @app.post("/tools/{tool_name}", response_model=ToolResult)
     def execute_tool(tool_name: str, request: ToolRequest) -> ToolResult:
-        return tools.execute(tool_name, step_id=request.step_id, **request.parameters)
+        result = tools.execute(tool_name, step_id=request.step_id, **request.parameters)
+        workspace.sync_layers(registry.list_layers())
+        if result.success and result.tool == "export_layer":
+            workspace.record_export(
+                layer_id=result.inputs[0],
+                format=str(result.data["format"]),
+                relative_path=str(result.data["path"]),
+                feature_count=int(result.data["feature_count"]),
+            )
+        return result
 
     return app

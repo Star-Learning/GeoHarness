@@ -52,7 +52,10 @@ class LayerRegistry:
     def clear(self) -> None:
         """Reset this one already-resolved workspace without touching any parent path."""
         for directory in (self.layers_root, self.exports_root):
-            for child in directory.iterdir():
+            resolved_directory = directory.resolve()
+            if resolved_directory == self.root or not resolved_directory.is_relative_to(self.root):
+                raise ValueError(f"Unsafe Geo workspace asset directory: {directory}")
+            for child in resolved_directory.iterdir():
                 if not child.is_file():
                     raise ValueError(f"Unexpected non-file in Geo workspace: {child}")
                 child.unlink()

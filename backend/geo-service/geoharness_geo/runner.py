@@ -8,6 +8,7 @@ from typing import Any
 from .operations import GeoTools
 from .regression import ScenarioRegression
 from .registry import LayerRegistry
+from .workspace import WorkspaceStore
 
 
 def _load_scenario(
@@ -70,29 +71,64 @@ def _load_dataset(
 
 def dispatch(payload: dict[str, Any]) -> Any:
     workspace_root = Path(payload["workspace_root"]).resolve()
+    workspace = WorkspaceStore(
+        workspace_root,
+        workspace_id=str(payload.get("workspace_id", workspace_root.name)),
+        session_id=str(payload.get("session_id", payload.get("workspace_id", workspace_root.name))),
+    )
     registry = LayerRegistry(workspace_root)
+    workspace.sync_layers(registry.list_layers())
     action = payload.get("action")
     if action == "load_scenario":
-        return _load_scenario(
+        if bool(payload.get("reset", False)):
+            registry.clear()
+            workspace.reset_assets()
+        value = _load_scenario(
             registry,
             Path(payload["scenario_root"]).resolve(),
             str(payload["scenario_id"]),
-            reset=bool(payload.get("reset", False)),
+            reset=False,
         )
+        workspace.activate_scenario(str(payload["scenario_id"]))
+        workspace.sync_layers(registry.list_layers())
+        return value
     if action == "load_dataset":
-        return _load_dataset(
+        if bool(payload.get("reset", False)):
+            registry.clear()
+            workspace.reset_assets()
+        value = _load_dataset(
             registry,
             Path(payload["dataset_root"]).resolve(),
             str(payload["dataset_id"]),
-            reset=bool(payload.get("reset", False)),
+            reset=False,
         )
+        workspace.activate_dataset(str(payload["dataset_id"]))
+        workspace.sync_layers(registry.list_layers())
+        return value
     if action == "tool":
         result = GeoTools(registry).execute(
             str(payload["tool"]),
             step_id=payload.get("step_id"),
             **dict(payload.get("parameters", {})),
         )
+        workspace.sync_layers(registry.list_layers())
+        if result.success and result.tool == "export_layer":
+            workspace.record_export(
+                layer_id=result.inputs[0],
+                format=str(result.data["format"]),
+                relative_path=str(result.data["path"]),
+                feature_count=int(result.data["feature_count"]),
+            )
         return result.model_dump(mode="json")
+    if action == "workspace_manifest":
+        return workspace.sync_layers(registry.list_layers()).model_dump(mode="json")
+    if action == "workspace_record_run":
+        run = dict(payload.get("run", {}))
+        return workspace.record_run(str(payload["run_id"]), run).model_dump(mode="json")
+    if action == "workspace_reset":
+        registry.clear()
+        workspace.reset_assets()
+        return workspace.manifest().model_dump(mode="json")
     if action == "layers":
         return [item.model_dump(mode="json") for item in registry.list_layers()]
     if action == "geojson":

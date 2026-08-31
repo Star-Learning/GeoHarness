@@ -11,6 +11,9 @@ canonical layer metadata and GeoPackage snapshots under a caller-provided worksp
 Every operation returns a `ToolResult` with `success`, `tool`, `step_id`, `inputs`, `parameters`,
 `outputs`, `summary`, `warnings`, and bounded structured `data`. Derived layers record parent IDs,
 the generating step and parameters in `registry.json`; vector contents are stored as GeoPackage.
+The versioned `workspace.json` binds those layers plus exports and run assets to one stable Harness
+Session. Provider recreation restores the same workspace without relying on in-memory Dataset or
+Scenario selection.
 
 Run locally from this directory:
 
@@ -20,5 +23,6 @@ python -m geoharness_geo --workspace ../../.tmp/geo-workspace `
 ```
 
 The HTTP surface binds to `127.0.0.1` by default, restricts imports to explicitly configured
-Scenario roots, and exposes `/health`, `/layers`, `/layers/{id}/geojson`, `/layers/import`, and
-`/tools/{tool_name}`. Phase 5 connects these operations to the Harness Tool pipeline.
+Scenario roots, and exposes `/health`, `/workspace`, `/layers`, `/layers/{id}/geojson`,
+`/layers/import`, and `/tools/{tool_name}`. Phase 5 connects these operations to the Harness Tool
+pipeline.
