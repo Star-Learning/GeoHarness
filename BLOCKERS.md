@@ -26,6 +26,11 @@ CLI 的安装/启动/卸载。CI 的 build/Node/Python 也拆成独立步骤，�
 Bundle build、Catalog freshness 与 Scenario freshness 三项；这仍是发布验证中的普通跨平台修复，
 不是外部阻塞。
 
+第三轮精确门禁确认两套 Ubuntu 的 Bundle build 与 Catalog freshness 均通过，失败项只有 Scenario
+freshness。原因是先前将平台相关的 GEOS/PROJ 派生几何 JSON 做逐字节比较。现在原始来源 SHA/数量、
+属性/ID/统计仍精确，几何改用严格空间容差并增加真实篡改回归；生成文本也固定为 LF。等待远程
+矩阵复验，不把等价空间结果的序列化差异记录为产品阻塞。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、

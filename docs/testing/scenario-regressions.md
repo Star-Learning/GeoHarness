@@ -16,6 +16,11 @@ The oracle reads persisted GeoPackage layers from the Registry; it does not reus
 summary being tested. Map Verification must also be `ready`, so a statistical match cannot hide a
 broken `Task Step ↔ Layer ↔ Map` projection.
 
+Official-source freshness first verifies each frozen source file's SHA256 and feature count. Derived
+properties, feature IDs and expected statistics remain exact. Geometry freshness uses geometry type,
+validity, area and a `1e-8` degree Hausdorff threshold so equivalent GEOS/PROJ builds do not fail only
+because of ring ordering or insignificant final coordinate digits.
+
 Scenario 05's initial 500 m run is part of Phase 8 and must return 329 buildings. Its
 `revised_candidate_count` and retained history are explicitly deferred—not skipped—to Phase 9,
 where the conversational 200 m revision and partial rerun are implemented and tested through the

@@ -1,0 +1,22 @@
+* text=auto
+
+*.css text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+*.txt text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.geojson text eol=lf
+
+*.gif binary
+*.gpkg binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.png binary
+*.zip binary

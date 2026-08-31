@@ -11,7 +11,7 @@ from typing import Any
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box
+from shapely.geometry import GeometryCollection, MultiPolygon, Polygon, box, shape
 from shapely.ops import unary_union
 
 
@@ -330,15 +330,65 @@ def persist(path: Path, contents: str, *, check: bool) -> None:
     path.write_text(contents, encoding="utf-8")
 
 
+def verify_collection(name: str, expected: dict[str, Any], actual: dict[str, Any]) -> None:
+    for key in ("type", "name", "crs", "metadata"):
+        if actual.get(key) != expected.get(key):
+            raise ValueError(f"{name}: stale collection {key}")
+    expected_features = {str(feature["id"]): feature for feature in expected["features"]}
+    actual_features = {str(feature["id"]): feature for feature in actual.get("features", [])}
+    if actual_features.keys() != expected_features.keys():
+        raise ValueError(f"{name}: stale feature ids")
+    for feature_id, expected_feature in expected_features.items():
+        actual_feature = actual_features[feature_id]
+        if actual_feature.get("properties") != expected_feature.get("properties"):
+            raise ValueError(f"{name}: stale properties for {feature_id}")
+        expected_geometry = shape(expected_feature["geometry"])
+        actual_geometry = shape(actual_feature["geometry"])
+        if actual_geometry.geom_type != expected_geometry.geom_type:
+            raise ValueError(f"{name}: stale geometry type for {feature_id}")
+        if actual_geometry.is_valid != expected_geometry.is_valid:
+            raise ValueError(f"{name}: stale geometry validity for {feature_id}")
+        # Reprojecting and overlaying the same official polygons can change the
+        # last coordinate digits or ring ordering across GEOS/PROJ builds.
+        # Roughly one millimetre in display degrees is strict enough to catch
+        # a changed source geometry without treating equivalent builds as stale.
+        if actual_geometry.hausdorff_distance(expected_geometry) > 1e-8:
+            raise ValueError(f"{name}: stale geometry coordinates for {feature_id}")
+        area_tolerance = max(1e-14, abs(expected_geometry.area) * 1e-8)
+        if abs(actual_geometry.area - expected_geometry.area) > area_tolerance:
+            raise ValueError(f"{name}: stale geometry area for {feature_id}")
+
+
+def verify_derived_payloads(
+    collections: dict[str, dict[str, Any]],
+    statistics: dict[str, Any],
+) -> None:
+    statistics_path = DERIVED_ROOT / "statistics.json"
+    if not statistics_path.is_file():
+        raise ValueError(f"Missing official derived data: {statistics_path.relative_to(ROOT)}")
+    actual_statistics = json.loads(statistics_path.read_text(encoding="utf-8"))
+    if actual_statistics != statistics:
+        raise ValueError("Missing or stale official derived data: data/official-sources/nyc/derived/statistics.json")
+    for name, collection in collections.items():
+        path = DERIVED_ROOT / f"{name}.geojson"
+        if not path.is_file():
+            raise ValueError(f"Missing official derived data: {path.relative_to(ROOT)}")
+        verify_collection(name, collection, json.loads(path.read_text(encoding="utf-8")))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     collections, statistics = build_payloads(read_sources())
+    if args.check:
+        verify_derived_payloads(collections, statistics)
+        print(f"Verified official Scenario data: {statistics}")
+        return
     for name, collection in collections.items():
-        persist(DERIVED_ROOT / f"{name}.geojson", serialized(collection), check=args.check)
-    persist(DERIVED_ROOT / "statistics.json", serialized(statistics), check=args.check)
-    print(f"{'Verified' if args.check else 'Prepared'} official Scenario data: {statistics}")
+        persist(DERIVED_ROOT / f"{name}.geojson", serialized(collection), check=False)
+    persist(DERIVED_ROOT / "statistics.json", serialized(statistics), check=False)
+    print(f"Prepared official Scenario data: {statistics}")
 
 
 if __name__ == "__main__":

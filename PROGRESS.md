@@ -775,9 +775,12 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   Python 3.11 的完整 build/typecheck/test/docs/catalog/media 验收矩阵；clean clone 不再错误要求相邻
   上游源码目录，源码级 Phase 0 审计仅在该目录存在时执行，CI 改由精确 peers 和真实 lifecycle 验证；
   Windows 的 published CLI 路径通过 Node `npm_execpath` 调用 pnpm，不依赖 `.cmd` spawn 行为。
+- [x] Scenario freshness 保留官方原始快照 SHA256/数量、feature ID、属性和统计精确校验；派生几何改为
+  类型/有效性/面积与 `1e-8` 度 Hausdorff 门禁，避免等价 GEOS/PROJ 构建仅因环顺序或坐标末位误报；
+  `.gitattributes` 固定生成文本为 LF，并以真实篡改属性、统计和几何的测试确认仍会 fail closed。
 - [x] 新增 `docs/releases/v1.0.0.md`、兼容矩阵和平台验收说明；更新 README、文档导航、Security
   支持版本及 Changelog `1.0.0` 条目。
-- [x] 本地最终门禁通过：Node 86/86、Python 36/36、TypeScript、peer dependencies、Catalog、
+- [x] 本地最终门禁通过：Node 86/86、Python 37/37、TypeScript、peer dependencies、Catalog、
   60 份 Markdown/120 个本地链接、7 个媒体包、插件 lifecycle 和 `git diff --check`。
 - [ ] 推送本提交后等待 GitHub Actions 的 Windows/Linux 远程门禁，通过后创建 annotated
   `v1.0.0` Tag 与 GitHub Release，并把本节状态更新为完成。
