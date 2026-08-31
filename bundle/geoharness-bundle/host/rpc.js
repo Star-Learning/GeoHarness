@@ -241,6 +241,16 @@ export function registerGeoRpc(ctx) {
       ])
       return { ok: true, value: verifyWorkspaceProjection(projection, manifest.layer_preferences) }
     }
+    if (endpoint === 'agent/runs') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      try {
+        const value = await ctx.geo.execute({ action: 'workspace_runs', workspaceKey: request.workspaceKey }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
     if (endpoint === 'data/import-capabilities') {
       const request = agentWorkspacePayload(payload)
       if (request === null) return badRequest('A valid workspace_key is required')

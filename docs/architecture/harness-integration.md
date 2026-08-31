@@ -132,6 +132,28 @@ Agent Stream、Tool Trace、Layer projection 都由同一个 Session history 轮
 读取 `expected-result.json`。用户后续修改距离等要求仍发送到同一个 Agent session，由模型
 结合历史与当前 Layer ID 自主决定下一次工具调用。
 
+## Native Session 到 Run Manifest
+
+Host Bundle 的实际激活依赖是 `tools`、`systemPrompt` 和官方 `sessions` Service。Host 不创建
+第二套会话或 Planner，而是在 SessionStore 所属 context 上订阅：
+
+```text
+session/event → 按 Session 串行投影并写入 workspace/runs
+session/flush → 等待该 Session 已排队的 Run 写入完成
+session/disposed → 完成后释放 Session 队列
+```
+
+投影只消费 `user/message`、`turn/start`、`request/header`、`request/context`、`tool/call`、
+`tool/result`、`assistant/message`、`llm/retry` 和 `turn/end`。它记录用户目标、Provider/Model、
+Tool 参数与状态、输入/输出 Layer、最终回答引用、错误分类和 retry，但不会把
+`assistant/chunk` 中的隐藏 reasoning 写入 GeoHarness Workspace。
+
+`session/flush` 是本版本确认过的真实集成点：Harness 在 flush 时会等待监听器返回的 Promise，
+因此 Session event log 与相应的 Run Manifest 不会在正常 flush 后发生时序缺口。客户端通过
+loopback-only `agent/runs` RPC 恢复最近运行，并与 `sessions.history` 的实时 Agent Stream 分工：
+前者负责可恢复摘要，后者负责当轮流式展示。完整 schema、并发一致性和五类修订验证见
+[`run-manifest.md`](run-manifest.md)。
+
 ## 数据发现与 13 个 Geo Tools
 
 Host 通过当前 `@deepseek-ai/dsh-tools` API 注册 13 个 `defineTool` consumer。新增的

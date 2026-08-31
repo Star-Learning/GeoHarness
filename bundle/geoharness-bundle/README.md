@@ -34,6 +34,12 @@ The native composer remains the only execution entry. GeoHarness observes the re
 `sessions.history({ sessionId })`; prompt submission, model routing, queue/steer, stop and errors stay
 owned by the upstream conversation modules.
 
+The Host plugin also injects the official `sessions` Service. It subscribes to canonical
+`session/event` publications, projects each native turn into a versioned, reasoning-free Run
+Manifest, and participates in `session/flush` so completed event history and the matching GIS run
+summary reach disk together. The loopback-only `agent/runs` RPC restores the latest run summaries
+after a reload; credentials and `assistant/chunk` reasoning are never persisted by GeoHarness.
+
 The Native Harness Agent receives GeoHarness prompt guidance and 13 model-facing Geo Tools. It
 discovers available datasets, selects the required tools and parameters from the user's actual
 request, and emits ordinary Harness Session events. The client folds `tool/call`, `tool/result`,
@@ -62,10 +68,16 @@ analysis and export. All are registered with Harness `defineTool`, schema valida
 `ToolResult`, timeout/cancellation and presentation metadata. Geo operations go through `ctx.geo`
 to a cancellable Python/GeoPandas provider and persistent workspace Layer Registry.
 
+Provider requests for the same Session Workspace are queued in issue order. This prevents concurrent
+Run projection, export and Layer updates from replacing `workspace.json` with an older in-memory
+snapshot. Different Sessions retain independent queues and can execute in parallel.
+
 After each Agent history refresh, the client calls the loopback-only
 `/geoharness` channel's `agent/workspace` RPC. The Host projects canonical Registry GeoJSON only after feature
 counts and parent Layer references validate. The client preserves per-Layer visibility and opacity,
 and renders pointer pan, fit bounds, toolbar zoom, 0.7×–5× mouse-wheel zoom and feature inspection.
+It also reads `agent/runs` and shows the latest three turns with provider/model, executed Tools,
+reused inputs, new output Layers and Provider/Tool/Data errors.
 
 ## Deterministic regression path
 

@@ -665,3 +665,28 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增 `docs/architecture/data-layer-workbench.md` 并同步 Workspace/文档索引与 Changelog；最终
   门禁通过：build、TypeScript、peer dependencies、文档 52/52（98 个本地链接）、Scenario
   freshness、Node 66/66、Python 23/23、7 个媒体包和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 4
+
+状态：完成（2026-08-31）
+
+- [x] Host 注入官方 `sessions` Service，并在真实 SessionStore owner context 订阅
+  `session/event`、`session/flush` 与 `session/disposed`；每轮 Native Harness 事件被投影为
+  versioned Run Manifest，没有平行会话、LLM Planner 或 Scenario fallback。
+- [x] Run Manifest 记录 user goal、turn、Provider/Model、Tool 参数与状态、输入/输出 Layer、
+  final answer 引用、retry 和 Provider/Tool/Data 错误；明确不保存 `assistant/chunk` reasoning。
+- [x] Python Workspace 对 Agent Run 使用 Pydantic schema、Session 一致性校验和原子持久化；
+  `agent/runs` loopback RPC 与页面最近三轮卡片可在刷新或 Provider 重建后恢复运行摘要。
+- [x] 同一 Workspace 的 Provider 请求按提交顺序串行，不同 Session 继续并行；真实并发回归确认
+  Run projector 和 CSV export 不再发生旧 `workspace.json` 快照覆盖新 export index。
+- [x] Windows Python runner 改为显式 UTF-8 stdin/stdout，中文用户目标、最终回答和 metadata
+  均能通过 JSON/Pydantic 并按原文恢复。
+- [x] UI 显示本轮 Executed Tools、Reused inputs、New outputs、Provider/Model 及分类错误；数据均
+  来自 Run Manifest 与 canonical Registry，不从模型文本猜测复用或统计。
+- [x] 同一个 Native Harness Session 使用用户上传的真实 NYC Buildings/Roads/Rivers 完成五类
+  修订：275 m → 200 m、`within` → `intersects`、属性值变化、GeoJSON → CSV、追加 river
+  800 m `disjoint` 条件；原始 GeoJSON 的独立 GeoPandas oracle 分别核对 228、188、205、
+  242 条道路、205 行 CSV 和 14 个最终要素。
+- [x] 新增 `docs/architecture/run-manifest.md` 并同步 Harness/Workspace/Bundle/Changelog；最终
+  门禁通过：build、TypeScript、peer dependencies、文档 53/53（100 个本地链接）、Scenario
+  freshness、Node 72/72、Python 25/25、7 个媒体包和 `git diff --check`。

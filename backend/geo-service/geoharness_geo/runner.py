@@ -141,6 +141,10 @@ def dispatch(payload: dict[str, Any]) -> Any:
     if action == "workspace_record_run":
         run = dict(payload.get("run", {}))
         return workspace.record_run(str(payload["run_id"]), run).model_dump(mode="json")
+    if action == "workspace_record_agent_run":
+        return workspace.record_agent_run(dict(payload.get("run", {}))).model_dump(mode="json")
+    if action == "workspace_runs":
+        return [run.model_dump(mode="json") for run in workspace.agent_runs()]
     if action == "workspace_reset":
         registry.clear()
         workspace.reset_assets()
@@ -195,14 +199,16 @@ def dispatch(payload: dict[str, Any]) -> Any:
 
 def main() -> None:
     try:
-        payload = json.load(sys.stdin)
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
         value = dispatch(payload)
-        print(json.dumps({"ok": True, "value": value}, ensure_ascii=False, separators=(",", ":")))
+        response = json.dumps({"ok": True, "value": value}, ensure_ascii=False, separators=(",", ":"))
+        sys.stdout.buffer.write(f"{response}\n".encode("utf-8"))
     except Exception as error:
-        print(json.dumps({
+        response = json.dumps({
             "ok": False,
             "error": {"type": type(error).__name__, "message": str(error)},
-        }, ensure_ascii=False, separators=(",", ":")))
+        }, ensure_ascii=False, separators=(",", ":"))
+        sys.stdout.buffer.write(f"{response}\n".encode("utf-8", errors="backslashreplace"))
         raise SystemExit(1)
 
 

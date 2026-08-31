@@ -24,6 +24,7 @@ export class LocalPythonGeoProvider {
     this.scenarioRoot = resolve(options.scenarioRoot)
     this.datasetRoot = resolve(options.datasetRoot)
     this.workspaceRoot = resolve(options.workspaceRoot)
+    this.workspaceQueues = new Map()
     this.uploadMaxBytes = Number(options.uploadMaxBytes ?? DEFAULT_UPLOAD_BYTES)
     if (!Number.isSafeInteger(this.uploadMaxBytes)
       || this.uploadMaxBytes < 1
@@ -66,7 +67,12 @@ export class LocalPythonGeoProvider {
     delete payload.datasetId
     if (request.action === 'load_scenario') payload.scenario_id = scenarioId
     if (request.action === 'load_dataset') payload.dataset_id = datasetId
-    return this.run(payload, signal)
+    const previous = this.workspaceQueues.get(workspaceId) ?? Promise.resolve()
+    const operation = previous.catch(() => {}).then(() => this.run(payload, signal))
+    this.workspaceQueues.set(workspaceId, operation)
+    return operation.finally(() => {
+      if (this.workspaceQueues.get(workspaceId) === operation) this.workspaceQueues.delete(workspaceId)
+    })
   }
 
   run(payload, signal) {

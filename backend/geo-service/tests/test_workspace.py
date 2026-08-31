@@ -138,3 +138,42 @@ def test_layer_preferences_and_import_removal_are_persistent_and_bounded(tmp_pat
     assert layer.layer_id not in removed.layer_preferences
     assert not import_root.exists()
     assert root.exists()
+
+
+def test_agent_run_manifest_validates_unicode_session_and_restores(tmp_path: Path):
+    root = tmp_path / "workspaces" / "native-run"
+    workspace = WorkspaceStore(root, workspace_id="native-run", session_id="native-run")
+    run = workspace.record_agent_run({
+        "schema_version": "1.0",
+        "run_id": "run-turn-0001",
+        "session_id": "native-run",
+        "turn": 1,
+        "user_goal": "把距离改成 200 米。",
+        "user_event_seq": 0,
+        "started_at": "2026-08-31T04:00:00+00:00",
+        "finished_at": "2026-08-31T04:00:01+00:00",
+        "status": "success",
+        "provider": "test",
+        "model": "test-model",
+        "max_event_seq": 5,
+        "tool_calls": [],
+        "input_layers": [],
+        "output_layers": [],
+        "reused_layers": [],
+        "final_answer": {"event_seq": 4, "text": "已经重新计算。"},
+        "errors": [],
+        "retries": [],
+    })
+    assert run.final_answer is not None
+    assert run.final_answer.text == "已经重新计算。"
+    restored = WorkspaceStore(root, workspace_id="native-run", session_id="native-run").agent_runs()
+    assert restored == [run]
+
+    invalid = run.model_dump(mode="json")
+    invalid["session_id"] = "another-session"
+    try:
+        workspace.record_agent_run(invalid)
+    except ValueError as error:
+        assert "does not match" in str(error)
+    else:
+        raise AssertionError("A Run from another Session must be rejected")

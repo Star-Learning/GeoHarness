@@ -85,6 +85,7 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
   assert.deepEqual(manifest.peerDependencies, {
     '@deepseek-ai/cordis': '4.0.1',
     '@deepseek-ai/dsh-client-connection': '0.1.1-rc.2',
+    '@deepseek-ai/dsh-session': '0.1.1-rc.2',
     '@deepseek-ai/dsh-system-prompt': '0.1.1-rc.2',
     '@deepseek-ai/dsh-tools': '0.1.1-rc.2',
   })
@@ -98,7 +99,7 @@ test('the bundle manifest and patch form one installable dual-face plugin layer'
 
   const hostPlugin = await import(pathToFileURL(join(bundleRoot, 'index.js')).href)
   assert.equal(hostPlugin.name, 'geoharness')
-  assert.deepEqual(hostPlugin.inject, ['tools', 'systemPrompt'])
+  assert.deepEqual(hostPlugin.inject, ['tools', 'systemPrompt', 'sessions'])
   assert.equal(typeof hostPlugin.apply, 'function')
   assert.equal(typeof hostPlugin.GeoRuntime, 'function')
   assert.equal(typeof hostPlugin.LocalPythonGeoProvider, 'function')

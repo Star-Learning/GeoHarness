@@ -83,6 +83,61 @@ class WorkspaceRunAsset(BaseModel):
     updated_at: str
 
 
+class AgentRunError(BaseModel):
+    classification: Literal["provider", "tool", "data"]
+    code: str | None = None
+    message: str = Field(max_length=2_000)
+    event_seq: int = Field(ge=0)
+    call_id: str | None = None
+
+
+class AgentRunRetry(BaseModel):
+    event_seq: int = Field(ge=0)
+    provider: str | None = None
+    code: str | None = None
+    retry: int = Field(ge=0)
+    max_retries: int = Field(ge=0)
+
+
+class AgentRunToolCall(BaseModel):
+    call_id: str = Field(min_length=1, max_length=180)
+    name: str = Field(min_length=1, max_length=180)
+    status: Literal["running", "success", "failed"]
+    event_seq: int = Field(ge=0)
+    result_event_seq: int | None = Field(default=None, ge=0)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    input_layers: list[str] = Field(default_factory=list)
+    output_layers: list[str] = Field(default_factory=list)
+    summary: str | None = Field(default=None, max_length=2_000)
+
+
+class AgentRunFinalAnswer(BaseModel):
+    event_seq: int = Field(ge=0)
+    text: str = Field(max_length=20_000)
+
+
+class AgentRunManifest(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    run_id: str = Field(pattern=r"^[A-Za-z0-9._-]{1,120}$")
+    session_id: str = Field(min_length=1, max_length=120)
+    turn: int = Field(ge=1)
+    user_goal: str = Field(min_length=1, max_length=20_000)
+    user_event_seq: int = Field(ge=0)
+    started_at: str | None = None
+    finished_at: str | None = None
+    status: Literal["running", "success", "failed"]
+    provider: str | None = Field(default=None, max_length=180)
+    model: str | None = Field(default=None, max_length=300)
+    max_event_seq: int = Field(ge=0)
+    tool_calls: list[AgentRunToolCall] = Field(default_factory=list)
+    input_layers: list[str] = Field(default_factory=list)
+    output_layers: list[str] = Field(default_factory=list)
+    reused_layers: list[str] = Field(default_factory=list)
+    final_answer: AgentRunFinalAnswer | None = None
+    errors: list[AgentRunError] = Field(default_factory=list)
+    retries: list[AgentRunRetry] = Field(default_factory=list)
+
+
 class LayerDisplayPreference(BaseModel):
     visible: bool = True
     opacity: float = Field(default=1.0, ge=0, le=1)

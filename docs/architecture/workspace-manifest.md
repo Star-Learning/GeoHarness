@@ -72,7 +72,9 @@ Manifest 使用同目录临时文件、`fsync` 和原子替换写入，调用方
 | action | 用途 |
 | --- | --- |
 | `workspace_manifest` | 恢复并返回当前版本化资产索引 |
-| `workspace_record_run` | 将一个受限 Run ID 的 JSON 写入 `runs/` 并建立索引 |
+| `workspace_record_run` | 将一个受限 Run ID 的通用 JSON 写入 `runs/` 并建立索引（兼容 Phase 1） |
+| `workspace_record_agent_run` | 校验并原子保存 Native `AgentRunManifest` |
+| `workspace_runs` | 恢复当前 Session 下通过 schema 的 Native Agent Runs |
 | `workspace_reset` | 清空当前 Workspace 的 canonical Layer、导出、导入和 Run 资产 |
 
 HTTP 开发入口同步暴露只读 `/workspace`。正式 Harness 页面仍经 loopback Connection RPC 和

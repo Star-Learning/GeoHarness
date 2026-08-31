@@ -353,6 +353,32 @@ interface LayerDetails {
   warnings: string[]
 }
 
+interface AgentRunManifest {
+  schema_version: '1.0'
+  run_id: string
+  session_id: string
+  turn: number
+  user_goal: string
+  user_event_seq: number
+  status: 'running' | 'success' | 'failed'
+  provider: string | null
+  model: string | null
+  max_event_seq: number
+  tool_calls: Array<{
+    call_id: string
+    name: string
+    status: 'running' | 'success' | 'failed'
+    input_layers: string[]
+    output_layers: string[]
+  }>
+  input_layers: string[]
+  output_layers: string[]
+  reused_layers: string[]
+  final_answer: { event_seq: number, text: string } | null
+  errors: Array<{ classification: 'provider' | 'tool' | 'data', message: string }>
+  retries: unknown[]
+}
+
 interface ImportCapabilities {
   schema_version: '1.0'
   max_file_bytes: number
@@ -427,6 +453,7 @@ interface GeoHarnessInjected {
     renameLayer(layerId: string, name: string): Promise<void>
     removeLayer(layerId: string): Promise<void>
     setLayerPreference(layerId: string, preference: Partial<LayerDisplayPreference>): Promise<void>
+    runs(): Promise<AgentRunManifest[]>
   }
 }
 
@@ -767,12 +794,14 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [layerDetails, setLayerDetails] = React.useState<LayerDetails | null>(null)
   const [layerDetailsLoading, setLayerDetailsLoading] = React.useState(false)
   const [layerDetailsError, setLayerDetailsError] = React.useState<string | null>(null)
+  const [runManifests, setRunManifests] = React.useState<AgentRunManifest[]>([])
   const fileInput = React.useRef<HTMLInputElement | null>(null)
   const detailsRequest = React.useRef(0)
   const activeGoalSeq = React.useRef<number | null>(null)
   const lastAutoStepId = React.useRef<string | null>(null)
   const lastRunStatus = React.useRef<'ready' | 'running' | 'success' | 'failed'>('ready')
   const lastWorkspaceSeq = React.useRef<number | null>(null)
+  const lastRunManifestKey = React.useRef<string | null>(null)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
   const previousLayerCount = React.useRef(0)
   const layerState = useLayerWorkspace()
@@ -789,6 +818,8 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     setInspectedLayerId(null)
     setLayerDetails(null)
     setLayerDetailsError(null)
+    setRunManifests([])
+    lastRunManifestKey.current = null
   }, [sessionId])
 
   React.useEffect(() => {
@@ -821,6 +852,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
         if (disposed) return
         const humanGoal = latestHumanGoal(history.events)
         let workspaceSeq = -1
+        let runManifestKey = 'empty'
         setRunHistoryCount(humanGoalCount(history.events))
         if (humanGoal === null) {
           setRunStatus('ready')
@@ -839,6 +871,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           setGoal(humanGoal.text)
           const projection = projectAgentHistory(history.events, humanGoal.seq)
           workspaceSeq = projection.maxSeq
+          runManifestKey = `${humanGoal.seq}:${projection.steps.map(step => `${step.id}:${step.status}`).join('|')}:${projection.finished}`
           const status = projection.finished ? (projection.succeeded ? 'success' : 'failed') : 'running'
           setTaskSteps(projection.steps)
           setAgentStream(projection.stream)
@@ -854,6 +887,20 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             if (outputStep !== undefined) setSelectedStepId(outputStep.id)
           }
           lastRunStatus.current = status
+        }
+        if (lastRunManifestKey.current !== runManifestKey) {
+          try {
+            const runs = await agent.runs()
+            if (disposed) return
+            setRunManifests(runs)
+            const current = runs.find(run => run.user_event_seq === humanGoal?.seq)
+            if (humanGoal === null || (current !== undefined
+              && (current.max_event_seq === workspaceSeq || current.status !== 'running'))) {
+              lastRunManifestKey.current = runManifestKey
+            }
+          } catch {
+            // Native stream remains usable while a just-appended Run projection catches up.
+          }
         }
         if (lastWorkspaceSeq.current !== workspaceSeq) {
           try {
@@ -907,6 +954,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const successfulSteps = taskSteps.filter(step => step.status === 'success')
   const importBusy = importPhase === 'reading' || importPhase === 'uploading'
   const inspectedLayer = inspectedLayerId === null ? null : layers.find(layer => layer.id === inspectedLayerId) ?? null
+  const recentRunManifests = runManifests.slice(-3).reverse()
 
   React.useEffect(() => {
     if (inspectedLayerId !== null && inspectedLayer === null) {
@@ -1190,6 +1238,21 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
+            <section className="gh-agent-block gh-run-history" aria-label="Agent Run history">
+              <span className="gh-eyebrow">RUN MANIFEST · REVISIONS</span>
+              {recentRunManifests.length === 0 && <p className="gh-result-empty">Native Session 产生 Tool Call 后，这里会恢复可核查的运行记录。</p>}
+              {recentRunManifests.map(run => <article className={`is-${run.status}`} key={run.run_id}>
+                <header><b>Turn {run.turn}</b><small>{run.status} · {run.provider ?? 'provider'} / {run.model ?? 'model'}</small></header>
+                <p>{run.user_goal}</p>
+                <div>
+                  <span>Executed <b>{run.tool_calls.length}</b></span>
+                  <span>Reused <b>{run.reused_layers.length}</b></span>
+                  <span>New outputs <b>{run.output_layers.length}</b></span>
+                </div>
+                {run.tool_calls.length > 0 && <small>{run.tool_calls.map(call => `${call.name} ${call.status === 'success' ? '✓' : call.status === 'failed' ? '!' : '…'}`).join(' · ')}</small>}
+                {run.errors.length > 0 && <small className="is-error">{run.errors.map(error => `${error.classification}: ${error.message}`).join(' · ')}</small>}
+              </article>)}
+            </section>
             <section className={`gh-agent-block gh-agent-result is-${runStatus}`} aria-label="Agent result">
               <div className="gh-stream-heading">
                 <span className="gh-eyebrow">AGENT STREAM</span>
@@ -1304,6 +1367,15 @@ export function apply(ctx: ClientContext) {
             ...preference,
           })
           if (!response.ok) throw new Error(response.error?.message ?? 'Layer display preference could not be saved')
+        },
+        runs: async () => {
+          const response = await connection.rpc.call('/geoharness', 'agent/runs', {
+            workspace_key: sessionId,
+          })
+          if (!response.ok || !Array.isArray(response.value)) {
+            throw new Error(response.error?.message ?? 'Agent Run history is unavailable')
+          }
+          return response.value as AgentRunManifest[]
         },
       },
     }),

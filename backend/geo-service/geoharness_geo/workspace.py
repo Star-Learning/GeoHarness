@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .models import (
+    AgentRunManifest,
     LayerMetadata,
     LayerDisplayPreference,
     WorkspaceExportAsset,
@@ -224,6 +225,30 @@ class WorkspaceStore:
         self._manifest.runs.sort(key=lambda item: item.run_id)
         self._touch()
         return self.manifest()
+
+    def record_agent_run(self, payload: dict[str, Any]) -> AgentRunManifest:
+        run = AgentRunManifest.model_validate(payload)
+        if run.session_id != self.session_id:
+            raise ValueError("Agent Run Session does not match this Workspace")
+        self.record_run(run.run_id, run.model_dump(mode="json"))
+        return run
+
+    def agent_runs(self) -> list[AgentRunManifest]:
+        runs: list[AgentRunManifest] = []
+        for asset in self._manifest.runs:
+            source = (self.root / asset.path).resolve()
+            if not source.is_relative_to(self.runs_root) or not source.is_file():
+                raise ValueError(f"Unsafe or missing Run asset: {asset.run_id}")
+            try:
+                run = AgentRunManifest.model_validate_json(source.read_text(encoding="utf-8"))
+            except Exception:
+                # Phase 1 allowed generic run fixtures. They remain indexed but are not
+                # presented as Native Agent Run manifests.
+                continue
+            if run.session_id != self.session_id:
+                raise ValueError("Agent Run Session does not match this Workspace")
+            runs.append(run)
+        return sorted(runs, key=lambda item: (item.turn, item.run_id))
 
     def set_layer_preference(
         self,

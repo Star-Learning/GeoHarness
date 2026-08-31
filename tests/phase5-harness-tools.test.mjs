@@ -15,13 +15,15 @@ async function importFromBundle(packageName) {
 }
 
 async function setup(workspaceRoot) {
-  const [{ Context }, { default: SystemPrompt }, { default: ToolRuntime }, GeoPlugin] = await Promise.all([
+  const [{ Context }, { default: SessionStore }, { default: SystemPrompt }, { default: ToolRuntime }, GeoPlugin] = await Promise.all([
     importFromBundle('@deepseek-ai/cordis'),
+    importFromBundle('@deepseek-ai/dsh-session'),
     importFromBundle('@deepseek-ai/dsh-system-prompt'),
     importFromBundle('@deepseek-ai/dsh-tools'),
     import('../bundle/geoharness-bundle/index.js'),
   ])
   const ctx = new Context()
+  await ctx.plugin(SessionStore)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(GeoPlugin, {

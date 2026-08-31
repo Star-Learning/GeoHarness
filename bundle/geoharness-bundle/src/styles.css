@@ -294,6 +294,18 @@
 .gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }
 .gh-result-trace i { color: var(--gh-success); font-style: normal; }
 .gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }
+.gh-run-history { gap: 7px; }
+.gh-run-history > article { padding: 8px 9px; display: grid; gap: 5px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }
+.gh-run-history > article.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }
+.gh-run-history > article.is-failed { border-color: color-mix(in srgb, var(--gh-error) 45%, var(--gh-line)); }
+.gh-run-history article header { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.gh-run-history article header b { font-size: 10px; }
+.gh-run-history article header small, .gh-run-history article > small { overflow: hidden; color: var(--gh-muted); font: 8px/1.4 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }
+.gh-run-history article p { margin: 0; overflow: hidden; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.gh-run-history article > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.gh-run-history article > div span { padding: 4px 5px; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; text-align: center; }
+.gh-run-history article > div b { color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }
+.gh-run-history article > small.is-error { color: var(--gh-error); }
 
 @media (prefers-reduced-motion: reduce) {
   .gh-layer-row.is-step-highlighted,

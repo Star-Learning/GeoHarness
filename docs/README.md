@@ -11,8 +11,9 @@
 5. [用户矢量数据导入](architecture/user-data-import.md)：查看四种格式、loopback 上传、大小限制、ZIP 安全和 canonical 注册契约。
 6. [数据与 Layer 工作台](architecture/data-layer-workbench.md)：查看 canonical metadata、属性预览、质量检查、选择联动和 Layer 生命周期。
 7. [Geo Tool 契约](architecture/tool-spec.md)：查看 Geo Backend、Layer Registry、工具输入输出与 CRS 规则。
-8. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
-9. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
+8. [Native Agent Run Manifest](architecture/run-manifest.md)：查看 Session 事件投影、运行恢复、错误分类和五类通用修订。
+9. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
+10. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
 
 安装与普通使用请先看仓库根目录的 [README](../README.md)；当前开发进度和已知问题分别记录在 [PROGRESS](../PROGRESS.md) 与 [BLOCKERS](../BLOCKERS.md)。
 
