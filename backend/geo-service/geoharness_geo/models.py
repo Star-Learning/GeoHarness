@@ -83,6 +83,11 @@ class WorkspaceRunAsset(BaseModel):
     updated_at: str
 
 
+class LayerDisplayPreference(BaseModel):
+    visible: bool = True
+    opacity: float = Field(default=1.0, ge=0, le=1)
+
+
 class WorkspaceManifest(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     workspace_id: str
@@ -96,3 +101,4 @@ class WorkspaceManifest(BaseModel):
     derived_layers: list[WorkspaceLayerAsset] = Field(default_factory=list)
     exports: list[WorkspaceExportAsset] = Field(default_factory=list)
     runs: list[WorkspaceRunAsset] = Field(default_factory=list)
+    layer_preferences: dict[str, LayerDisplayPreference] = Field(default_factory=dict)

@@ -12,6 +12,7 @@ from typing import Any, Iterable
 
 from .models import (
     LayerMetadata,
+    LayerDisplayPreference,
     WorkspaceExportAsset,
     WorkspaceImportAsset,
     WorkspaceLayerAsset,
@@ -224,6 +225,38 @@ class WorkspaceStore:
         self._touch()
         return self.manifest()
 
+    def set_layer_preference(
+        self,
+        layer_id: str,
+        *,
+        visible: bool | None = None,
+        opacity: float | None = None,
+    ) -> WorkspaceManifest:
+        current = self._manifest.layer_preferences.get(layer_id, LayerDisplayPreference())
+        next_preference = LayerDisplayPreference(
+            visible=current.visible if visible is None else visible,
+            opacity=current.opacity if opacity is None else opacity,
+        )
+        if next_preference != current or layer_id not in self._manifest.layer_preferences:
+            self._manifest.layer_preferences[layer_id] = next_preference
+            self._touch()
+        return self.manifest()
+
+    def remove_layer_assets(self, layer_id: str) -> WorkspaceManifest:
+        removed_imports = [item for item in self._manifest.imports if item.layer_id == layer_id]
+        for asset in removed_imports:
+            source = (self.root / asset.path).resolve()
+            if not source.is_relative_to(self.imports_root):
+                raise ValueError(f"Unsafe import asset for Layer {layer_id}")
+            asset_root = source.parent
+            if asset_root.parent != self.imports_root or not asset_root.name.startswith("import_"):
+                raise ValueError(f"Unexpected import asset layout for Layer {layer_id}")
+            shutil.rmtree(asset_root, ignore_errors=False)
+        self._manifest.imports = [item for item in self._manifest.imports if item.layer_id != layer_id]
+        self._manifest.layer_preferences.pop(layer_id, None)
+        self._touch()
+        return self.manifest()
+
     def _clear_directory(self, directory: Path) -> None:
         resolved = directory.resolve()
         if resolved == self.root or not resolved.is_relative_to(self.root):
@@ -248,5 +281,6 @@ class WorkspaceStore:
         self._manifest.derived_layers = []
         self._manifest.exports = []
         self._manifest.runs = []
+        self._manifest.layer_preferences = {}
         self._touch()
         return self.manifest()

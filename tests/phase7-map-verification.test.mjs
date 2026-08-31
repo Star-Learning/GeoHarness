@@ -234,8 +234,12 @@ test('the Agent workspace RPC verifies and returns canonical live Registry proje
   registerGeoRpc({
     connection: { rpc: { handle: (channel, handler, options) => { registration = { channel, handler, options }; return () => {} } } },
     geo: { execute: async request => {
-      assert.deepEqual(request, { action: 'projection', workspaceKey: 'geoharness-main' })
-      return projection
+      if (request.action === 'projection') {
+        assert.deepEqual(request, { action: 'projection', workspaceKey: 'geoharness-main' })
+        return projection
+      }
+      assert.deepEqual(request, { action: 'workspace_manifest', workspaceKey: 'geoharness-main' })
+      return { layer_preferences: { layer_0001: { visible: false, opacity: 0.4 }, layer_9999: { visible: true, opacity: 1 } } }
     } },
   })
   const response = await registration.handler('agent/workspace', { workspace_key: 'geoharness-main' })
@@ -243,6 +247,7 @@ test('the Agent workspace RPC verifies and returns canonical live Registry proje
   assert.equal(response.value.status, 'ready')
   assert.deepEqual(response.value.checks, { feature_counts_match: true, parent_layers_present: true })
   assert.deepEqual(response.value.layers, projection)
+  assert.deepEqual(response.value.preferences, { layer_0001: { visible: false, opacity: 0.4 } })
 })
 
 test('the loopback Connection RPC exposes validated Scenario and goal-driven endpoints', async () => {

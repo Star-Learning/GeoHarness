@@ -3,6 +3,7 @@ import { HARD_UPLOAD_BYTES } from './provider.js'
 
 const SCENARIOS = new Set(SCENARIO_IDS)
 const WORKSPACE_KEY = /^[A-Za-z0-9._:-]{1,120}$/
+const LAYER_ID = /^layer_[0-9]{4,}$/u
 const MAX_GOAL_LENGTH = 2_000
 const MAX_BASE64_LENGTH = Math.ceil(HARD_UPLOAD_BYTES / 3) * 4 + 4
 const SAFE_UPLOAD_NAME = /^[^<>:"/\\|?*\u0000-\u001f]{1,180}$/u
@@ -70,7 +71,13 @@ function importRequestPayload(payload) {
   return { workspaceKey, fileName, contentBase64, options }
 }
 
-function verifyWorkspaceProjection(projection) {
+function layerRequestPayload(payload) {
+  const workspace = agentWorkspacePayload(payload)
+  if (workspace === null || typeof payload.layer_id !== 'string' || !LAYER_ID.test(payload.layer_id)) return null
+  return { ...workspace, layerId: payload.layer_id }
+}
+
+function verifyWorkspaceProjection(projection, preferences = {}) {
   const ids = new Set(projection.map(item => item.metadata?.layer_id))
   const issues = []
   for (const item of projection) {
@@ -91,6 +98,7 @@ function verifyWorkspaceProjection(projection) {
     },
     issues,
     layers: projection,
+    preferences: Object.fromEntries(Object.entries(preferences).filter(([layerId]) => ids.has(layerId))),
   }
 }
 
@@ -227,8 +235,11 @@ export function registerGeoRpc(ctx) {
     if (endpoint === 'agent/workspace') {
       const request = agentWorkspacePayload(payload)
       if (request === null) return badRequest('A valid workspace_key is required')
-      const projection = await ctx.geo.execute({ action: 'projection', workspaceKey: request.workspaceKey }, signal)
-      return { ok: true, value: verifyWorkspaceProjection(projection) }
+      const [projection, manifest] = await Promise.all([
+        ctx.geo.execute({ action: 'projection', workspaceKey: request.workspaceKey }, signal),
+        ctx.geo.execute({ action: 'workspace_manifest', workspaceKey: request.workspaceKey }, signal),
+      ])
+      return { ok: true, value: verifyWorkspaceProjection(projection, manifest.layer_preferences) }
     }
     if (endpoint === 'data/import-capabilities') {
       const request = agentWorkspacePayload(payload)
@@ -251,6 +262,66 @@ export function registerGeoRpc(ctx) {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return badRequest(message.slice(0, 800))
+      }
+    }
+    if (endpoint === 'layer/details') {
+      const request = layerRequestPayload(payload)
+      if (request === null) return badRequest('A valid workspace_key and layer_id are required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'layer_details', workspaceKey: request.workspaceKey, layer_id: request.layerId, limit: 100,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'layer/rename') {
+      const request = layerRequestPayload(payload)
+      const name = optionalString(payload?.name, 120)
+      if (request === null || name === null || name === undefined) {
+        return badRequest('A valid workspace_key, layer_id and name are required')
+      }
+      try {
+        const value = await ctx.geo.execute({
+          action: 'layer_rename', workspaceKey: request.workspaceKey, layer_id: request.layerId, name,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'layer/remove') {
+      const request = layerRequestPayload(payload)
+      if (request === null) return badRequest('A valid workspace_key and layer_id are required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'layer_remove', workspaceKey: request.workspaceKey, layer_id: request.layerId,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'layer/preference') {
+      const request = layerRequestPayload(payload)
+      const visible = payload?.visible
+      const opacity = payload?.opacity
+      if (request === null
+        || (visible === undefined && opacity === undefined)
+        || (visible !== undefined && typeof visible !== 'boolean')
+        || (opacity !== undefined && (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1))) {
+        return badRequest('Layer preference requires a valid visible and/or opacity value')
+      }
+      try {
+        const value = await ctx.geo.execute({
+          action: 'layer_preference', workspaceKey: request.workspaceKey, layer_id: request.layerId,
+          ...visible === undefined ? {} : { visible },
+          ...opacity === undefined ? {} : { opacity },
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
       }
     }
     if (endpoint === 'goal/run' || endpoint === 'goal/start') {

@@ -94,3 +94,47 @@ def test_workspace_identity_mismatch_is_rejected(tmp_path: Path):
         assert "identity mismatch" in str(error)
     else:
         raise AssertionError("A colliding Session id must not expose the existing workspace")
+
+
+def test_layer_preferences_and_import_removal_are_persistent_and_bounded(tmp_path: Path):
+    root = tmp_path / "workspaces" / "session-layer-workbench"
+    registry = LayerRegistry(root)
+    workspace = WorkspaceStore(
+        root,
+        workspace_id="session-layer-workbench",
+        session_id="session-layer-workbench",
+    )
+    layer = registry.register("uploaded", point_frame("uploaded"), source="upload")
+    workspace.sync_layers(registry.list_layers())
+    import_root = workspace.imports_root / "import_testasset"
+    import_root.mkdir()
+    source = import_root / "uploaded.geojson"
+    source.write_text('{"type":"FeatureCollection","features":[]}', encoding="utf-8")
+    workspace.record_import(
+        asset_id="import_testasset",
+        file_name=source.name,
+        format="geojson",
+        relative_path=source.relative_to(root).as_posix(),
+        size_bytes=source.stat().st_size,
+        layer_id=layer.layer_id,
+        source_layer=None,
+        warnings=[],
+    )
+
+    workspace.set_layer_preference(layer.layer_id, visible=False)
+    workspace.set_layer_preference(layer.layer_id, opacity=0.4)
+    restored = WorkspaceStore(
+        root,
+        workspace_id="session-layer-workbench",
+        session_id="session-layer-workbench",
+    )
+    assert restored.manifest().layer_preferences[layer.layer_id].model_dump() == {
+        "visible": False,
+        "opacity": 0.4,
+    }
+
+    removed = restored.remove_layer_assets(layer.layer_id)
+    assert removed.imports == []
+    assert layer.layer_id not in removed.layer_preferences
+    assert not import_root.exists()
+    assert root.exists()

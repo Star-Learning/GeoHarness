@@ -93,6 +93,11 @@ export interface WorkspaceProjectionItem {
   geojson: GeoJsonFeatureCollection
 }
 
+export interface LayerDisplayPreference {
+  visible: boolean
+  opacity: number
+}
+
 const STYLE_BY_NAME: Record<string, LayerStyle> = {
   buildings: { color: '#718096', fillOpacity: 0.34, lineWidth: 1.05 },
   roads: { color: '#334155', fillOpacity: 0, lineWidth: 2.8 },
@@ -224,6 +229,7 @@ export function registerUploadedLayer(fileName: string, value: unknown): LayerRe
 export function registerWorkspaceProjection(
   previous: readonly LayerRecord[],
   value: readonly WorkspaceProjectionItem[],
+  preferences: Readonly<Record<string, LayerDisplayPreference>> = {},
 ): LayerRecord[] {
   const previousById = new Map(previous.map(layer => [layer.id, layer]))
   return value.map(({ metadata, geojson }) => {
@@ -232,6 +238,7 @@ export function registerWorkspaceProjection(
       throw new Error(`Layer ${metadata.layer_id} feature count does not match its Registry metadata.`)
     }
     const current = previousById.get(metadata.layer_id)
+    const preference = preferences[metadata.layer_id]
     return {
       id: metadata.layer_id,
       name: metadata.name,
@@ -246,8 +253,8 @@ export function registerWorkspaceProjection(
       parameters: metadata.parameters,
       storagePath: metadata.storage_path,
       createdAt: metadata.created_at,
-      visible: current?.visible ?? true,
-      opacity: current?.opacity ?? 1,
+      visible: preference?.visible ?? current?.visible ?? true,
+      opacity: preference?.opacity ?? current?.opacity ?? 1,
       style: current?.style ?? styleForLayer(metadata.name),
       data: geojson,
     }

@@ -145,6 +145,34 @@ def dispatch(payload: dict[str, Any]) -> Any:
         registry.clear()
         workspace.reset_assets()
         return workspace.manifest().model_dump(mode="json")
+    if action == "layer_details":
+        value = registry.details(str(payload["layer_id"]), limit=int(payload.get("limit", 100)))
+        import_warnings = [
+            warning
+            for asset in workspace.manifest().imports
+            if asset.layer_id == str(payload["layer_id"])
+            for warning in asset.warnings
+        ]
+        value["warnings"] = list(dict.fromkeys([*import_warnings, *value["warnings"]]))
+        return value
+    if action == "layer_rename":
+        metadata = registry.rename(str(payload["layer_id"]), str(payload["name"]))
+        workspace.sync_layers(registry.list_layers())
+        return metadata.model_dump(mode="json")
+    if action == "layer_remove":
+        layer_id = str(payload["layer_id"])
+        registry.remove(layer_id)
+        workspace.remove_layer_assets(layer_id)
+        workspace.sync_layers(registry.list_layers())
+        return workspace.manifest().model_dump(mode="json")
+    if action == "layer_preference":
+        layer_id = str(payload["layer_id"])
+        registry.metadata(layer_id)
+        return workspace.set_layer_preference(
+            layer_id,
+            visible=payload.get("visible"),
+            opacity=payload.get("opacity"),
+        ).model_dump(mode="json")
     if action == "layers":
         return [item.model_dump(mode="json") for item in registry.list_layers()]
     if action == "geojson":

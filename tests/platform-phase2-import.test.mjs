@@ -154,7 +154,7 @@ test('the native Harness conversation surface owns a format-aware upload dialog 
     '导入矢量数据', 'data/import-capabilities', "'data/import'", 'readFileAsBase64',
     '.geojson,.json,.zip,.gpkg,.csv', 'longitudeField', 'latitudeField', 'sourceLayer',
     "setImportPhase('reading')", "setImportPhase('uploading')", "setImportPhase('success')",
-    'layerWorkspace.project(sessionId, workspace.layers)',
+    'layerWorkspace.project(sessionId, workspace.layers, workspace.preferences ?? {})',
   ]) assert.ok(source.includes(marker), `upload UI is missing ${marker}`)
   assert.doesNotMatch(source, /sessions\.(?:prompt|create|models)|registerUploadedLayer\(/u)
 

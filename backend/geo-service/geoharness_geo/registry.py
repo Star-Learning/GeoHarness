@@ -119,6 +119,11 @@ class LayerRegistry:
 
     def remove(self, layer_id: str) -> None:
         metadata = self.metadata(layer_id)
+        dependents = [item.layer_id for item in self.list_layers() if layer_id in item.parents]
+        if dependents:
+            raise ValueError(
+                f"Cannot remove {layer_id}; derived Layers depend on it: {', '.join(dependents)}"
+            )
         storage = (self.root / metadata.storage_path).resolve()
         if not storage.is_relative_to(self.layers_root.resolve()):
             raise ValueError(f"Unsafe storage path for layer {layer_id}")
@@ -129,6 +134,75 @@ class LayerRegistry:
             self._metadata[layer_id] = metadata
             raise
         storage.unlink(missing_ok=True)
+
+    def rename(self, layer_id: str, name: str) -> LayerMetadata:
+        normalized = name.strip()
+        if not normalized or len(normalized) > 120 or any(ord(character) < 32 for character in normalized):
+            raise ValueError("Layer name must be 1-120 printable characters")
+        metadata = self.metadata(layer_id)
+        previous = metadata.name
+        metadata.name = normalized
+        try:
+            self._persist()
+        except Exception:
+            metadata.name = previous
+            raise
+        return metadata
+
+    def details(self, layer_id: str, *, limit: int = 100) -> dict[str, Any]:
+        if not 1 <= limit <= 100:
+            raise ValueError("Layer preview limit must be between 1 and 100")
+        metadata = self.metadata(layer_id)
+        frame = self.get(layer_id).reset_index(drop=True)
+        attribute_columns = [column for column in frame.columns if column != frame.geometry.name]
+        preview_columns = attribute_columns[:200]
+        preview = frame.loc[:, preview_columns].head(limit)
+        rows = json.loads(preview.to_json(orient="records", date_format="iso", default_handler=str))
+        for index, row in enumerate(rows):
+            row["__row_index"] = index
+            for key, value in list(row.items()):
+                if isinstance(value, str) and len(value) > 500:
+                    row[key] = f"{value[:500]}…"
+        fields = [{
+            "name": column,
+            "type": str(frame[column].dtype),
+            "null_count": int(frame[column].isna().sum()),
+        } for column in preview_columns]
+        null_geometry = int(frame.geometry.isna().sum())
+        empty_geometry = int(frame.geometry.is_empty.sum())
+        invalid_geometry = int((~frame.geometry.is_valid & ~frame.geometry.isna() & ~frame.geometry.is_empty).sum())
+        warnings = []
+        if len(attribute_columns) > len(preview_columns):
+            warnings.append(f"Field preview is limited to 200 of {len(attribute_columns)} fields.")
+        if len(frame) > limit:
+            warnings.append(f"Attribute preview is limited to the first {limit} of {len(frame)} features.")
+        if null_geometry:
+            warnings.append(f"Layer contains {null_geometry} null geometries.")
+        if empty_geometry:
+            warnings.append(f"Layer contains {empty_geometry} empty geometries.")
+        if invalid_geometry:
+            warnings.append(f"Layer contains {invalid_geometry} invalid geometries.")
+        return {
+            "schema_version": "1.0",
+            "metadata": metadata.model_dump(mode="json"),
+            "fields": fields,
+            "rows": rows,
+            "preview": {
+                "limit": limit,
+                "returned_rows": len(rows),
+                "total_rows": len(frame),
+                "total_fields": len(attribute_columns),
+                "fields_truncated": len(attribute_columns) > len(preview_columns),
+                "rows_truncated": len(frame) > limit,
+            },
+            "quality": {
+                "missing_crs": frame.crs is None,
+                "null_geometry_count": null_geometry,
+                "empty_geometry_count": empty_geometry,
+                "invalid_geometry_count": invalid_geometry,
+            },
+            "warnings": warnings,
+        }
 
     def register_file(self, path: str | Path, *, name: str | None = None, source: str = "scenario") -> LayerMetadata:
         source_path = Path(path).resolve()

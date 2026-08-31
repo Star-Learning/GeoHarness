@@ -643,3 +643,25 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   freshness、Node 63/63、Python 19/19、7 个媒体包和 `git diff --check`。
 - [x] 预览 Harness 已成功启动在 `127.0.0.1:31994`；内置浏览器在刷新 localhost 时被当前 URL
   安全策略拒绝，因此本轮自动视觉截图未执行，详见 `BLOCKERS.md`。该限制不影响编译或真实 E2E。
+
+## GIS Agent 平台 v1.0 · Platform Phase 3
+
+状态：完成（2026-08-31）
+
+- [x] Python `LayerRegistry.details` 返回真实 metadata、字段 dtype/空值、前 100 行属性、完整总数、
+  geometry quality 和 warning；最多 200 字段、单字符串 500 字符，截断均显式标记。
+- [x] 在现有地图 Layers 面板中增加数据工作台，不创建平行页面；展示 Layer 来源、CRS、geometry、
+  feature count、字段、质量卡片和可滚动属性表。
+- [x] 地图要素点击会打开对应 Layer 并选中属性行，属性表行点击会高亮同一 canonical map feature；
+  前 100 行外的地图要素明确提示不在当前预览内。
+- [x] 新增 loopback-only `layer/details`、`layer/rename`、`layer/remove` 与 `layer/preference` RPC；
+  Host 校验 Session/Layer ID、名称和 opacity，浏览器不直接修改 Registry。
+- [x] 重命名保持 Layer ID/lineage 并持久恢复；删除有 dependent 的 Layer 会 fail closed，删除叶子
+  Layer 同步清理 canonical GeoPackage、上传资产、Workspace index 与显示偏好。
+- [x] `workspace.json` 增加按 canonical Layer ID 保存的显隐/透明度；`agent/workspace` 投影只返回
+  当前 Layer 的偏好，Provider 重建和页面刷新后可恢复，不同 Session 继续隔离。
+- [x] Python 边界测试覆盖 150 行、205 字段、900 字符、null/empty/invalid geometry、重命名恢复、
+  dependent 删除保护和受限上传资产清理；Host E2E 使用真实 NYC Buildings 360 要素完成完整生命周期。
+- [x] 新增 `docs/architecture/data-layer-workbench.md` 并同步 Workspace/文档索引与 Changelog；最终
+  门禁通过：build、TypeScript、peer dependencies、文档 52/52（98 个本地链接）、Scenario
+  freshness、Node 66/66、Python 23/23、7 个媒体包和 `git diff --check`。

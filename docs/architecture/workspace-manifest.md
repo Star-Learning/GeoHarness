@@ -46,7 +46,8 @@ Manifest 至少包含：
   "input_layers": [],
   "derived_layers": [],
   "exports": [],
-  "runs": []
+  "runs": [],
+  "layer_preferences": {}
 }
 ```
 
@@ -56,6 +57,8 @@ Manifest 至少包含：
 - `exports` 只接受 `exports/` 下已经存在的 GeoJSON、GeoPackage 或 CSV；
 - `runs` 只指向 `runs/<safe-run-id>.json`；Platform Phase 4 会用 Native Session 事件填充正式
   Run Manifest；
+- `layer_preferences` 按仍存在的 canonical Layer ID 保存 `visible` 与 0–1 `opacity`；移除 Layer
+  或 reset 时同步清理；
 - `registry.json` 仍是 Layer metadata 权威来源，`workspace.json` 是跨资产索引，不复制矢量内容。
 
 Manifest 使用同目录临时文件、`fsync` 和原子替换写入，调用方不会读取到半段 JSON。每次 Layer
