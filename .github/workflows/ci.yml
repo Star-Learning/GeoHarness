@@ -48,8 +48,14 @@ jobs:
       - name: Verify TypeScript and peer dependencies
         run: pnpm run typecheck && pnpm peers check
 
-      - name: Run complete test suite
-        run: pnpm test
+      - name: Build and verify generated artifacts
+        run: pnpm run build && pnpm run check:catalogs && pnpm run check:scenarios
+
+      - name: Run Node test suite
+        run: node --test tests/*.test.mjs tests/scenarios/*.test.mjs tests/regression/*.test.mjs
+
+      - name: Run Python test suite
+        run: pnpm run test:python
 
       - name: Verify Demo media
         run: pnpm run check:media

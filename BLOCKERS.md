@@ -16,6 +16,11 @@ GIS Agent 平台 v1.0 的 Platform Phase 0–7 已完成，Phase 8 实现与本�
 当前只等待新提交的 GitHub Actions Windows/Linux 结果，成功后即可创建 `v1.0.0` Tag/Release；
 这属于发布状态而不是代码阻塞，若远端暴露平台差异则按普通 CI 兼容问题修复。
 
+首轮 Phase 8 远程 CI 暴露了一个已解决的 clean-clone 门禁错误：Phase 0 的源码审计测试曾强制
+读取仓库外的 `../deepseek-harness`。正式 GitHub checkout 不应复制上游源码，因此该项现在只在
+相邻开发检出存在时执行；跨平台 CI 仍强制验证精确 Harness peers、全部本仓库测试以及基于已发布
+CLI 的安装/启动/卸载。CI 的 build/Node/Python 也拆成独立步骤，后续平台差异可以直接定位。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、

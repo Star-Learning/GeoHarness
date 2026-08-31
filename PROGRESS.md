@@ -772,7 +772,8 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增全新 `DSH_HOME` 插件生命周期脚本；本地使用真实上游构建 CLI 完成 Bundle 安装、
   `dump-config`、随机 loopback 端口 Web 启动、HTTP 200/HTML 探测、进程停止、卸载与配置清理。
 - [x] GitHub Actions 新增 Ubuntu/Windows clean lifecycle job；保留两平台、Node 22.19/24、
-  Python 3.11 的完整 build/typecheck/test/docs/catalog/media 验收矩阵。
+  Python 3.11 的完整 build/typecheck/test/docs/catalog/media 验收矩阵；clean clone 不再错误要求相邻
+  上游源码目录，源码级 Phase 0 审计仅在该目录存在时执行，CI 改由精确 peers 和真实 lifecycle 验证。
 - [x] 新增 `docs/releases/v1.0.0.md`、兼容矩阵和平台验收说明；更新 README、文档导航、Security
   支持版本及 Changelog `1.0.0` 条目。
 - [x] 本地最终门禁通过：Node 86/86、Python 36/36、TypeScript、peer dependencies、Catalog、

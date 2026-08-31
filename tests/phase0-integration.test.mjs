@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { readFile, access } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -9,6 +10,8 @@ import test from 'node:test'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const upstreamRoot = resolve(repositoryRoot, '..', 'deepseek-harness')
+const upstreamManifest = join(upstreamRoot, 'package.json')
+const hasUpstreamCheckout = existsSync(upstreamManifest)
 const bundleRoot = join(repositoryRoot, 'bundle', 'geoharness-bundle')
 const packageName = '@geoharness/harness-plugin'
 
@@ -16,10 +19,11 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
 
-test('the inspected DeepSeek Harness baseline is readable and still exposes the required integration points', async () => {
-  const manifestPath = join(upstreamRoot, 'package.json')
-  await access(manifestPath, constants.R_OK)
-  const manifest = await readJson(manifestPath)
+test('the inspected DeepSeek Harness baseline is readable and still exposes the required integration points', {
+  skip: hasUpstreamCheckout ? false : 'clean clones validate the pinned release through the plugin lifecycle smoke',
+}, async () => {
+  await access(upstreamManifest, constants.R_OK)
+  const manifest = await readJson(upstreamManifest)
   assert.equal(manifest.version, '0.1.1-rc.2')
   const cordisManifest = await readJson(join(upstreamRoot, 'vendor', 'cordis', 'package.json'))
   assert.equal(cordisManifest.version, '4.0.1')
