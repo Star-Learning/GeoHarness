@@ -2,7 +2,9 @@ import { jsx as _jsx } from 'react/jsx-runtime'
 import * as React from 'react'
 import {
   registerWorkspaceProjection,
+  resetLayerStyle,
   setLayerOpacity,
+  setLayerStyle,
   toggleLayerVisibility,
   type LayerDisplayPreference,
   type GeoJsonFeature,
@@ -22,6 +24,15 @@ import {
   mergeVerificationLayers,
   stepStatus,
 } from './verification-map'
+import {
+  buildFeatureFlow,
+  buildNumericStatistics,
+  groupWorkspaceLayers,
+  mapScaleLabel,
+  parseCsvPreview,
+  suggestCoordinateField,
+  type CsvPreview,
+} from './ui-model'
 
 declare const __GE0HARNESS_CSS__: string
 
@@ -173,6 +184,8 @@ function GeoMap({
 }) {
   const [zoom, setZoom] = React.useState(1)
   const [pan, setPan] = React.useState({ x: 0, y: 0 })
+  const [canvasMode, setCanvasMode] = React.useState<'grid' | 'plain'>('grid')
+  const [legendOpen, setLegendOpen] = React.useState(true)
   const drag = React.useRef<{ x: number, y: number, panX: number, panY: number } | null>(null)
   const bounds = React.useMemo(() => layerBounds(layers), [layers])
   const project = React.useMemo(() => {
@@ -190,6 +203,7 @@ function GeoMap({
   const visibleLayers = layers.filter(layer => layer.visible)
   const centerLongitude = ((bounds[0] + bounds[2]) / 2).toFixed(4)
   const centerLatitude = ((bounds[1] + bounds[3]) / 2).toFixed(4)
+  const visibleCrs = [...new Set(visibleLayers.map(layer => layer.crs))]
   const orderedLayers = [...visibleLayers].sort((left, right) => {
     const order: Record<string, number> = { districts: 0, rivers: 1, roads: 2, buildings: 3 }
     return (order[left.name] ?? 4) - (order[right.name] ?? 4)
@@ -211,13 +225,23 @@ function GeoMap({
   })()
 
   return (
-    <section className="gh-map" aria-label="Map workspace">
+    <section className={`gh-map is-${canvasMode}`} aria-label="Map workspace">
       <div className="gh-map-toolbar" aria-label="Map controls">
         <button type="button" onClick={() => setZoom(value => Math.min(5, value * 1.35))} aria-label="Zoom in">+</button>
         <button type="button" onClick={() => setZoom(value => Math.max(0.7, value / 1.35))} aria-label="Zoom out">−</button>
         <button type="button" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }} aria-label="Fit bounds">⌖</button>
+        <button
+          type="button"
+          aria-label="Toggle map canvas"
+          aria-pressed={canvasMode === 'grid'}
+          title="切换网格底图"
+          onClick={() => setCanvasMode(value => value === 'grid' ? 'plain' : 'grid')}
+        >#</button>
       </div>
-      <div className="gh-map-label"><span>{layers.length > 0 ? 'NYC OPEN DATA' : 'AGENT WORKSPACE'}</span><small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W</small></div>
+      <div className="gh-map-label">
+        <span>{layers.length > 0 ? 'CANONICAL WORKSPACE' : 'AGENT WORKSPACE'}</span>
+        <small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W · {visibleCrs.join(' / ') || 'CRS84'}</small>
+      </div>
       <svg
         className="gh-map-canvas"
         viewBox="0 0 1000 700"
@@ -311,8 +335,16 @@ function GeoMap({
         <strong>No registered layers</strong>
         <p>点击顶部“导入数据”上传自己的矢量文件，或在右侧原生 Harness 对话框让 Agent 发现可用数据。</p>
       </div>}
-      <div className="gh-map-scale"><span /> {zoom.toFixed(1)}×</div>
-      <div className="gh-map-attribution">{layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · map CRS84</div>
+      {visibleLayers.length > 0 && <aside className={`gh-map-legend${legendOpen ? ' is-open' : ''}`} aria-label="Map legend">
+        <button type="button" aria-expanded={legendOpen} onClick={() => setLegendOpen(open => !open)}>
+          <span>Legend</span><small>{visibleLayers.length}</small><i>{legendOpen ? '−' : '+'}</i>
+        </button>
+        {legendOpen && <div>{visibleLayers.slice(-7).reverse().map(layer => <span key={layer.id}>
+          <i style={{ background: layer.style.color }} /><b title={layer.name}>{layer.name}</b><small>{Math.round(layer.opacity * 100)}%</small>
+        </span>)}{visibleLayers.length > 7 && <em>+ {visibleLayers.length - 7} more visible layers</em>}</div>}
+      </aside>}
+      <div className="gh-map-scale"><span /> <b>{mapScaleLabel(bounds, zoom)}</b><small>{zoom.toFixed(1)}×</small></div>
+      <div className="gh-map-attribution">{layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · local vector canvas</div>
       {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
         <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
         <span className="gh-eyebrow">FEATURE INSPECTION</span>
@@ -484,6 +516,7 @@ interface ImportDraft {
   longitudeField: string
   latitudeField: string
   crs: string
+  preview: CsvPreview | null
 }
 
 function readFileAsBase64(file: File, onProgress: (progress: number) => void): Promise<string> {
@@ -679,6 +712,41 @@ function renderLayerRow(
           onKeyUp={event => persistOpacity(event.currentTarget)}
           onBlur={event => persistOpacity(event.currentTarget)}
         />
+        <details className="gh-layer-style-controls">
+          <summary>样式</summary>
+          <div>
+            <label title="图层颜色">
+              <span>颜色</span>
+              <input
+                type="color"
+                value={layer.style.color}
+                aria-label={`${layer.name} color`}
+                onChange={event => {
+                  const color = event.currentTarget.value
+                  layerWorkspace.update(sessionId, current => setLayerStyle(current, layer.id, { color }))
+                }}
+              />
+            </label>
+            <label title="边线宽度">
+              <span>线宽 {layer.style.lineWidth.toFixed(1)}</span>
+              <input
+                type="range"
+                min="0.5"
+                max="6"
+                step="0.5"
+                value={layer.style.lineWidth}
+                aria-label={`${layer.name} line width`}
+                onChange={event => {
+                  const lineWidth = Number(event.currentTarget.value)
+                  layerWorkspace.update(sessionId, current => setLayerStyle(current, layer.id, { lineWidth }))
+                }}
+              />
+            </label>
+            <button type="button" title="恢复 GeoHarness 语义样式" onClick={() => {
+              layerWorkspace.update(sessionId, current => resetLayerStyle(current, layer.id))
+            }}>重置</button>
+          </div>
+        </details>
       </div>
     </article>
   )
@@ -689,15 +757,18 @@ function GeoHarnessLayerPanel({
   selectedLayerId,
   onInspect,
   onPreference,
+  layerStatuses,
+  statisticsCount,
 }: {
   onClose: () => void
   selectedLayerId: string | null
   onInspect: (layerId: string) => void
   onPreference: (layerId: string, preference: Partial<LayerDisplayPreference>) => void
+  layerStatuses: Readonly<Record<string, AgentToolStep['status']>>
+  statisticsCount: number
 }) {
   const workspace = useLayerWorkspace()
-  const inputLayers = workspace.layers.filter(layer => layer.source !== 'derived')
-  const derivedLayers = workspace.layers.filter(layer => layer.source === 'derived')
+  const groups = groupWorkspaceLayers(workspace.layers)
   const visibleCount = workspace.layers.filter(layer => layer.visible).length
   return (
     <section className="gh-sidebar-layers gh-map-layer-panel" aria-label="Layer panel">
@@ -710,19 +781,28 @@ function GeoHarnessLayerPanel({
       </div>
       <div className="gh-layer-section-label">Workspace input data</div>
       <div className="gh-layer-list">
-        {inputLayers.map(layer => renderLayerRow(
+        {groups.input.map(layer => renderLayerRow(
           workspace.sessionId ?? '', layer, workspace.highlightedLayerIds,
           selectedLayerId, onInspect, onPreference,
         ))}
       </div>
-      <div className="gh-layer-section-label">Agent-created outputs</div>
+      <div className="gh-layer-section-label"><span>Intermediate layers</span><small>{groups.intermediate.length}</small></div>
       <div className="gh-layer-list gh-output-list" aria-label="Task output layers">
-        {derivedLayers.length === 0 && <p className="gh-output-empty">Agent 尚未创建派生图层；纯统计结果会显示在右侧。</p>}
-        {derivedLayers.map(layer => renderLayerRow(
+        {groups.intermediate.length === 0 && <p className="gh-output-empty">当前没有被下游继续使用的中间图层。</p>}
+        {groups.intermediate.map(layer => renderLayerRow(
           workspace.sessionId ?? '', layer, workspace.highlightedLayerIds,
-          selectedLayerId, onInspect, onPreference, 'success',
+          selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success',
         ))}
       </div>
+      <div className="gh-layer-section-label"><span>Final result layers</span><small>{groups.final.length}</small></div>
+      <div className="gh-layer-list gh-output-list gh-final-output-list" aria-label="Final result layers">
+        {groups.final.length === 0 && <p className="gh-output-empty">Agent 完成空间 Tool 后，lineage 叶子图层会显示在这里。</p>}
+        {groups.final.map(layer => renderLayerRow(
+          workspace.sessionId ?? '', layer, workspace.highlightedLayerIds,
+          selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success',
+        ))}
+      </div>
+      <div className="gh-layer-statistics-summary"><span>∑</span><b>{statisticsCount} structured statistics</b><small>见右侧 Result Center</small></div>
       <div className="gh-layer-footer">
         <span>{visibleCount} visible</span><span>{workspace.layers[0]?.crs ?? 'CRS —'}</span>
       </div>
@@ -763,8 +843,16 @@ function GeoHarnessDataWorkbench({
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [actionBusy, setActionBusy] = React.useState(false)
   const [removeArmed, setRemoveArmed] = React.useState(false)
+  const [rowQuery, setRowQuery] = React.useState('')
+  const [sortField, setSortField] = React.useState<string | null>(null)
+  const [sortDescending, setSortDescending] = React.useState(false)
   const selectedRow = React.useRef<HTMLTableRowElement | null>(null)
   React.useEffect(() => { setName(layer.name) }, [layer.id, layer.name])
+  React.useEffect(() => {
+    setRowQuery('')
+    setSortField(null)
+    setSortDescending(false)
+  }, [layer.id])
   React.useEffect(() => {
     selectedRow.current?.scrollIntoView({ block: 'nearest' })
   }, [selectedFeatureIndex])
@@ -794,6 +882,31 @@ function GeoHarnessDataWorkbench({
       setRemoveArmed(false)
     } finally {
       setActionBusy(false)
+    }
+  }
+  const visibleRows = React.useMemo(() => {
+    if (details === null) return []
+    const normalized = rowQuery.trim().toLocaleLowerCase()
+    const filtered = normalized === '' ? details.rows : details.rows.filter(row => details.fields.some(field => (
+      attributeValue(row[field.name]).toLocaleLowerCase().includes(normalized)
+    )))
+    if (sortField === null) return filtered
+    return [...filtered].sort((left, right) => {
+      const leftValue = left[sortField]
+      const rightValue = right[sortField]
+      const numeric = typeof leftValue === 'number' && typeof rightValue === 'number'
+      const order = numeric
+        ? leftValue - rightValue
+        : attributeValue(leftValue).localeCompare(attributeValue(rightValue), 'zh-CN', { numeric: true })
+      return sortDescending ? -order : order
+    })
+  }, [details, rowQuery, sortField, sortDescending])
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) setSortDescending(value => !value)
+    else {
+      setSortField(field)
+      setSortDescending(false)
     }
   }
 
@@ -827,10 +940,20 @@ function GeoHarnessDataWorkbench({
       <div className="gh-data-fields" aria-label="Layer fields">
         {details.fields.map(field => <span key={field.name}><b>{field.name}</b><small>{field.type} · {field.null_count} null</small></span>)}
       </div>
+      <div className="gh-table-controls">
+        <label>
+          <span aria-hidden="true">⌕</span>
+          <input value={rowQuery} onChange={event => setRowQuery(event.currentTarget.value)} placeholder="筛选当前 100 行属性…" aria-label="筛选属性表" />
+          {rowQuery !== '' && <button type="button" onClick={() => setRowQuery('')} aria-label="清除属性筛选">×</button>}
+        </label>
+        <small>{visibleRows.length} / {details.preview.returned_rows} preview rows</small>
+      </div>
       <div className="gh-attribute-table-wrap">
         <table className="gh-attribute-table">
-          <thead><tr><th>#</th>{details.fields.map(field => <th key={field.name}>{field.name}</th>)}</tr></thead>
-          <tbody>{details.rows.map(row => {
+          <thead><tr><th>#</th>{details.fields.map(field => <th key={field.name}><button type="button" onClick={() => toggleSort(field.name)}>
+            {field.name}<i>{sortField === field.name ? sortDescending ? '↓' : '↑' : '↕'}</i>
+          </button></th>)}</tr></thead>
+          <tbody>{visibleRows.map(row => {
             const rowIndex = row.__row_index
             const selected = rowIndex === selectedFeatureIndex
             return <tr
@@ -860,17 +983,22 @@ function ResultCenterPanel({
   error,
   onDownload,
   onLayer,
+  onLayerFocus,
+  focusedLayerId,
 }: {
   result: ResultCenter | null
   downloading: string | null
   error: string | null
   onDownload: (asset: ResultAsset) => void
   onLayer: (layerId: string) => void
+  onLayerFocus: (layerId: string | null) => void
+  focusedLayerId: string | null
 }) {
   if (result === null) return <section className="gh-agent-block gh-result-center" aria-label="Result Center">
     <span className="gh-eyebrow">RESULT CENTER</span>
     <p className="gh-result-empty">真实 Tool 完成后，这里会展示可核查结果、统计和下载资产。</p>
   </section>
+  const featureFlow = buildFeatureFlow(result.input_layers, result.output_layers)
   return <section className={`gh-agent-block gh-result-center is-${result.status}`} aria-label="Result Center">
     <header>
       <span><span className="gh-eyebrow">RESULT CENTER · TURN {result.turn}</span><small>{result.provider ?? 'provider'} / {result.model ?? 'model'}</small></span>
@@ -883,17 +1011,49 @@ function ResultCenterPanel({
       <span><small>Outputs</small><b>{result.output_layers.length}</b></span>
       <span><small>Assets</small><b>{result.assets.length}</b></span>
     </div>
+    {featureFlow.items.length > 1 && <div className="gh-result-flow" aria-label="Layer feature-count flow">
+      <span className="gh-result-section-label">Registered layer feature flow</span>
+      {featureFlow.omitted > 0 && <small>为保持可读性省略 {featureFlow.omitted} 个较早的中间图层</small>}
+      <div>{featureFlow.items.map(item => <button
+        type="button"
+        key={`${item.role}:${item.layer_id}`}
+        className={focusedLayerId === item.layer_id ? 'is-focused' : ''}
+        onFocus={() => onLayerFocus(item.layer_id)}
+        onMouseEnter={() => onLayerFocus(item.layer_id)}
+        onMouseLeave={() => onLayerFocus(null)}
+        onClick={() => onLayer(item.layer_id)}
+      >
+        <span><b>{item.name}</b><small>{item.role}</small><em>{item.feature_count.toLocaleString()}</em></span>
+        <i><span style={{ width: `${item.width}%` }} /></i>
+      </button>)}</div>
+    </div>}
     {(result.input_layers.length > 0 || result.output_layers.length > 0) && <div className="gh-result-layers">
-      {[...result.input_layers, ...result.output_layers].map(layer => <button type="button" key={`${layer.role}:${layer.layer_id}`} onClick={() => onLayer(layer.layer_id)}>
+      {[...result.input_layers, ...result.output_layers].map(layer => <button
+        type="button"
+        className={focusedLayerId === layer.layer_id ? 'is-focused' : ''}
+        key={`${layer.role}:${layer.layer_id}`}
+        onFocus={() => onLayerFocus(layer.layer_id)}
+        onMouseEnter={() => onLayerFocus(layer.layer_id)}
+        onMouseLeave={() => onLayerFocus(null)}
+        onClick={() => onLayer(layer.layer_id)}
+      >
         <i>{layer.role === 'output' ? '↗' : '→'}</i><span><b>{layer.name}</b><small>{layer.role} · {layer.feature_count} features · {layer.crs}</small></span>
       </button>)}
     </div>}
     {result.statistics.length > 0 && <div className="gh-result-statistics">
       <span className="gh-result-section-label">Verified Tool statistics</span>
-      {result.statistics.map(statistic => <details key={statistic.call_id} open={result.statistics.length === 1}>
-        <summary>{statistic.tool} · {statistic.summary ?? 'structured result'}</summary>
-        <dl>{flattenResultData(statistic.data).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd title={value}>{value}</dd></React.Fragment>)}</dl>
-      </details>)}
+      {result.statistics.map(statistic => {
+        const chartRows = buildNumericStatistics(statistic.data)
+        return <details key={statistic.call_id} open={result.statistics.length === 1}>
+          <summary>{statistic.tool} · {statistic.summary ?? 'structured result'}</summary>
+          {chartRows.length > 1 && <div className="gh-stat-chart" aria-label={`${statistic.tool} numeric statistics`}>
+            {chartRows.map(row => <span key={row.path} title={`${row.path}: ${row.value}`}>
+              <small>{row.path}</small><i><span style={{ width: `${row.width}%` }} /></i><b>{Number(row.value.toPrecision(6)).toLocaleString()}</b>
+            </span>)}
+          </div>}
+          <dl>{flattenResultData(statistic.data).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd title={value}>{value}</dd></React.Fragment>)}</dl>
+        </details>
+      })}
     </div>}
     <div className="gh-result-provenance">
       <span><small>CRS</small><b>{result.crs.join(' · ') || '—'}</b></span>
@@ -926,6 +1086,8 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [runStatus, setRunStatus] = React.useState<'ready' | 'running' | 'success' | 'failed'>('ready')
   const [runError, setRunError] = React.useState<string | null>(null)
   const [selectedStepId, setSelectedStepId] = React.useState<string | null>(null)
+  const [focusedLayerId, setFocusedLayerId] = React.useState<string | null>(null)
+  const [presentationMode, setPresentationMode] = React.useState(false)
   const [runHistoryCount, setRunHistoryCount] = React.useState(0)
   const [taskSteps, setTaskSteps] = React.useState<AgentToolStep[]>([])
   const [agentStream, setAgentStream] = React.useState<AgentStreamItem[]>([])
@@ -953,11 +1115,14 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [downloadingAsset, setDownloadingAsset] = React.useState<string | null>(null)
   const [downloadError, setDownloadError] = React.useState<string | null>(null)
   const fileInput = React.useRef<HTMLInputElement | null>(null)
+  const shell = React.useRef<HTMLElement | null>(null)
   const detailsRequest = React.useRef(0)
   const activeGoalSeq = React.useRef<number | null>(null)
   const lastAutoStepId = React.useRef<string | null>(null)
   const lastRunStatus = React.useRef<'ready' | 'running' | 'success' | 'failed'>('ready')
   const lastWorkspaceSeq = React.useRef<number | null>(null)
+  const lastWorkspaceSession = React.useRef<string | null>(null)
+  const bootstrapSession = React.useRef<string | null>(null)
   const lastRunManifestKey = React.useRef<string | null>(null)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
   const previousLayerCount = React.useRef(0)
@@ -966,6 +1131,12 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
 
   React.useEffect(() => {
     previousLayerCount.current = 0
+    activeGoalSeq.current = null
+    lastAutoStepId.current = null
+    lastRunStatus.current = 'ready'
+    lastWorkspaceSeq.current = null
+    lastWorkspaceSession.current = null
+    bootstrapSession.current = null
     setLayerPanelOpen(false)
     setImportDraft(null)
     setImportPhase('idle')
@@ -975,6 +1146,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     setInspectedLayerId(null)
     setLayerDetails(null)
     setLayerDetailsError(null)
+    setFocusedLayerId(null)
     setRunManifests([])
     setResultCenter(null)
     setDownloadingAsset(null)
@@ -983,11 +1155,53 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   }, [sessionId])
 
   React.useEffect(() => {
+    const update = () => setPresentationMode(document.fullscreenElement !== null)
+    document.addEventListener('fullscreenchange', update)
+    return () => document.removeEventListener('fullscreenchange', update)
+  }, [])
+
+  // Hydrate canonical state independently from Session history. Workspace is
+  // restored first so a completed conversation does not wait behind Result or
+  // import-capability reads after a service restart.
+  React.useEffect(() => {
     let disposed = false
-    void agent.importCapabilities()
-      .then(value => { if (!disposed) setImportCapabilities(value) })
-      .catch(() => {})
-    return () => { disposed = true }
+    bootstrapSession.current = sessionId
+    layerWorkspace.activate(sessionId)
+    setWorkspaceStatus('restoring canonical workspace…')
+    const hydrate = async () => {
+      try {
+        const workspace = await agent.workspace()
+        if (disposed) return
+        if (workspace.status !== 'ready') throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed')
+        layerWorkspace.project(sessionId, workspace.layers, workspace.preferences ?? {})
+        lastWorkspaceSession.current = sessionId
+        setWorkspaceStatus(`${workspace.layers.length} verified layers`)
+      } catch (error) {
+        if (!disposed) setWorkspaceStatus(error instanceof Error ? error.message : String(error))
+      }
+      const [capabilities, runs] = await Promise.all([
+        agent.importCapabilities().catch(() => null),
+        agent.runs().catch(() => [] as AgentRunManifest[]),
+      ])
+      if (disposed) return
+      if (capabilities !== null) setImportCapabilities(capabilities)
+      setRunManifests(runs)
+      const latest = runs.at(-1)
+      if (latest !== undefined) {
+        try {
+          const result = await agent.result(latest.run_id)
+          if (!disposed) setResultCenter(result)
+        } catch {
+          // A just-written Run projection is retried by the regular poll.
+        }
+      }
+      if (bootstrapSession.current === sessionId) bootstrapSession.current = null
+    }
+    void hydrate()
+    return () => {
+      disposed = true
+      if (bootstrapSession.current === sessionId) bootstrapSession.current = null
+    }
   }, [agent, sessionId])
 
   React.useEffect(() => {
@@ -1050,7 +1264,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           }
           lastRunStatus.current = status
         }
-        if (lastRunManifestKey.current !== runManifestKey) {
+        if (bootstrapSession.current !== sessionId && lastRunManifestKey.current !== runManifestKey) {
           try {
             const runs = await agent.runs()
             if (disposed) return
@@ -1074,17 +1288,23 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             // Native stream remains usable while a just-appended Run projection catches up.
           }
         }
-        if (lastWorkspaceSeq.current !== workspaceSeq) {
+        if (bootstrapSession.current === sessionId) {
+          lastWorkspaceSeq.current = workspaceSeq
+        } else if (lastWorkspaceSession.current !== sessionId
+          || (lastWorkspaceSeq.current !== null && lastWorkspaceSeq.current !== workspaceSeq)) {
           try {
             const workspace = await agent.workspace()
             if (disposed) return
             if (workspace.status !== 'ready') throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed')
             layerWorkspace.project(sessionId, workspace.layers, workspace.preferences ?? {})
             lastWorkspaceSeq.current = workspaceSeq
+            lastWorkspaceSession.current = sessionId
             setWorkspaceStatus(`${workspace.layers.length} verified layers`)
           } catch (error) {
             if (!disposed) setWorkspaceStatus(error instanceof Error ? error.message : String(error))
           }
+        } else if (lastWorkspaceSeq.current === null) {
+          lastWorkspaceSeq.current = workspaceSeq
         }
       } catch (error) {
         if (!disposed) {
@@ -1119,11 +1339,22 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       || layer.generatedBy === selectedStepId
       || (semanticStepId !== null && layer.generatedBy === semanticStepId))
     .map(layer => layer.id))
+  if (focusedLayerId !== null && layers.some(layer => layer.id === focusedLayerId)) highlightedLayerIds.add(focusedLayerId)
   const highlightedLayerKey = [...highlightedLayerIds].sort().join('\n')
   React.useEffect(() => {
     layerWorkspace.highlight(sessionId, highlightedLayerIds)
   }, [sessionId, highlightedLayerKey])
   const successfulSteps = taskSteps.filter(step => step.status === 'success')
+  const failedSteps = taskSteps.filter(step => step.status === 'failed')
+  const layerStatuses = Object.fromEntries(layers.flatMap(layer => {
+    const step = taskSteps.find(candidate => candidate.id === layer.generatedBy
+      || (typeof candidate.arguments.step_id === 'string' && candidate.arguments.step_id === layer.generatedBy))
+    return step === undefined ? [] : [[layer.id, step.status]]
+  })) as Record<string, AgentToolStep['status']>
+  const progress = taskSteps.length === 0
+    ? 0
+    : Math.round((successfulSteps.length + failedSteps.length) / taskSteps.length * 100)
+  const liveStep = taskSteps.find(step => step.status === 'running') ?? selectedStep ?? taskSteps.at(-1)
   const importBusy = importPhase === 'reading' || importPhase === 'uploading'
   const inspectedLayer = inspectedLayerId === null ? null : layers.find(layer => layer.id === inspectedLayerId) ?? null
   const recentRunManifests = runManifests.slice(-3).reverse()
@@ -1153,6 +1384,27 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     } finally {
       if (detailsRequest.current === request) setLayerDetailsLoading(false)
     }
+  }
+
+  const focusLayer = (layerId: string, inspect: boolean) => {
+    setFocusedLayerId(layerId)
+    const layer = layers.find(candidate => candidate.id === layerId)
+    const step = layer === undefined ? undefined : taskSteps.find(candidate => candidate.id === layer.generatedBy
+      || (typeof candidate.arguments.step_id === 'string' && candidate.arguments.step_id === layer.generatedBy))
+    if (step !== undefined) setSelectedStepId(step.id)
+    if (inspect) {
+      setLayerPanelOpen(false)
+      void loadLayerDetails(layerId)
+    }
+  }
+
+  const togglePresentationMode = async () => {
+    if (document.fullscreenElement !== null) {
+      await document.exitFullscreen()
+      return
+    }
+    const target = shell.current?.closest('[data-conversation-scroll]') ?? shell.current
+    await target?.requestFullscreen()
   }
 
   const refreshCanonicalWorkspace = async () => {
@@ -1187,7 +1439,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     setLayerDetails(null)
   }
 
-  const selectImportFile = (file: File) => {
+  const selectImportFile = async (file: File) => {
     const extension = `.${file.name.split('.').pop()?.toLowerCase() ?? ''}`
     if (!importCapabilities.extensions.includes(extension)) {
       setImportDraft(null)
@@ -1201,14 +1453,23 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       setImportMessage(`文件必须大于 0 且不超过 ${fileSizeLabel(importCapabilities.max_file_bytes)}。`)
       return
     }
+    let preview: CsvPreview | null = null
+    if (extension === '.csv') {
+      try {
+        preview = parseCsvPreview(await file.slice(0, 128 * 1024).text())
+      } catch {
+        // The canonical importer will report a bounded parse error if local preview fails.
+      }
+    }
     setImportDraft({
       file,
       extension,
       name: file.name.replace(/\.(?:geojson|json|zip|gpkg|csv)$/iu, ''),
       sourceLayer: '',
-      longitudeField: extension === '.csv' ? 'longitude' : '',
-      latitudeField: extension === '.csv' ? 'latitude' : '',
+      longitudeField: extension === '.csv' ? suggestCoordinateField(preview?.fields ?? [], 'longitude') || 'longitude' : '',
+      latitudeField: extension === '.csv' ? suggestCoordinateField(preview?.fields ?? [], 'latitude') || 'latitude' : '',
       crs: extension === '.csv' ? 'EPSG:4326' : '',
+      preview,
     })
     setImportPhase('idle')
     setImportProgress(0)
@@ -1220,6 +1481,13 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     const draft = importDraft
     if (draft === null || importBusy) return
     try {
+      if (draft.name.trim() === '') throw new Error('请填写图层名称。')
+      if (draft.extension === '.csv' && (draft.longitudeField.trim() === '' || draft.latitudeField.trim() === '')) {
+        throw new Error('CSV 必须选择经度和纬度字段。')
+      }
+      if (draft.extension === '.csv' && draft.longitudeField === draft.latitudeField) {
+        throw new Error('经度和纬度不能使用同一个字段。')
+      }
       setImportPhase('reading')
       setImportProgress(2)
       setImportMessage('正在读取本地文件…')
@@ -1239,7 +1507,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
         latitudeField: draft.extension === '.csv' ? draft.latitudeField.trim() || undefined : undefined,
         crs: draft.extension === '.csv' ? draft.crs.trim() || undefined : undefined,
       })
-      const workspace = await refreshCanonicalWorkspace()
+      await refreshCanonicalWorkspace()
       setLayerPanelOpen(true)
       setImportProgress(100)
       setImportPhase('success')
@@ -1287,7 +1555,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   }
 
   return (
-    <main className="gh-shell" data-geoharness-plugin="loaded" data-geoharness-phase="10" data-geoharness-agent="native" data-conversation-composer-overlay="">
+    <main ref={shell} className={`gh-shell${presentationMode ? ' is-presentation' : ''}`} data-geoharness-plugin="loaded" data-geoharness-phase="10" data-geoharness-agent="native" data-conversation-composer-overlay="">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
@@ -1295,7 +1563,10 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
         </div>
         <div className="gh-launcher">
           {importPhase !== 'idle' && <span className={`gh-import-summary is-${importPhase}`}>{importPhase === 'success' ? '✓' : importBusy ? '…' : '!'} {importMessage}</span>}
-          <span className="gh-status"><i /> Native Harness Agent · {layers.length} layers · {featureCount} features</span>
+          <span className={`gh-status is-${runStatus}`}><i /> {runStatus === 'running' ? `Agent 正在执行 · ${progress}%` : runStatus === 'failed' ? 'Agent 执行失败' : runStatus === 'success' ? 'Agent 运行完成' : 'Native Harness Agent'} · {layers.length} layers · {featureCount} features</span>
+          <button type="button" className="gh-presentation-button" onClick={() => {
+            void togglePresentationMode().catch(reason => setWorkspaceStatus(reason instanceof Error ? reason.message : String(reason)))
+          }}><span aria-hidden="true">{presentationMode ? '↙' : '↗'}</span> {presentationMode ? '退出演示' : '演示模式'}</button>
           <button type="button" className="gh-import-button" onClick={() => fileInput.current?.click()} disabled={importBusy}>
             <span aria-hidden="true">⇧</span> 导入数据
           </button>
@@ -1307,7 +1578,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             onChange={event => {
               const file = event.currentTarget.files?.[0]
               event.currentTarget.value = ''
-              if (file !== undefined) selectImportFile(file)
+              if (file !== undefined) void selectImportFile(file)
             }}
           />
         </div>
@@ -1329,9 +1600,23 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             <input disabled={importBusy || importPhase === 'success'} value={importDraft.sourceLayer} maxLength={180} placeholder="单图层文件可留空" onChange={event => setImportDraft({ ...importDraft, sourceLayer: event.currentTarget.value })} />
           </label>}
           {importDraft.extension === '.csv' && <div className="gh-import-grid">
-            <label>经度字段<input disabled={importBusy || importPhase === 'success'} value={importDraft.longitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value })} /></label>
-            <label>纬度字段<input disabled={importBusy || importPhase === 'success'} value={importDraft.latitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value })} /></label>
+            <label>经度字段{importDraft.preview === null
+              ? <input disabled={importBusy || importPhase === 'success'} value={importDraft.longitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value })} />
+              : <select disabled={importBusy || importPhase === 'success'} value={importDraft.longitudeField} onChange={event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value })}>
+                  <option value="">请选择字段</option>{importDraft.preview.fields.map(field => <option key={field} value={field}>{field}</option>)}
+                </select>}</label>
+            <label>纬度字段{importDraft.preview === null
+              ? <input disabled={importBusy || importPhase === 'success'} value={importDraft.latitudeField} maxLength={120} onChange={event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value })} />
+              : <select disabled={importBusy || importPhase === 'success'} value={importDraft.latitudeField} onChange={event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value })}>
+                  <option value="">请选择字段</option>{importDraft.preview.fields.map(field => <option key={field} value={field}>{field}</option>)}
+                </select>}</label>
             <label>源 CRS<input disabled={importBusy || importPhase === 'success'} value={importDraft.crs} maxLength={80} onChange={event => setImportDraft({ ...importDraft, crs: event.currentTarget.value })} /></label>
+          </div>}
+          {importDraft.preview !== null && <div className="gh-import-preview">
+            <header><span>字段预览</span><small>{importDraft.preview.fields.length} fields · {importDraft.preview.delimiter === '\t' ? 'TAB' : importDraft.preview.delimiter} delimiter</small></header>
+            <div><table><thead><tr>{importDraft.preview.fields.map(field => <th key={field}>{field}</th>)}</tr></thead>
+              <tbody>{importDraft.preview.rows.slice(0, 5).map((row, rowIndex) => <tr key={rowIndex}>{importDraft.preview?.fields.map((field, index) => <td key={field}>{row[index] ?? ''}</td>)}</tr>)}</tbody>
+            </table></div>
           </div>}
           {importPhase !== 'idle' && <div className={`gh-import-progress is-${importPhase}`}>
             <span><i style={{ width: `${importProgress}%` }} /></span>
@@ -1357,9 +1642,16 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             runStatus={runStatus}
             onSelect={value => {
               setSelectedFeature(value)
-              if (value !== null) void loadLayerDetails(value.layer.id)
+              if (value !== null) focusLayer(value.layer.id, true)
+              else setFocusedLayerId(null)
             }}
           />
+          <div className={`gh-execution-strip is-${runStatus}`} aria-live="polite">
+            <i aria-hidden="true" />
+            <span><b>{runStatus === 'ready' ? '等待空间分析目标' : runStatus === 'running' ? 'Agent 正在执行真实 GIS Tool' : runStatus === 'success' ? '分析完成，结果已核查' : '运行中断，请查看错误'}</b>
+              <small>{liveStep?.title ?? 'Native Harness Session 与 Workspace 已连接'}</small></span>
+            <em><span><i style={{ width: `${progress}%` }} /></span><b>{successfulSteps.length}/{taskSteps.length || 0}</b></em>
+          </div>
           <button
             type="button"
             className="gh-map-layers-toggle"
@@ -1373,8 +1665,10 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             <GeoHarnessLayerPanel
               onClose={() => setLayerPanelOpen(false)}
               selectedLayerId={inspectedLayerId}
-              onInspect={layerId => { void loadLayerDetails(layerId) }}
+              onInspect={layerId => focusLayer(layerId, true)}
               onPreference={persistLayerPreference}
+              layerStatuses={layerStatuses}
+              statisticsCount={resultCenter?.statistics.length ?? 0}
             />
           </div>}
           {inspectedLayer !== null && <GeoHarnessDataWorkbench
@@ -1383,7 +1677,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             loading={layerDetailsLoading}
             error={layerDetailsError}
             selectedFeatureIndex={selectedFeature?.layer.id === inspectedLayer.id ? selectedFeature.featureIndex : null}
-            onClose={() => { setInspectedLayerId(null); setLayerDetails(null); setLayerDetailsError(null) }}
+            onClose={() => { setInspectedLayerId(null); setLayerDetails(null); setLayerDetailsError(null); setFocusedLayerId(null) }}
             onSelectRow={index => {
               const feature = inspectedLayer.data.features[index]
               if (feature !== undefined) setSelectedFeature({ layer: inspectedLayer, feature, featureIndex: index })
@@ -1414,7 +1708,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
                   data-step-status={step.status}
                   key={step.id}
                 >
-                  <button type="button" className="gh-step-button" onClick={() => setSelectedStepId(step.id)}>
+                  <button type="button" className="gh-step-button" onClick={() => { setFocusedLayerId(null); setSelectedStepId(step.id) }}>
                     <i>{stepIcon(step.status, index)}</i>
                     <span>
                       <b>{step.title}</b>
@@ -1433,7 +1727,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               <div><span>Tools</span><b>{successfulSteps.length}/{taskSteps.length} success</b></div>
               <div><span>Outputs</span><b>{derivedLayers.length} layers</b></div>
               <div><span>Turns</span><b>{runHistoryCount}</b></div>
-              <div><span>Session</span><b>{sessionId.slice(0, 8)}</b></div>
+              <div><span>Session</span><b title={sessionId}>{sessionId.slice(0, 12)}</b></div>
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               <button type="button" className="gh-diagnostics-button" disabled={downloadingAsset !== null} onClick={() => { void downloadDiagnostics() }}>
                 {downloadingAsset === 'diagnostic' ? '正在生成诊断…' : '导出结构化诊断'}
@@ -1445,7 +1739,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               downloading={downloadingAsset}
               error={downloadError}
               onDownload={asset => { void downloadResult(asset) }}
-              onLayer={layerId => { setLayerPanelOpen(true); void loadLayerDetails(layerId) }}
+              onLayer={layerId => focusLayer(layerId, true)}
+              onLayerFocus={layerId => setFocusedLayerId(layerId)}
+              focusedLayerId={focusedLayerId}
             />
             <section className="gh-agent-block gh-run-history" aria-label="Agent Run history">
               <span className="gh-eyebrow">RUN MANIFEST · REVISIONS</span>

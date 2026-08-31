@@ -288,3 +288,29 @@ export function setLayerOpacity(layers: readonly LayerRecord[], layerId: string,
   const normalized = Math.max(0, Math.min(1, opacity))
   return layers.map(layer => layer.id === layerId ? { ...layer, opacity: normalized } : layer)
 }
+
+export function setLayerStyle(
+  layers: readonly LayerRecord[],
+  layerId: string,
+  style: Partial<LayerStyle>,
+): LayerRecord[] {
+  return layers.map(layer => {
+    if (layer.id !== layerId) return layer
+    const color = typeof style.color === 'string' && /^#[0-9a-f]{6}$/iu.test(style.color)
+      ? style.color.toLowerCase()
+      : layer.style.color
+    const fillOpacity = style.fillOpacity === undefined
+      ? layer.style.fillOpacity
+      : Math.max(0, Math.min(1, style.fillOpacity))
+    const lineWidth = style.lineWidth === undefined
+      ? layer.style.lineWidth
+      : Math.max(0.5, Math.min(6, style.lineWidth))
+    return { ...layer, style: { color, fillOpacity, lineWidth } }
+  })
+}
+
+export function resetLayerStyle(layers: readonly LayerRecord[], layerId: string): LayerRecord[] {
+  return layers.map(layer => layer.id === layerId
+    ? { ...layer, style: styleForLayer(layer.name) }
+    : layer)
+}

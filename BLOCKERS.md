@@ -17,6 +17,11 @@ Session Workspace、
 按 2026-08-31 的发布决策，本轮不再 push、不创建远程 Tag 或 GitHub Release；远程部署与
 跨平台 Actions 延后处理，因此既不是当前完成条件，也不是活跃阻塞。
 
+2026-08-31 的 UI / 前端 / 可视化优化也没有活跃阻塞。真实 Harness 浏览器已验证 15 个 Layer、
+847 个地图 display features、lineage 分组、Legend、缩放、属性筛选/排序与 map-linked selection；
+全量 Node 91/91、Python 37/37 通过。当前在线页面为 `http://127.0.0.1:31994/`，仍按既定决策不
+push、不部署 GitHub。
+
 ## 延后的远程部署
 
 以下 GitHub Actions 记录只保留为后续部署诊断历史，不影响已经通过的本地 v1.0 验收。

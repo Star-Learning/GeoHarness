@@ -800,3 +800,23 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 保存 4248 个连续真实 UI 帧并编码为 1920×1080、30 fps、H.264 High、17:42 的本地 MP4；
   第 15 分钟编码帧与源帧 SSIM 为 0.998184，确认后半段无清晰度退化，结尾对 Result 与 Map
   增加动态描边。MP4 按仓库策略仅保存在本地，不进入 Git 历史。
+
+## UI / 前端 / 可视化优化
+
+状态：完成（2026-08-31）
+
+- [x] 加强 Step → Layer → Map → Result 双向联动；Tool step、结果 Layer、地图要素和属性行共享
+  canonical Layer ID / feature index，不从 Agent 文本猜测状态。
+- [x] Layers 按真实 lineage 分为输入、中间和最终结果；Result Center 从结构化 Tool/Layer 数据生成
+  有界 feature flow 和数值图，不加载 Scenario 预设答案。
+- [x] 新增动态运行状态条、Legend、近似距离比例尺、画布切换、颜色/线宽控制与 Fullscreen 演示模式；
+  保持 Harness 原生项目/会话、设置、模型选择和 composer。
+- [x] 属性工作台新增前 100 行筛选、字段排序和地图选中联动；CSV 导入新增有界字段/样例预览、
+  delimiter/引号识别和经纬度字段建议，canonical 导入仍由 Python 校验。
+- [x] 修复服务重启后的已完成会话地图恢复：Workspace hydration 与新 Session 事件解耦，先恢复
+  disk-backed Registry，再异步恢复 Run、Result 与导入能力；真实会话约 3.1 秒恢复 15 Layers、
+  951 registry features 和 847 个 SVG display features。
+- [x] 浏览器验证 `bldg_final_district` 11 行按 `101` 筛为 6 行，表格/地图单要素同步高亮；
+  Legend、滚轮/按钮缩放、Result Center 与原生输入区均正常。
+- [x] 新增 5 项 UI 模型/接线测试；最终全量门禁通过 TypeScript、Catalog、64 份 Markdown / 126 个
+  本地链接、六 Scenario freshness、Node 91/91、Python 37/37 和 `git diff --check`。

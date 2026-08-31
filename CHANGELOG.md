@@ -4,6 +4,20 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 
 ## [Unreleased]
 
+### Added
+
+- Structured Result Center feature-flow and numeric visualizations, lineage-based Layer groups, a dynamic map legend, bounded CSV field preview and presentation mode.
+- Map-linked attribute filtering/sorting, session-local Layer color/line-width controls and UI visualization regression tests.
+
+### Changed
+
+- Canonical Workspace restoration now runs independently from new Session events and restores the map before Run/import metadata after a service restart.
+- Opening a Layer data workbench collapses the Layer drawer and reallocates width from the Agent column for a denser attribute table.
+
+### Fixed
+
+- Completed historical Sessions no longer remain on an empty map until another conversation event is appended.
+
 ## [1.0.0] - 2026-08-31
 
 ### Added

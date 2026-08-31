@@ -10,15 +10,16 @@
 4. [Workspace Manifest](architecture/workspace-manifest.md)：查看 Session 持久化目录、资产索引、恢复与安全清理契约。
 5. [用户矢量数据导入](architecture/user-data-import.md)：查看四种格式、loopback 上传、大小限制、ZIP 安全和 canonical 注册契约。
 6. [数据与 Layer 工作台](architecture/data-layer-workbench.md)：查看 canonical metadata、属性预览、质量检查、选择联动和 Layer 生命周期。
-7. [Geo Tool 契约](architecture/tool-spec.md)：查看 Geo Backend、Layer Registry、工具输入输出与 CRS 规则。
-8. [Native Agent Run Manifest](architecture/run-manifest.md)：查看 Session 事件投影、运行恢复、错误分类和五类通用修订。
-9. [Result Center 与安全导出](architecture/result-center.md)：查看权威统计、来源、最终 Layer、三格式导出与受限下载。
-10. [Tool / Dataset 扩展契约](architecture/extension-contract.md)与[自动生成 Catalog 清单](architecture/catalog-reference.md)：查看 schema、第三方 executor、缺失能力和版本冲突门禁。
-11. [稳定性、安全与性能边界](architecture/resilience-security.md)：查看文件/Layer 上限、分页、幂等、回滚、进程退出和诊断导出。
-12. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
-13. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
-14. [Platform v1.0 验收](testing/platform-v1-acceptance.md)：查看三条用户上传 E2E、独立空间 oracle 与发布门禁。
-15. [v1.0.0 Release Notes](releases/v1.0.0.md)与[兼容矩阵](releases/compatibility-matrix.md)：查看正式版本能力、运行环境和明确边界。
+7. [UI 与可视化联动](architecture/ui-visualization.md)：查看 Step/Layer/Map/Result 同步、结果图、Legend、属性表、导入预览和演示模式。
+8. [Geo Tool 契约](architecture/tool-spec.md)：查看 Geo Backend、Layer Registry、工具输入输出与 CRS 规则。
+9. [Native Agent Run Manifest](architecture/run-manifest.md)：查看 Session 事件投影、运行恢复、错误分类和五类通用修订。
+10. [Result Center 与安全导出](architecture/result-center.md)：查看权威统计、来源、最终 Layer、三格式导出与受限下载。
+11. [Tool / Dataset 扩展契约](architecture/extension-contract.md)与[自动生成 Catalog 清单](architecture/catalog-reference.md)：查看 schema、第三方 executor、缺失能力和版本冲突门禁。
+12. [稳定性、安全与性能边界](architecture/resilience-security.md)：查看文件/Layer 上限、分页、幂等、回滚、进程退出和诊断导出。
+13. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
+14. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
+15. [Platform v1.0 验收](testing/platform-v1-acceptance.md)：查看三条用户上传 E2E、独立空间 oracle 与发布门禁。
+16. [v1.0.0 Release Notes](releases/v1.0.0.md)与[兼容矩阵](releases/compatibility-matrix.md)：查看正式版本能力、运行环境和明确边界。
 
 安装与普通使用请先看仓库根目录的 [README](../README.md)；当前开发进度和已知问题分别记录在 [PROGRESS](../PROGRESS.md) 与 [BLOCKERS](../BLOCKERS.md)。
 
