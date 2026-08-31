@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../bundle/geoharness-bundle/catalog/schemas/dataset-catalog.schema.json",
   "schema_version": "1.0",
   "id": "nyc-core-official",
   "title": "NYC Core Official GIS Catalog",

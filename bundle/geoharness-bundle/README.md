@@ -62,6 +62,13 @@ and returns canonical Layer IDs for official NYC buildings, roads, rivers, distr
 Manhattan buildings. The catalog describes data capabilities only; it does not prescribe an
 analysis plan.
 
+Dataset and Tool declarations are versioned JSON catalogs. The current Dataset `dataset.json`
+drives discovery and `list_layers` enums; `catalog/builtin-tools.json` drives all 13 Harness Tool
+registrations and the generated reference. Each Tool declares semver, capability, parameters,
+`ToolResult@1.0`, timeout and map effect. Third-party Host plugins may provide another validated
+catalog plus executors. Missing executors remain unregistered and appear as unavailable
+capabilities in the System Prompt; duplicate or conflicting Tool versions fail activation.
+
 The remaining 12 tools cover inspection, CRS transformation, buffering, filtering, spatial join,
 clipping, regional aggregation, geometry calculation, nearest-feature analysis, distribution
 analysis and export. All are registered with Harness `defineTool`, schema validation, structured

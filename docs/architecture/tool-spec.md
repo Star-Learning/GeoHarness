@@ -2,6 +2,11 @@
 
 > **文档状态**：当前 Geo Backend、Layer Registry 与 Tool 的实现契约。
 
+内置 Tool 的 name、semver、capability、input、output、timeout 和 map effect 以版本化
+[`builtin-tools.json`](../../bundle/geoharness-bundle/catalog/builtin-tools.json) 为权威来源；
+[`catalog-reference.md`](catalog-reference.md) 由它自动生成。本文说明公共运行结果与空间语义，
+第三方接入和冲突规则见 [`extension-contract.md`](extension-contract.md)。
+
 ## Runtime boundary
 
 Geo computation lives in `backend/geo-service`; the Harness client never performs authoritative
@@ -52,6 +57,8 @@ API responses can expose GeoJSON through `GET /layers/{layer_id}/geojson`; proje
 converted to EPSG:4326 for browser rendering while their canonical GeoPackage retains its CRS.
 
 ## Tools
+
+下表是空间语义摘要；Harness `defineTool` 注册不再读取此 Markdown，而是直接读取 catalog。
 
 | Tool | Main input | Structured effect |
 | --- | --- | --- |

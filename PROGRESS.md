@@ -710,3 +710,27 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增 `docs/architecture/result-center.md` 并同步 Workspace、Run、Bundle 与 Changelog；最终
   门禁通过：build、TypeScript、peer dependencies、文档 54/54（102 个本地链接）、Scenario
   freshness、Node 74/74、Python 27/27、7 个媒体包和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 6
+
+状态：完成（2026-08-31）
+
+- [x] 新增 Dataset catalog 与 Tool manifest 的 JSON Schema `1.0`；Host 校验版本、ID、唯一名称、
+  semver、capability、`ToolResult@1.0`、timeout 和 map effect，Python 在打开 Dataset path 前再次
+  用严格 Pydantic schema 拒绝未知字段与不兼容版本。
+- [x] 13 个内置 Harness Tool 的 name、description、parameters、version、capability、timeout、
+  output 与 map effect 全部迁入 `catalog/builtin-tools.json`，`tools.js` 不再复制参数清单；Python
+  parity test 保证 12 个 backend operation 与 Host manifest 一致。
+- [x] `discover_datasets` 和 `list_layers.dataset_id.enum` 从部署的真实 `dataset.json` 生成；Agent
+  只看到 region/CRS/layer/license 能力，不会收到服务器相对 path 或预设分析步骤。
+- [x] 新增 catalog 合并与 executor 扩展入口；同名不同 semver 报 version conflict，同名同版本
+  报 duplicate，声明但缺少 executor 的能力不注册给模型并进入 `unavailable` System Prompt，
+  Agent 被明确要求报告未安装能力而不是编造结果。
+- [x] 第三方 fixture `fixture_layer_note@1.2.0` 通过真实 Harness ToolRuntime 执行并进入通用 Run
+  projector；客户端源码不包含 fixture 名称，证明 Agent Stream、Layer panel 与 Result Center
+  不需要按新 Tool 修改核心渲染。
+- [x] 新增 `build:catalogs/check:catalogs`，从相同 manifest 生成
+  `docs/architecture/catalog-reference.md`；新增扩展契约文档并同步 Harness/Tool/Bundle/Backend。
+- [x] 最终门禁通过：build、TypeScript、peer dependencies、catalog freshness、文档 56/56
+  （108 个本地链接）、Scenario freshness、Node 78/78、Python 30/30、7 个媒体包和
+  `git diff --check`。

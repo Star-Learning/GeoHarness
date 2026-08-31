@@ -108,6 +108,9 @@ test('Harness ToolRuntime executes a complete river-buffer workflow through the 
     assert.match(filtered.content[0].text, /Selected 132 of 360/)
     assert.deepEqual(filtered.meta, {
       tool: 'spatial_filter',
+      tool_version: '1.0.0',
+      capability: 'vector.spatial-filter',
+      map_effect: 'add-layer',
       success: true,
       outputs: filtered.value.outputs,
       summary: 'Selected 132 of 360 input features.',

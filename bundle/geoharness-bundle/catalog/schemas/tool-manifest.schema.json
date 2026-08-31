@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://geoharness.dev/schemas/tool-manifest-1.0.json",
+  "title": "GeoHarness Tool Manifest Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "tools"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "const": "1.0" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,119}$" },
+    "tools": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version", "capability", "description", "parameters", "output", "timeout_ms", "map_effect"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,119}$" },
+          "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+          "capability": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,119}$" },
+          "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "parameters": { "type": "object" },
+          "output": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["contract", "creates_layer"],
+            "properties": {
+              "contract": { "const": "ToolResult@1.0" },
+              "creates_layer": { "type": "boolean" }
+            }
+          },
+          "timeout_ms": { "type": "integer", "minimum": 100, "maximum": 600000 },
+          "map_effect": { "enum": ["none", "add-layer", "export"] }
+        }
+      }
+    }
+  }
+}

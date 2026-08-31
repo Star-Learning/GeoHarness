@@ -160,6 +160,12 @@ Host 通过当前 `@deepseek-ai/dsh-tools` API 注册 13 个 `defineTool` consum
 `discover_datasets` 返回部署可用的数据能力；`list_layers(dataset_id)` 激活所选 catalog，
 其他 11 个分析/导出工具只接受返回的 canonical Layer ID。
 
+Platform Phase 6 后，这 13 个 Tool 的 name、semver、capability、parameters、`ToolResult@1.0`、
+timeout 和 map effect 由 `catalog/builtin-tools.json` 驱动注册；Dataset discovery 和
+`list_layers` enum 由实际 `dataset.json` 生成。第三方 Tool 仍注册到相同官方 ToolRuntime，
+Agent Stream 与 Result Center 不需要识别具体 Tool 名。版本冲突或缺失 executor 会在 Host
+激活/诊断阶段明确暴露，不会由注册顺序静默覆盖。
+
 当前 catalog 为 `examples/datasets/nyc-core-official/dataset.json`，聚合仓库中已审计的 NYC
 Open Data 冻结快照：buildings、roads、rivers、districts 和 Lower Manhattan buildings。
 它没有 Task Graph、预设距离或预期结论。System Prompt 要求 Agent 遵循：

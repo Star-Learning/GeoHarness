@@ -20,6 +20,8 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Real same-Session revision E2E coverage for distance, predicate, attribute value, export format and appended spatial conditions.
 - Authoritative Result Center with final answer, Tool counts, terminal Layers, structured statistics, provenance, CRS, units and warnings.
 - Indexed 20 MB-bounded download RPC for GeoJSON, GeoPackage, CSV and reasoning-free Run Manifest assets with SHA256 metadata.
+- Versioned JSON Schema contracts for Dataset catalogs and Tool manifests, plus a generated catalog reference.
+- Catalog-driven registration for all 13 built-in Harness Tools and a tested third-party fixture executor path.
 
 ### Changed
 
@@ -28,6 +30,7 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Layer registration now uses temporary GeoPackage snapshots and rollback-safe manifest persistence.
 - Agent workspace projection now restores per-Session Layer visibility and opacity from `workspace.json`.
 - Geo provider writes for one Session Workspace are serialized while independent Sessions remain concurrent.
+- Dataset discovery and `list_layers` enums now come from validated deployment catalogs instead of an inline Host list.
 - GeoHarness Agent workspace now uses clearer semantic map colors and synchronized result focus states.
 - Seven Scenario video prompts and reproducible 1080p recording/encoding scripts are tracked without committing generated MP4 files.
 

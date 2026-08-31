@@ -27,7 +27,7 @@ export function apply(ctx, config = {}) {
     uploadMaxBytes: config.uploadMaxBytes,
   }))
   new TaskGraphRuntime(ctx, { scenarioRoot: resolve(config.scenarioRoot ?? resolve(process.cwd(), 'examples/scenarios')) })
-  registerGeoTools(ctx)
+  registerGeoTools(ctx, { datasetRoot: resolve(config.datasetRoot ?? packagedDatasetRoot) })
   registerRunManifestProjector(ctx)
   ctx.inject(['connection'], connectionCtx => registerGeoRpc(connectionCtx))
 }

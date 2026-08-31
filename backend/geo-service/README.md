@@ -8,6 +8,11 @@ canonical layer metadata and GeoPackage snapshots under a caller-provided worksp
 `spatial_join`, `clip_layer`, `aggregate_by_region`, `calculate_geometry`, `nearest_features`,
 `analyze_distribution`, and `export_layer`.
 
+The model-facing declarations for these backend operations live in the versioned
+`bundle/geoharness-bundle/catalog/builtin-tools.json`. Python tests require its backend Tool names
+to match `TOOL_NAMES`. Dataset manifests are also validated by the Python `DatasetCatalog` schema
+before any Layer path is opened.
+
 Every operation returns a `ToolResult` with `success`, `tool`, `step_id`, `inputs`, `parameters`,
 `outputs`, `summary`, `warnings`, and bounded structured `data`. Derived layers record parent IDs,
 the generating step and parameters in `registry.json`; vector contents are stored as GeoPackage.

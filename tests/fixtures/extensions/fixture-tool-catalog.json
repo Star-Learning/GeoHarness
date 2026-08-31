@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../bundle/geoharness-bundle/catalog/schemas/tool-manifest.schema.json",
+  "schema_version": "1.0",
+  "id": "geoharness.fixture-extension",
+  "tools": [
+    {
+      "name": "fixture_layer_note",
+      "version": "1.2.0",
+      "capability": "vector.fixture-note",
+      "description": "Return a structured note for one canonical Layer without creating map data.",
+      "parameters": {
+        "input_layer": { "type": "string", "required": true },
+        "note": { "type": "string", "required": true },
+        "step_id": { "type": "string" }
+      },
+      "output": { "contract": "ToolResult@1.0", "creates_layer": false },
+      "timeout_ms": 5000,
+      "map_effect": "none"
+    }
+  ]
+}

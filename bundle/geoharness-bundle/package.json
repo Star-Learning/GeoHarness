@@ -17,6 +17,7 @@
   "files": [
     "index.js",
     "host",
+    "catalog",
     "client.js",
     "cordis.patch.yml",
     "README.md"

@@ -7,11 +7,11 @@
 未配置；服务已在允许联网的进程中重启。尚待下一次真实 Prompt 由 Provider 验证凭据本身并
 完成 planning smoke test，详见下方“外部模型连接”。
 
-GIS Agent 平台 v1.0 的 Platform Phase 0–5 已完成，没有活跃代码阻塞。Session Workspace、
+GIS Agent 平台 v1.0 的 Platform Phase 0–6 已完成，没有活跃代码阻塞。Session Workspace、
 四种用户矢量格式导入、canonical 数据/Layer 工作台、Native Session Run Manifest、五类
-对话式修订、Result Center 与安全导出已经通过真实格式、边界、安全、恢复和 GeoPandas 验证。
-下一阶段是 Tool / Dataset 扩展契约；若 GitHub Actions 远端环境暴露平台差异，按普通 CI
-兼容问题修复。
+对话式修订、Result Center、安全导出以及 Tool / Dataset 扩展契约已经通过真实格式、边界、
+安全、恢复、第三方 fixture 和 GeoPandas 验证。下一阶段是稳定性、安全与性能；若 GitHub
+Actions 远端环境暴露平台差异，按普通 CI 兼容问题修复。
 
 ## Phase 0
 
