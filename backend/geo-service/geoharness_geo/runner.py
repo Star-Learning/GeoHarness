@@ -9,6 +9,7 @@ from .operations import GeoTools
 from .imports import import_capabilities, import_uploaded_layer
 from .regression import ScenarioRegression
 from .registry import LayerRegistry
+from .results import build_result_center, read_result_asset
 from .workspace import WorkspaceStore
 
 
@@ -145,6 +146,15 @@ def dispatch(payload: dict[str, Any]) -> Any:
         return workspace.record_agent_run(dict(payload.get("run", {}))).model_dump(mode="json")
     if action == "workspace_runs":
         return [run.model_dump(mode="json") for run in workspace.agent_runs()]
+    if action == "workspace_result":
+        result = build_result_center(workspace, registry, run_id=payload.get("run_id"))
+        return None if result is None else result.model_dump(mode="json")
+    if action == "workspace_download":
+        return read_result_asset(
+            workspace,
+            asset_type=str(payload["asset_type"]),
+            asset_id=str(payload["asset_id"]),
+        )
     if action == "workspace_reset":
         registry.clear()
         workspace.reset_assets()

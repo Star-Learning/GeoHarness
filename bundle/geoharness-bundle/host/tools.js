@@ -251,6 +251,8 @@ export function registerGeoTools(ctx) {
           success: value.success,
           outputs: value.outputs,
           summary: value.summary,
+          warnings: value.warnings,
+          data: value.data,
         }),
       },
       timeoutMs: 120_000,

@@ -690,3 +690,23 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增 `docs/architecture/run-manifest.md` 并同步 Harness/Workspace/Bundle/Changelog；最终
   门禁通过：build、TypeScript、peer dependencies、文档 53/53（100 个本地链接）、Scenario
   freshness、Node 72/72、Python 25/25、7 个媒体包和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 5
+
+状态：完成（2026-08-31）
+
+- [x] Geo Tool `presentationMeta` 增加经过 output schema 校验的真实 `warnings/data`；Native
+  Run Manifest 持久化结构化 Tool Result，但仍不保存 `assistant/chunk` reasoning 或凭据。
+- [x] Python `ResultCenter` 从 Run、Registry 与 Workspace 索引生成最终回答、Tool 成功/失败数、
+  外部输入、terminal outputs、结构化统计、CRS、单位、数据来源和 warning；不解析 LLM 文本数字。
+- [x] 新增 loopback-only `result/center` 与 `result/download`；浏览器只提交当前 Session、
+  `export|run` 和安全 asset ID，Python 必须在当前 `exports/` / `runs/` 索引内重新解析路径。
+- [x] 下载固定上限 20 MB，并核对 export 索引字节数；响应返回真实 MIME、size 和 SHA256，
+  客户端解码后再次核对字节数，再生成用户下载 Blob。越界 ID、未索引资产和跨 Session 均拒绝。
+- [x] Result Center 集成在现有 Agent workspace，展示可点击输入/输出 Layer、真实统计表、来源、
+  CRS/单位/warning，以及 GeoJSON、GeoPackage、CSV 与 reasoning-free Run JSON 下载；刷新后恢复。
+- [x] Native Session 用户上传建筑 E2E 按 `use=feature_code_2100` 真实筛出 357 栋并验证三种导出、
+  SHA256 和 Run JSON；独立 Python 河流 500 米测试真实得到 132 栋并逐格式核对要素/行数。
+- [x] 新增 `docs/architecture/result-center.md` 并同步 Workspace、Run、Bundle 与 Changelog；最终
+  门禁通过：build、TypeScript、peer dependencies、文档 54/54（102 个本地链接）、Scenario
+  freshness、Node 74/74、Python 27/27、7 个媒体包和 `git diff --check`。

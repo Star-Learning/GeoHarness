@@ -109,6 +109,8 @@ class AgentRunToolCall(BaseModel):
     input_layers: list[str] = Field(default_factory=list)
     output_layers: list[str] = Field(default_factory=list)
     summary: str | None = Field(default=None, max_length=2_000)
+    warnings: list[str] = Field(default_factory=list)
+    result_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentRunFinalAnswer(BaseModel):
@@ -136,6 +138,73 @@ class AgentRunManifest(BaseModel):
     final_answer: AgentRunFinalAnswer | None = None
     errors: list[AgentRunError] = Field(default_factory=list)
     retries: list[AgentRunRetry] = Field(default_factory=list)
+
+
+class ResultLayerSnapshot(BaseModel):
+    layer_id: str
+    name: str
+    role: Literal["input", "output"]
+    source: Literal["scenario", "upload", "derived"]
+    geometry: str
+    crs: str
+    feature_count: int = Field(ge=0)
+    generated_by: str | None = None
+    parents: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ResultStatistic(BaseModel):
+    call_id: str
+    tool: str
+    summary: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+class ResultSource(BaseModel):
+    layer_id: str
+    kind: Literal["upload", "scenario", "derived"]
+    name: str
+    detail: str
+
+
+class ResultAsset(BaseModel):
+    asset_type: Literal["export", "run"]
+    asset_id: str
+    file_name: str
+    format: Literal["geojson", "gpkg", "csv", "json"]
+    layer_id: str | None = None
+    feature_count: int | None = Field(default=None, ge=0)
+    size_bytes: int = Field(ge=0)
+    created_at: str
+    downloadable: bool
+
+
+class ResultToolCounts(BaseModel):
+    total: int = Field(ge=0)
+    success: int = Field(ge=0)
+    failed: int = Field(ge=0)
+    running: int = Field(ge=0)
+
+
+class ResultCenter(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    run_id: str
+    session_id: str
+    turn: int = Field(ge=1)
+    status: Literal["running", "success", "failed"]
+    user_goal: str
+    final_answer: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    tools: ResultToolCounts
+    input_layers: list[ResultLayerSnapshot] = Field(default_factory=list)
+    output_layers: list[ResultLayerSnapshot] = Field(default_factory=list)
+    statistics: list[ResultStatistic] = Field(default_factory=list)
+    crs: list[str] = Field(default_factory=list)
+    units: list[str] = Field(default_factory=list)
+    sources: list[ResultSource] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    assets: list[ResultAsset] = Field(default_factory=list)
 
 
 class LayerDisplayPreference(BaseModel):

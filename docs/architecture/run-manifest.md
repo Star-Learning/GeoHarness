@@ -27,7 +27,8 @@ user/message(source.kind=user)
 
 - `session_id`、`turn`、`user_goal`、对应 event seq 和开始/结束时间；
 - `provider` / `model`，来自 `request/header.config` 或 `request/context`，不含 credential；
-- 每个 Tool 的 call ID、name、状态、arguments、输入/输出 canonical Layer ID 和 summary；
+- 每个 Tool 的 call ID、name、状态、arguments、输入/输出 canonical Layer ID、summary、warnings
+  和经过 Tool output schema 校验的结构化 `result_data`；
 - 本轮所有 input/output Layer、外部复用 Layer 和本轮新 output Layer；
 - 最终 `assistant/message` 的 event seq 与可见文本；
 - Provider、Tool、Data 三类 error，以及 Harness retry 摘要；
@@ -35,6 +36,9 @@ user/message(source.kind=user)
 
 `request/header` 在 Harness 中只有初次、resume 或模型变更时写入，因此 projector 会继承当前有效
 route 到后续 turn。它不会臆造模型状态，也不会把 API Key、环境变量或系统 Prompt 写入 Run 文件。
+
+Platform Phase 5 以 `result_data` 和 canonical Registry 构建结构化 Result Center；完整权威来源、
+terminal Layer 判定与安全下载契约见 [`result-center.md`](result-center.md)。
 
 ## 持久化与恢复
 

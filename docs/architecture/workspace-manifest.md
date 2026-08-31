@@ -55,8 +55,8 @@ Manifest 至少包含：
 - `input_layers` 索引 Scenario、Dataset 或用户上传形成的 canonical Layer；
 - `derived_layers` 索引真实 GIS Tool 生成且带 lineage 的 Layer；
 - `exports` 只接受 `exports/` 下已经存在的 GeoJSON、GeoPackage 或 CSV；
-- `runs` 只指向 `runs/<safe-run-id>.json`；Platform Phase 4 会用 Native Session 事件填充正式
-  Run Manifest；
+- `runs` 只指向 `runs/<safe-run-id>.json`；Native Session 事件已经填充正式 Run Manifest，
+  Result Center 可从相同索引下载当前运行记录；
 - `layer_preferences` 按仍存在的 canonical Layer ID 保存 `visible` 与 0–1 `opacity`；移除 Layer
   或 reset 时同步清理；
 - `registry.json` 仍是 Layer metadata 权威来源，`workspace.json` 是跨资产索引，不复制矢量内容。
@@ -75,6 +75,8 @@ Manifest 使用同目录临时文件、`fsync` 和原子替换写入，调用方
 | `workspace_record_run` | 将一个受限 Run ID 的通用 JSON 写入 `runs/` 并建立索引（兼容 Phase 1） |
 | `workspace_record_agent_run` | 校验并原子保存 Native `AgentRunManifest` |
 | `workspace_runs` | 恢复当前 Session 下通过 schema 的 Native Agent Runs |
+| `workspace_result` | 从 Run、Registry 和资产索引重建权威 Result Center 投影 |
+| `workspace_download` | 读取当前 Workspace 中一个已索引、大小受限的 export/run 资产 |
 | `workspace_reset` | 清空当前 Workspace 的 canonical Layer、导出、导入和 Run 资产 |
 
 HTTP 开发入口同步暴露只读 `/workspace`。正式 Harness 页面仍经 loopback Connection RPC 和

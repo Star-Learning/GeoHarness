@@ -18,6 +18,8 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 - Versioned Native Harness Run Manifests projected from canonical Session events without persisting reasoning.
 - Reloadable run comparison for executed Tools, reused input Layers, new outputs and classified errors.
 - Real same-Session revision E2E coverage for distance, predicate, attribute value, export format and appended spatial conditions.
+- Authoritative Result Center with final answer, Tool counts, terminal Layers, structured statistics, provenance, CRS, units and warnings.
+- Indexed 20 MB-bounded download RPC for GeoJSON, GeoPackage, CSV and reasoning-free Run Manifest assets with SHA256 metadata.
 
 ### Changed
 

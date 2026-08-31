@@ -170,6 +170,8 @@ export function projectRunManifests(sessionId, events) {
         input_layers: [...collectLayerIds(args)],
         output_layers: [],
         summary: null,
+        warnings: [],
+        result_data: {},
       })
     } else if (event.type === 'tool/result') {
       const message = record(data.message)
@@ -183,6 +185,12 @@ export function projectRunManifests(sessionId, events) {
       call.result_event_seq = event.seq
       call.output_layers = outputLayers(data)
       call.summary = (text(meta.summary) ?? contentText(message.content).split('\n')[0] ?? '').slice(0, 2_000) || null
+      call.warnings = Array.isArray(meta.warnings)
+        ? meta.warnings.filter(item => typeof item === 'string').map(item => item.slice(0, 2_000))
+        : []
+      call.result_data = meta.data !== null && typeof meta.data === 'object' && !Array.isArray(meta.data)
+        ? meta.data
+        : {}
       if (failed) {
         const failure = record(data.error)
         const code = text(failure.code) ?? text(failure.name)

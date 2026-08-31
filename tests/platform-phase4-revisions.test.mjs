@@ -96,6 +96,8 @@ test('five conversational revision classes execute real Tools in one Native Sess
           success: outcome.value.success,
           outputs: outcome.value.outputs,
           summary: outcome.value.summary,
+          warnings: outcome.value.warnings,
+          data: outcome.value.data,
         },
       }, { surfaceOp: 'append' })
       session.append('step/end', { turn, step })

@@ -4,6 +4,7 @@ import { HARD_UPLOAD_BYTES } from './provider.js'
 const SCENARIOS = new Set(SCENARIO_IDS)
 const WORKSPACE_KEY = /^[A-Za-z0-9._:-]{1,120}$/
 const LAYER_ID = /^layer_[0-9]{4,}$/u
+const RESULT_ASSET_ID = /^[A-Za-z0-9._-]{1,120}$/u
 const MAX_GOAL_LENGTH = 2_000
 const MAX_BASE64_LENGTH = Math.ceil(HARD_UPLOAD_BYTES / 3) * 4 + 4
 const SAFE_UPLOAD_NAME = /^[^<>:"/\\|?*\u0000-\u001f]{1,180}$/u
@@ -40,6 +41,23 @@ function agentWorkspacePayload(payload) {
   const workspaceKey = payload.workspace_key
   if (typeof workspaceKey !== 'string' || !WORKSPACE_KEY.test(workspaceKey)) return null
   return { workspaceKey }
+}
+
+function resultRequestPayload(payload) {
+  const workspace = agentWorkspacePayload(payload)
+  if (workspace === null) return null
+  const runId = payload.run_id
+  if (runId !== undefined && (typeof runId !== 'string' || !RESULT_ASSET_ID.test(runId))) return null
+  return { ...workspace, runId }
+}
+
+function resultDownloadPayload(payload) {
+  const workspace = agentWorkspacePayload(payload)
+  const assetType = payload?.asset_type
+  const assetId = payload?.asset_id
+  if (workspace === null || !['export', 'run'].includes(assetType)
+    || typeof assetId !== 'string' || !RESULT_ASSET_ID.test(assetId)) return null
+  return { ...workspace, assetType, assetId }
 }
 
 function optionalString(value, maxLength) {
@@ -246,6 +264,31 @@ export function registerGeoRpc(ctx) {
       if (request === null) return badRequest('A valid workspace_key is required')
       try {
         const value = await ctx.geo.execute({ action: 'workspace_runs', workspaceKey: request.workspaceKey }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'result/center') {
+      const request = resultRequestPayload(payload)
+      if (request === null) return badRequest('A valid workspace_key and optional run_id are required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'workspace_result', workspaceKey: request.workspaceKey, run_id: request.runId,
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'result/download') {
+      const request = resultDownloadPayload(payload)
+      if (request === null) return badRequest('A valid indexed Result asset is required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'workspace_download', workspaceKey: request.workspaceKey,
+          asset_type: request.assetType, asset_id: request.assetId,
+        }, signal)
         return { ok: true, value }
       } catch (error) {
         return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))

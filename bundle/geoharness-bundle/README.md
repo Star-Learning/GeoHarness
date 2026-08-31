@@ -79,6 +79,14 @@ and renders pointer pan, fit bounds, toolbar zoom, 0.7×–5× mouse-wheel zoom 
 It also reads `agent/runs` and shows the latest three turns with provider/model, executed Tools,
 reused inputs, new output Layers and Provider/Tool/Data errors.
 
+The Result Center reads `result/center` from the same loopback channel. Final answers come from the
+Run Manifest; counts and statistics come from structured Tool Results; CRS, sources, warnings and
+Layer counts come from the canonical Registry and Workspace indexes. `result/download` accepts only
+an indexed export or Run asset ID for the current Session. Python resolves it under `exports/` or
+`runs/`, enforces a 20 MB RPC download ceiling and returns byte count plus SHA256. GeoJSON,
+GeoPackage, CSV and the reasoning-free Run JSON are restored after reload and downloadable without
+exposing server paths.
+
 ## Deterministic regression path
 
 The seven independent Scenario packages and `TaskGraphRuntime` remain in the Host as deterministic

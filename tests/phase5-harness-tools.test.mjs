@@ -111,6 +111,8 @@ test('Harness ToolRuntime executes a complete river-buffer workflow through the 
       success: true,
       outputs: filtered.value.outputs,
       summary: 'Selected 132 of 360 input features.',
+      warnings: [],
+      data: { selected_count: 132, input_count: 360 },
     })
   } finally {
     await rm(temporary, { recursive: true, force: true })

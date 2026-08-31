@@ -370,6 +370,8 @@ interface AgentRunManifest {
     status: 'running' | 'success' | 'failed'
     input_layers: string[]
     output_layers: string[]
+    warnings: string[]
+    result_data: Record<string, unknown>
   }>
   input_layers: string[]
   output_layers: string[]
@@ -377,6 +379,64 @@ interface AgentRunManifest {
   final_answer: { event_seq: number, text: string } | null
   errors: Array<{ classification: 'provider' | 'tool' | 'data', message: string }>
   retries: unknown[]
+}
+
+interface ResultLayerSnapshot {
+  layer_id: string
+  name: string
+  role: 'input' | 'output'
+  source: 'scenario' | 'upload' | 'derived'
+  geometry: string
+  crs: string
+  feature_count: number
+  generated_by: string | null
+  parents: string[]
+  warnings: string[]
+}
+
+interface ResultAsset {
+  asset_type: 'export' | 'run'
+  asset_id: string
+  file_name: string
+  format: 'geojson' | 'gpkg' | 'csv' | 'json'
+  layer_id: string | null
+  feature_count: number | null
+  size_bytes: number
+  created_at: string
+  downloadable: boolean
+}
+
+interface ResultCenter {
+  schema_version: '1.0'
+  run_id: string
+  session_id: string
+  turn: number
+  status: 'running' | 'success' | 'failed'
+  user_goal: string
+  final_answer: string | null
+  provider: string | null
+  model: string | null
+  tools: { total: number, success: number, failed: number, running: number }
+  input_layers: ResultLayerSnapshot[]
+  output_layers: ResultLayerSnapshot[]
+  statistics: Array<{ call_id: string, tool: string, summary: string | null, data: Record<string, unknown> }>
+  crs: string[]
+  units: string[]
+  sources: Array<{ layer_id: string, kind: 'upload' | 'scenario' | 'derived', name: string, detail: string }>
+  warnings: string[]
+  assets: ResultAsset[]
+}
+
+interface ResultDownload {
+  schema_version: '1.0'
+  asset_type: 'export' | 'run'
+  asset_id: string
+  file_name: string
+  format: string
+  mime_type: string
+  size_bytes: number
+  sha256: string
+  content_base64: string
 }
 
 interface ImportCapabilities {
@@ -443,6 +503,34 @@ function fileSizeLabel(bytes: number) {
   return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function saveResultDownload(download: ResultDownload) {
+  const binary = atob(download.content_base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  if (bytes.byteLength !== download.size_bytes) throw new Error('下载资产的字节数与 Workspace 索引不一致')
+  const url = URL.createObjectURL(new Blob([bytes], { type: download.mime_type }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = download.file_name
+  anchor.click()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+function flattenResultData(value: unknown, path = '', rows: Array<[string, string]> = []): Array<[string, string]> {
+  if (rows.length >= 40) return rows
+  if (value === null || typeof value !== 'object') {
+    rows.push([path || 'value', value === null ? 'null' : String(value)])
+  } else if (Array.isArray(value)) {
+    rows.push([path || 'value', JSON.stringify(value).slice(0, 500)])
+  } else {
+    for (const [key, child] of Object.entries(value)) {
+      flattenResultData(child, path ? `${path}.${key}` : key, rows)
+      if (rows.length >= 40) break
+    }
+  }
+  return rows
+}
+
 interface GeoHarnessInjected {
   agent: {
     history(): Promise<{ events: unknown[] }>
@@ -454,6 +542,8 @@ interface GeoHarnessInjected {
     removeLayer(layerId: string): Promise<void>
     setLayerPreference(layerId: string, preference: Partial<LayerDisplayPreference>): Promise<void>
     runs(): Promise<AgentRunManifest[]>
+    result(runId?: string): Promise<ResultCenter | null>
+    download(assetType: 'export' | 'run', assetId: string): Promise<ResultDownload>
   }
 }
 
@@ -758,6 +848,64 @@ function GeoHarnessDataWorkbench({
   </section>
 }
 
+function ResultCenterPanel({
+  result,
+  downloading,
+  error,
+  onDownload,
+  onLayer,
+}: {
+  result: ResultCenter | null
+  downloading: string | null
+  error: string | null
+  onDownload: (asset: ResultAsset) => void
+  onLayer: (layerId: string) => void
+}) {
+  if (result === null) return <section className="gh-agent-block gh-result-center" aria-label="Result Center">
+    <span className="gh-eyebrow">RESULT CENTER</span>
+    <p className="gh-result-empty">真实 Tool 完成后，这里会展示可核查结果、统计和下载资产。</p>
+  </section>
+  return <section className={`gh-agent-block gh-result-center is-${result.status}`} aria-label="Result Center">
+    <header>
+      <span><span className="gh-eyebrow">RESULT CENTER · TURN {result.turn}</span><small>{result.provider ?? 'provider'} / {result.model ?? 'model'}</small></span>
+      <b>{result.status}</b>
+    </header>
+    {result.final_answer !== null && <p className="gh-result-answer">{result.final_answer}</p>}
+    <div className="gh-result-metrics">
+      <span><small>Tools</small><b>{result.tools.success}/{result.tools.total}</b></span>
+      <span><small>Inputs</small><b>{result.input_layers.length}</b></span>
+      <span><small>Outputs</small><b>{result.output_layers.length}</b></span>
+      <span><small>Assets</small><b>{result.assets.length}</b></span>
+    </div>
+    {(result.input_layers.length > 0 || result.output_layers.length > 0) && <div className="gh-result-layers">
+      {[...result.input_layers, ...result.output_layers].map(layer => <button type="button" key={`${layer.role}:${layer.layer_id}`} onClick={() => onLayer(layer.layer_id)}>
+        <i>{layer.role === 'output' ? '↗' : '→'}</i><span><b>{layer.name}</b><small>{layer.role} · {layer.feature_count} features · {layer.crs}</small></span>
+      </button>)}
+    </div>}
+    {result.statistics.length > 0 && <div className="gh-result-statistics">
+      <span className="gh-result-section-label">Verified Tool statistics</span>
+      {result.statistics.map(statistic => <details key={statistic.call_id} open={result.statistics.length === 1}>
+        <summary>{statistic.tool} · {statistic.summary ?? 'structured result'}</summary>
+        <dl>{flattenResultData(statistic.data).map(([key, value]) => <React.Fragment key={key}><dt>{key}</dt><dd title={value}>{value}</dd></React.Fragment>)}</dl>
+      </details>)}
+    </div>}
+    <div className="gh-result-provenance">
+      <span><small>CRS</small><b>{result.crs.join(' · ') || '—'}</b></span>
+      <span><small>Units</small><b>{result.units.join(' · ') || '—'}</b></span>
+      {result.sources.map(source => <span key={source.layer_id}><small>{source.kind} · {source.name}</small><b>{source.detail}</b></span>)}
+    </div>
+    {result.warnings.length > 0 && <div className="gh-result-warnings">{result.warnings.map(warning => <small key={warning}>⚠ {warning}</small>)}</div>}
+    <div className="gh-result-assets">
+      <span className="gh-result-section-label">Downloads</span>
+      {result.assets.map(asset => <button type="button" key={`${asset.asset_type}:${asset.asset_id}`} disabled={!asset.downloadable || downloading === asset.asset_id} onClick={() => onDownload(asset)}>
+        <span><b>{asset.file_name}</b><small>{asset.format.toUpperCase()} · {fileSizeLabel(asset.size_bytes)}{asset.feature_count === null ? '' : ` · ${asset.feature_count} features`}</small></span>
+        <i>{!asset.downloadable ? 'limit' : downloading === asset.asset_id ? '…' : '↓'}</i>
+      </button>)}
+    </div>
+    {error !== null && <p className="gh-result-download-error" role="alert">{error}</p>}
+  </section>
+}
+
 function GeoHarnessBrandMark({ size }: { size: number }) {
   return <span className="gh-sidebar-brand-mark" style={{ width: size, height: size }} aria-hidden="true">⌖</span>
 }
@@ -795,6 +943,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [layerDetailsLoading, setLayerDetailsLoading] = React.useState(false)
   const [layerDetailsError, setLayerDetailsError] = React.useState<string | null>(null)
   const [runManifests, setRunManifests] = React.useState<AgentRunManifest[]>([])
+  const [resultCenter, setResultCenter] = React.useState<ResultCenter | null>(null)
+  const [downloadingAsset, setDownloadingAsset] = React.useState<string | null>(null)
+  const [downloadError, setDownloadError] = React.useState<string | null>(null)
   const fileInput = React.useRef<HTMLInputElement | null>(null)
   const detailsRequest = React.useRef(0)
   const activeGoalSeq = React.useRef<number | null>(null)
@@ -819,6 +970,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     setLayerDetails(null)
     setLayerDetailsError(null)
     setRunManifests([])
+    setResultCenter(null)
+    setDownloadingAsset(null)
+    setDownloadError(null)
     lastRunManifestKey.current = null
   }, [sessionId])
 
@@ -860,6 +1014,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           setTaskSteps([])
           setAgentStream([])
           setAgentAnswer('')
+          setResultCenter(null)
           lastRunStatus.current = 'ready'
         } else {
           const changedGoal = activeGoalSeq.current !== humanGoal.seq
@@ -867,6 +1022,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             activeGoalSeq.current = humanGoal.seq
             lastAutoStepId.current = null
             setSelectedStepId(null)
+            setResultCenter(null)
           }
           setGoal(humanGoal.text)
           const projection = projectAgentHistory(history.events, humanGoal.seq)
@@ -894,8 +1050,18 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             if (disposed) return
             setRunManifests(runs)
             const current = runs.find(run => run.user_event_seq === humanGoal?.seq)
-            if (humanGoal === null || (current !== undefined
-              && (current.max_event_seq === workspaceSeq || current.status !== 'running'))) {
+            let resultReady = humanGoal === null
+            if (current !== undefined) {
+              try {
+                const result = await agent.result(current.run_id)
+                if (!disposed) setResultCenter(result)
+                resultReady = true
+              } catch {
+                // The next polling cycle retries while the canonical result projection catches up.
+              }
+            }
+            if (resultReady && (humanGoal === null || (current !== undefined
+              && (current.max_event_seq === workspaceSeq || current.status !== 'running')))) {
               lastRunManifestKey.current = runManifestKey
             }
           } catch {
@@ -1080,6 +1246,20 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     }
   }
 
+  const downloadResult = async (asset: ResultAsset) => {
+    if (!asset.downloadable || downloadingAsset !== null) return
+    setDownloadingAsset(asset.asset_id)
+    setDownloadError(null)
+    try {
+      const download = await agent.download(asset.asset_type, asset.asset_id)
+      saveResultDownload(download)
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setDownloadingAsset(null)
+    }
+  }
+
   const stepIcon = (status: AgentToolStep['status'], index: number) => {
     if (status === 'success') return '✓'
     if (status === 'failed') return '!'
@@ -1238,6 +1418,13 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
             </section>
+            <ResultCenterPanel
+              result={resultCenter}
+              downloading={downloadingAsset}
+              error={downloadError}
+              onDownload={asset => { void downloadResult(asset) }}
+              onLayer={layerId => { setLayerPanelOpen(true); void loadLayerDetails(layerId) }}
+            />
             <section className="gh-agent-block gh-run-history" aria-label="Agent Run history">
               <span className="gh-eyebrow">RUN MANIFEST · REVISIONS</span>
               {recentRunManifests.length === 0 && <p className="gh-result-empty">Native Session 产生 Tool Call 后，这里会恢复可核查的运行记录。</p>}
@@ -1376,6 +1563,27 @@ export function apply(ctx: ClientContext) {
             throw new Error(response.error?.message ?? 'Agent Run history is unavailable')
           }
           return response.value as AgentRunManifest[]
+        },
+        result: async runId => {
+          const response = await connection.rpc.call('/geoharness', 'result/center', {
+            workspace_key: sessionId,
+            run_id: runId,
+          })
+          if (!response.ok) throw new Error(response.error?.message ?? 'Result Center is unavailable')
+          if (response.value === null) return null
+          if (typeof response.value !== 'object') throw new Error('Result Center returned an invalid projection')
+          return response.value as ResultCenter
+        },
+        download: async (assetType, assetId) => {
+          const response = await connection.rpc.call('/geoharness', 'result/download', {
+            workspace_key: sessionId,
+            asset_type: assetType,
+            asset_id: assetId,
+          })
+          if (!response.ok || response.value === null || typeof response.value !== 'object') {
+            throw new Error(response.error?.message ?? 'Result asset download failed')
+          }
+          return response.value as ResultDownload
         },
       },
     }),
