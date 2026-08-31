@@ -5,6 +5,8 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from shapely.affinity import translate
+from shapely.geometry import mapping, shape
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -29,7 +31,7 @@ def test_official_scenario_freshness_is_spatially_strict_but_cross_platform():
         PREPARATION.verify_derived_payloads(changed_collections, statistics)
 
     changed_geometry = copy.deepcopy(collections)
-    coordinates = changed_geometry["buildings"]["features"][0]["geometry"]["coordinates"]
-    coordinates[0][0][0][0] += 0.001
+    feature = changed_geometry["buildings"]["features"][0]
+    feature["geometry"] = mapping(translate(shape(feature["geometry"]), xoff=0.001))
     with pytest.raises(ValueError, match="stale geometry coordinates"):
         PREPARATION.verify_derived_payloads(changed_geometry, statistics)

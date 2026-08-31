@@ -31,6 +31,10 @@ freshness。原因是先前将平台相关的 GEOS/PROJ 派生几何 JSON 做逐
 属性/ID/统计仍精确，几何改用严格空间容差并增加真实篡改回归；生成文本也固定为 LF。等待远程
 矩阵复验，不把等价空间结果的序列化差异记录为产品阻塞。
 
+Scenario 修复后的远程 Ubuntu 已通过 Bundle、Catalog、Scenario 与全部 Node E2E，Python 阶段暴露
+新增篡改 fixture 在不同 Shapely 构建上的错误分类差异：只移动闭合环首点可能先改变 validity。
+fixture 已改为整体平移完整 geometry，确保类型/有效性保持，仅验证坐标阈值；这不改变产品算法。
+
 ## Phase 0
 
 没有阻止 Phase 0 完成的活跃问题。最小 Bundle 已被当前上游构建产物成功安装、
