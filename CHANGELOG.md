@@ -4,6 +4,8 @@ All notable changes to GeoHarness will be documented in this file. The format fo
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-31
+
 ### Added
 
 - GIS Agent Platform v1.0 development plan, acceptance matrix and phased delivery gates.

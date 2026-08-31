@@ -754,3 +754,28 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
 - [x] 新增 `docs/architecture/resilience-security.md` 并同步 Bundle/Backend/Changelog；最终门禁通过：
   build、TypeScript、peer dependencies、catalog/docs/Scenario freshness、Node 82/82、Python 33/33、
   7 个媒体包和 `git diff --check`。
+
+## GIS Agent 平台 v1.0 · Platform Phase 8
+
+状态：实现完成，远程发布验证中（2026-08-31）
+
+- [x] 新增三个完全绕过 Scenario/Dataset loader 的用户上传 E2E；三个独立 Session Workspace 均
+  通过 `import_upload` 注册真实 NYC canonical Layer，不调用 `load_scenario` 或 `load_dataset`。
+- [x] 建筑质量链路核对 NYC 官方 133 栋建筑的字段、CRS、几何有效性、bbox、100 行属性预览与
+  Map projection；主要道路任意 275 米链路真实筛出 241 栋建筑，并按 `building_id` 与独立
+  GeoPandas/Shapely oracle 逐项核对。
+- [x] 分区统计链路对用户上传的 360 栋建筑计算真实面积、聚合到 3 个 Community District 并导出
+  CSV；独立 spatial join/groupby 核对每区数量、面积、总数和导出内容。
+- [x] Native Agent System Prompt 明确 v1.0 只支持矢量 GIS；栅格、路网分析等缺失能力必须显式
+  报告 capability gap，不得伪造 Tool、Layer 或结果；发布契约测试确认正式客户端仍只消费
+  Native Session history，不调用 Scenario planner/fallback。
+- [x] 新增全新 `DSH_HOME` 插件生命周期脚本；本地使用真实上游构建 CLI 完成 Bundle 安装、
+  `dump-config`、随机 loopback 端口 Web 启动、HTTP 200/HTML 探测、进程停止、卸载与配置清理。
+- [x] GitHub Actions 新增 Ubuntu/Windows clean lifecycle job；保留两平台、Node 22.19/24、
+  Python 3.11 的完整 build/typecheck/test/docs/catalog/media 验收矩阵。
+- [x] 新增 `docs/releases/v1.0.0.md`、兼容矩阵和平台验收说明；更新 README、文档导航、Security
+  支持版本及 Changelog `1.0.0` 条目。
+- [x] 本地最终门禁通过：Node 86/86、Python 36/36、TypeScript、peer dependencies、Catalog、
+  60 份 Markdown/120 个本地链接、7 个媒体包、插件 lifecycle 和 `git diff --check`。
+- [ ] 推送本提交后等待 GitHub Actions 的 Windows/Linux 远程门禁，通过后创建 annotated
+  `v1.0.0` Tag 与 GitHub Release，并把本节状态更新为完成。

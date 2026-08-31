@@ -141,9 +141,15 @@ export function registerGeoTools(ctx, options = {}) {
   ctx.systemPrompt.section({
     name: 'tool:geoharness',
     order: 118,
-    text: `For every spatial request, plan from the user's actual goal rather than selecting a predefined analysis. Follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. If the workspace has no suitable data, call discover_datasets, choose a catalog from its declared region/layers, then call list_layers with that dataset_id. Reuse existing Layer IDs for conversational revisions. Choose and sequence Geo tools yourself from the goal; never infer distance, predicate, field, output, or conclusion from a sample Scenario. Use only returned Layer IDs, create metric CRS layers before distance operations, preserve useful intermediate layers, inspect every structured success field, and never claim completion from prose alone. State when the available catalog cannot support the request.${unavailableText}`,
+    text: `For every spatial request, plan from the user's actual goal rather than selecting a predefined analysis. Follow Goal → Plan → Geo Tools → Layers → Map → Verify → Result. If the workspace has no suitable data, call discover_datasets, choose a catalog from its declared region/layers, then call list_layers with that dataset_id. Reuse existing Layer IDs for conversational revisions. Choose and sequence Geo tools yourself from the goal; never infer distance, predicate, field, output, or conclusion from a sample Scenario. Use only returned Layer IDs, create metric CRS layers before distance operations, preserve useful intermediate layers, inspect every structured success field, and never claim completion from prose alone. This v1.0 deployment provides vector GIS capabilities only: for raster, network-analysis or other absent capabilities, explicitly report the capability gap and do not fabricate a Layer or result. State when the available catalog cannot support the request.${unavailableText}`,
   })
-  return { schema_version: '1.0', registered, unavailable, datasets: datasets.map(publicDatasetCatalog) }
+  return {
+    schema_version: '1.0',
+    registered,
+    unavailable,
+    unsupported_capabilities: ['raster', 'network-analysis'],
+    datasets: datasets.map(publicDatasetCatalog),
+  }
 }
 
 export { BUILTIN_TOOL_CATALOG, OUTPUT_SCHEMA, SCENARIO_IDS, TOOL_SPECS }

@@ -22,7 +22,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./bundle/geoharness-bun
 npx @deepseek-ai/dsh@0.1.1-rc.2 web
 ```
 
-打开 `http://127.0.0.1:3080` 即可使用。当前版本兼容 DeepSeek Harness `0.1.1-rc.2`。GeoHarness 以源码插件形式安装，因此请保留完整仓库目录，不要单独移动 `bundle/geoharness-bundle`。
+打开 `http://127.0.0.1:3080` 即可使用。当前正式版本为 `v1.0.0`，兼容 DeepSeek Harness `0.1.1-rc.2`；完整环境范围见[兼容矩阵](docs/releases/compatibility-matrix.md)。GeoHarness 以源码插件形式安装，因此请保留完整仓库目录，不要单独移动 `bundle/geoharness-bundle`。
 
 卸载插件：
 

@@ -17,6 +17,8 @@
 11. [稳定性、安全与性能边界](architecture/resilience-security.md)：查看文件/Layer 上限、分页、幂等、回滚、进程退出和诊断导出。
 12. [Task Graph](architecture/task-graph.md)、[地图验证](architecture/map-verification.md)和[对话式修订](architecture/conversational-revision.md)：理解确定性回归 DAG、Step/Layer/Map 绑定和局部重算。
 13. [Scenario 回归门禁](testing/scenario-regressions.md)与[Agent 测试 Prompt](testing/agent-test-prompts.md)：执行自动化和人工端到端验收。
+14. [Platform v1.0 验收](testing/platform-v1-acceptance.md)：查看三条用户上传 E2E、独立空间 oracle 与发布门禁。
+15. [v1.0.0 Release Notes](releases/v1.0.0.md)与[兼容矩阵](releases/compatibility-matrix.md)：查看正式版本能力、运行环境和明确边界。
 
 安装与普通使用请先看仓库根目录的 [README](../README.md)；当前开发进度和已知问题分别记录在 [PROGRESS](../PROGRESS.md) 与 [BLOCKERS](../BLOCKERS.md)。
 
@@ -28,6 +30,7 @@
 | `architecture/` | 已由源码、运行时和测试确认的集成方式与技术契约 | 当前技术参考；升级上游后需要重新验证 |
 | `testing/` | 自动回归说明、人工 Agent 验收输入与测试规则 | 当前验收参考 |
 | `media/` | 录屏 Prompt、视频方案和社交媒体文案 | 发布素材；不作为开发规范 |
+| `releases/` | 已发布版本说明、兼容矩阵和升级边界 | 对应版本的发布事实 |
 
 ## 文档事实优先级
 

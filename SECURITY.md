@@ -1,8 +1,15 @@
 # Security Policy
 
-## Supported development line
+## Supported versions
 
-Security fixes target the current `main` branch while GeoHarness Platform v1.0 is under development. Release-specific support information will be added when `v1.0.0` is published.
+| Version | Supported |
+| --- | --- |
+| `1.0.x` | Yes |
+| `< 1.0` | No |
+
+Security fixes target the latest `1.0.x` release and the current `main` branch. Compatibility is
+bounded to the versions in the [release compatibility matrix](docs/releases/compatibility-matrix.md);
+an upstream DeepSeek Harness upgrade requires a new integration review.
 
 ## Reporting a vulnerability
 

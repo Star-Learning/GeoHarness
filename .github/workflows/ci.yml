@@ -53,3 +53,42 @@ jobs:
 
       - name: Verify Demo media
         run: pnpm run check:media
+
+  release-smoke:
+    name: ${{ matrix.os }} / clean plugin lifecycle
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install clean checkout dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Geo runtime
+        run: python -m pip install -e "./backend/geo-service[test]"
+
+      - name: Build installable Bundle
+        run: pnpm run build
+
+      - name: Install, boot, probe and remove GeoHarness
+        run: pnpm run verify:plugin-lifecycle

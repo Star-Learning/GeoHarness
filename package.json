@@ -42,7 +42,8 @@
     "verify:phase7": "pnpm peers check && pnpm run build && pnpm run typecheck && pnpm run test:phase7",
     "verify:phase8": "pnpm run build && pnpm run check:scenarios && pnpm run test:phase8",
     "verify:phase9": "pnpm run build && pnpm run typecheck && pnpm run test:phase9",
-    "verify:phase10": "pnpm run build && pnpm run check:scenarios && pnpm run check:media && pnpm run test:phase10"
+    "verify:phase10": "pnpm run build && pnpm run check:scenarios && pnpm run check:media && pnpm run test:phase10",
+    "verify:plugin-lifecycle": "node scripts/verify-plugin-lifecycle.mjs"
   },
   "devDependencies": {
     "typescript": "6.0.3"
