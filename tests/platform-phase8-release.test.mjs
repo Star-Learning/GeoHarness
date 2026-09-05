@@ -44,12 +44,14 @@ test('Native Agent reports unsupported v1 capabilities instead of fabricating re
   const assembly = await ctx.systemPrompt.assemble()
   const prompt = assembly.sections.map(section => section.text).join('\n')
 
-  assert.deepEqual(diagnostics.unsupported_capabilities, ['raster', 'network-analysis'])
-  assert.match(prompt, /vector GIS capabilities only/u)
-  assert.match(prompt, /raster, network-analysis/u)
-  assert.match(prompt, /explicitly report the capability gap/u)
+  assert.deepEqual(diagnostics.unsupported_capabilities, ['scientific-raster', 'time-series-imagery', 'network-analysis'])
+  assert.match(prompt, /inspect_satellite_view/u)
+  assert.match(prompt, /Under no circumstances infer construction, demolition, development/u)
+  assert.match(prompt, /even if followed by a caveat/u)
+  assert.match(prompt, /scientific raster, time-series imagery or network-analysis/u)
+  assert.match(prompt, /explicitly report those gaps/u)
   assert.match(prompt, /do not fabricate a Layer or result/u)
-  assert.equal(ctx.tools.schemas().some(schema => /raster|network/u.test(schema.name)), false)
+  assert.equal(ctx.tools.schemas().some(schema => schema.name === 'inspect_satellite_view'), true)
 })
 
 test('production client remains Native Session driven and does not invoke Scenario planners', async () => {

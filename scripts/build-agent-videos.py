@@ -63,21 +63,29 @@ def recording_paths(scenario: str, frames_root: Path) -> tuple[Path, Path, Path]
     return frames, manifest, output
 
 
-def validate_frames(frames: Path, expected_count: int) -> None:
-    names = sorted(frames.glob("frame-*.png"))
+def validate_frames(frames: Path, expected_count: int) -> str:
+    names = sorted(path for path in frames.glob("frame-*.*") if path.suffix.lower() in {".png", ".jpg", ".jpeg"})
     if len(names) != expected_count:
         raise ValueError(f"{frames}: expected {expected_count} frames, found {len(names)}")
     if expected_count < CAPTURE_FPS * 10:
         raise ValueError(f"{frames}: recording must contain at least ten seconds of real UI frames")
+    suffixes = {path.suffix.lower() for path in names}
+    if len(suffixes) != 1:
+        raise ValueError(f"{frames}: every frame must use one consistent image extension")
+    suffix = names[0].suffix.lower()
     for index, path in enumerate(names, start=1):
-        if path.name != f"frame-{index:06d}.png":
-            raise ValueError(f"{frames}: frames must be contiguous from frame-000001.png")
+        if path.name != f"frame-{index:06d}{suffix}":
+            raise ValueError(f"{frames}: frames must be contiguous from frame-000001{suffix}")
         with Image.open(path) as image:
-            if image.format != "PNG" or image.size != FRAME_SIZE:
-                raise ValueError(f"{path}: expected a {FRAME_SIZE[0]}x{FRAME_SIZE[1]} PNG")
+            expected_format = "PNG" if suffix == ".png" else "JPEG"
+            if image.format != expected_format or image.size != FRAME_SIZE:
+                raise ValueError(
+                    f"{path}: expected a {FRAME_SIZE[0]}x{FRAME_SIZE[1]} {expected_format} whose extension matches its bytes"
+                )
+    return suffix
 
 
-def encode(frames: Path, output: Path) -> None:
+def encode(frames: Path, frame_suffix: str, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(".tmp.mp4")
     command = [
@@ -89,7 +97,7 @@ def encode(frames: Path, output: Path) -> None:
         "-framerate",
         str(CAPTURE_FPS),
         "-i",
-        str(frames / "frame-%06d.png"),
+        str(frames / f"frame-%06d{frame_suffix}"),
         "-vf",
         f"fps={OUTPUT_FPS},format=yuv420p",
         "-c:v",
@@ -142,9 +150,9 @@ def probe(path: Path) -> dict[str, Any]:
 def process_scenario(scenario: str, frames_root: Path, check_only: bool) -> Path:
     frames, manifest_path, output = recording_paths(scenario, frames_root)
     manifest = read_manifest(manifest_path)
-    validate_frames(frames, int(manifest["frame_count"]))
+    frame_suffix = validate_frames(frames, int(manifest["frame_count"]))
     if not check_only:
-        encode(frames, output)
+        encode(frames, frame_suffix, output)
     if not output.is_file() or output.stat().st_size < 100_000:
         raise ValueError(f"{output}: missing or unexpectedly small video")
     stream = probe(output)
@@ -162,7 +170,7 @@ def main() -> None:
         "--frames-root",
         type=Path,
         default=ROOT / ".tmp" / "agent-video-recordings",
-        help="root containing <scenario>/frames/frame-000001.png",
+        help="root containing <scenario>/frames/frame-000001.png or frame-000001.jpg",
     )
     parser.add_argument("--scenario", choices=SCENARIOS, help="build only one Scenario")
     args = parser.parse_args()

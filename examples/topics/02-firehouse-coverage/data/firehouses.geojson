@@ -1,0 +1,1127 @@
+{
+  "type": "FeatureCollection",
+  "name": "fdny_firehouses_manhattan",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "metadata": {
+    "source": "NYC Open Data",
+    "publisher": "New York City Fire Department (FDNY)",
+    "dataset_id": "hc8x-tcnd",
+    "source_url": "https://data.cityofnewyork.us/d/hc8x-tcnd",
+    "api_query_url": "https://data.cityofnewyork.us/resource/hc8x-tcnd.json?$limit=1000&$order=facilityname",
+    "snapshot_date": "2026-08-31",
+    "license": "NYC Open Data Terms of Use",
+    "filter": "borough = Manhattan; valid latitude/longitude",
+    "feature_count": 48
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "1047937",
+      "properties": {
+        "facility_name": "Battalion 10/Engine 22/Ladder 13",
+        "address": "159 East 85 Street",
+        "borough": "Manhattan",
+        "postcode": "10028",
+        "community_board": 108,
+        "community_council": 5,
+        "census_tract": "14801",
+        "bin": "1047937",
+        "bbl": "1015140027",
+        "nta": "Upper East Side-Carnegie Hill"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.955311,
+          40.778622
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1055910",
+      "properties": {
+        "facility_name": "Battalion 11/Engine 76/Ladder 22",
+        "address": "145 West 100th St.",
+        "borough": "Manhattan",
+        "postcode": "10025",
+        "community_board": 107,
+        "community_council": 7,
+        "census_tract": "189",
+        "bin": "1055910",
+        "bbl": "1018550005",
+        "nta": "Upper West Side"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.967261,
+          40.796449
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1054465",
+      "properties": {
+        "facility_name": "Battalion 12/Engine 35/Ladder 14",
+        "address": "2282 Third Avenue",
+        "borough": "Manhattan",
+        "postcode": "10035",
+        "community_board": 111,
+        "community_council": 8,
+        "census_tract": "196",
+        "bin": "1054465",
+        "bbl": "1017730033",
+        "nta": "East Harlem North"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.936522,
+          40.803297
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1075518",
+      "properties": {
+        "facility_name": "Battalion 13/Engine 93/Ladder 45",
+        "address": "515 West 181 Street",
+        "borough": "Manhattan",
+        "postcode": "10033",
+        "community_board": 112,
+        "community_council": 10,
+        "census_tract": "269",
+        "bin": "1075518",
+        "bbl": "1021550030",
+        "nta": "Washington Heights North"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.931662,
+          40.848722
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1075491",
+      "properties": {
+        "facility_name": "Battalion 16/Engine 69/Ladder 28",
+        "address": "248 West 143 Street",
+        "borough": "Manhattan",
+        "postcode": "10030",
+        "community_board": 110,
+        "community_council": 9,
+        "census_tract": "232",
+        "bin": "1075491",
+        "bbl": "1020280051",
+        "nta": "Central Harlem North-Polo Grounds"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.941821,
+          40.820847
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1080044",
+      "properties": {
+        "facility_name": "Battalion 2/Engine 24/Ladder 5",
+        "address": "227 Sixth Avenue",
+        "borough": "Manhattan",
+        "postcode": "10014",
+        "community_board": 102,
+        "community_council": 3,
+        "census_tract": "37",
+        "bin": "1080044",
+        "bbl": "1005200037",
+        "nta": "SoHo-TriBeCa-Civic Center-Little Italy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.003434,
+          40.728041
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1004078",
+      "properties": {
+        "facility_name": "Battalion 4/Engine 15/Ladder 18",
+        "address": "25 Pitt Street",
+        "borough": "Manhattan",
+        "postcode": "10002",
+        "community_board": 103,
+        "community_council": 1,
+        "census_tract": "12",
+        "bin": "1004078",
+        "bbl": "1003420060",
+        "nta": "Lower East Side"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.983927,
+          40.716439
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1009010",
+      "properties": {
+        "facility_name": "Battalion 6/Ladder 3",
+        "address": "108 East 13 Street",
+        "borough": "Manhattan",
+        "postcode": "10003",
+        "community_board": 103,
+        "community_council": 2,
+        "census_tract": "42",
+        "bin": "1009010",
+        "bbl": "1005580011",
+        "nta": "East Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.989443,
+          40.733093
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1014724",
+      "properties": {
+        "facility_name": "Battalion 7/Engine 3/Ladder 12",
+        "address": "150 West 19 Street",
+        "borough": "Manhattan",
+        "postcode": "10011",
+        "community_board": 104,
+        "community_council": 3,
+        "census_tract": "87",
+        "bin": "1014724",
+        "bbl": "1007940066",
+        "nta": "Hudson Yards-Chelsea-Flatiron-Union Square"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.996868,
+          40.741196
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1036462",
+      "properties": {
+        "facility_name": "Battalion 8/Engine 8/Ladder 2",
+        "address": "165 East 51 Street",
+        "borough": "Manhattan",
+        "postcode": "10022",
+        "community_board": 106,
+        "community_council": 4,
+        "census_tract": "100",
+        "bin": "1036462",
+        "bbl": "1013060033",
+        "nta": "Turtle Bay-East Midtown"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.970805,
+          40.756891
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1024767",
+      "properties": {
+        "facility_name": "Battalion 9/Engine 54/Ladder 4",
+        "address": "782 Eighth Avenue",
+        "borough": "Manhattan",
+        "postcode": "10036",
+        "community_board": 105,
+        "community_council": 3,
+        "census_tract": "125",
+        "bin": "1024767",
+        "bbl": "1010190061",
+        "nta": "Midtown-Midtown South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.986793,
+          40.76072
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1007523",
+      "properties": {
+        "facility_name": "Division 1/Ladder 20",
+        "address": "253 Lafayette Street",
+        "borough": "Manhattan",
+        "postcode": "10012",
+        "community_board": 102,
+        "community_council": 1,
+        "census_tract": "43",
+        "bin": "1007523",
+        "bbl": "1004950007",
+        "nta": "SoHo-TriBeCa-Civic Center-Little Italy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.996571,
+          40.723026
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1030885",
+      "properties": {
+        "facility_name": "Division 3/Ladder 25",
+        "address": "207 West 77th Street",
+        "borough": "Manhattan",
+        "postcode": "10024",
+        "community_board": 107,
+        "community_council": 6,
+        "census_tract": "163",
+        "bin": "1030885",
+        "bbl": "1011690026",
+        "nta": "Upper West Side"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.979841,
+          40.78223
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1015173",
+      "properties": {
+        "facility_name": "Engine 1/Ladder 24",
+        "address": "142 West 31 Street",
+        "borough": "Manhattan",
+        "postcode": "10001",
+        "community_board": 105,
+        "community_council": 3,
+        "census_tract": "101",
+        "bin": "1015173",
+        "bbl": "1008060066",
+        "nta": "Midtown-Midtown South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.991188,
+          40.748474
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1075700",
+      "properties": {
+        "facility_name": "Engine 10/Ladder 10",
+        "address": "124 Liberty Street",
+        "borough": "Manhattan",
+        "postcode": "10006",
+        "community_board": 101,
+        "community_council": 1,
+        "census_tract": "13",
+        "bin": "1075700",
+        "bbl": "1000520022",
+        "nta": "Battery Park City-Lower Manhattan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.012608,
+          40.709819
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1016141",
+      "properties": {
+        "facility_name": "Engine 14",
+        "address": "14 East 18 Street",
+        "borough": "Manhattan",
+        "postcode": "10003",
+        "community_board": 105,
+        "community_council": 2,
+        "census_tract": "52",
+        "bin": "1016141",
+        "bbl": "1008460066",
+        "nta": "Hudson Yards-Chelsea-Flatiron-Union Square"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.991035,
+          40.737948
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1019903",
+      "properties": {
+        "facility_name": "Engine 16/Ladder 7",
+        "address": "234 East 29 Street",
+        "borough": "Manhattan",
+        "postcode": "10016",
+        "community_board": 106,
+        "community_council": 2,
+        "census_tract": "66",
+        "bin": "1019903",
+        "bbl": "1009090035",
+        "nta": "Murray Hill-Kips Bay"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.97888,
+          40.741676
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1020385",
+      "properties": {
+        "facility_name": "Engine 21",
+        "address": "238 East 40 Street",
+        "borough": "Manhattan",
+        "postcode": "10016",
+        "community_board": 106,
+        "community_council": 4,
+        "census_tract": "88",
+        "bin": "1020385",
+        "bbl": "1009200042",
+        "nta": "Turtle Bay-East Midtown"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.974027,
+          40.748642
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1024915",
+      "properties": {
+        "facility_name": "Engine 23",
+        "address": "215 W 58th Street",
+        "borough": "Manhattan",
+        "postcode": "10019",
+        "community_board": 105,
+        "community_council": 4,
+        "census_tract": "137",
+        "bin": "1024915",
+        "bbl": "1010300023",
+        "nta": "Midtown-Midtown South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.980368,
+          40.766699
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1014447",
+      "properties": {
+        "facility_name": "Engine 26",
+        "address": "220 West 37 Street",
+        "borough": "Manhattan",
+        "postcode": "10018",
+        "community_board": 105,
+        "community_council": 3,
+        "census_tract": "109",
+        "bin": "1014447",
+        "bbl": "1007860061",
+        "nta": "Midtown-Midtown South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.990376,
+          40.753107
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1004608",
+      "properties": {
+        "facility_name": "Engine 28/Ladder 11",
+        "address": "222 East 2 Street",
+        "borough": "Manhattan",
+        "postcode": "10009",
+        "community_board": 103,
+        "community_council": 2,
+        "census_tract": "2202",
+        "bin": "1004608",
+        "bbl": "1003850058",
+        "nta": "Lower East Side"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.982526,
+          40.721879
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1008526",
+      "properties": {
+        "facility_name": "Engine 33/Ladder 9",
+        "address": "42 Great Jones Street",
+        "borough": "Manhattan",
+        "postcode": "10012",
+        "community_board": 102,
+        "community_council": 1,
+        "census_tract": "5502",
+        "bin": "1008526",
+        "bbl": "1005310049",
+        "nta": "West Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.992526,
+          40.726986
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1012982",
+      "properties": {
+        "facility_name": "Engine 34/Ladder 21",
+        "address": "440 West 38th Street",
+        "borough": "Manhattan",
+        "postcode": "10018",
+        "community_board": 104,
+        "community_council": 3,
+        "census_tract": "111",
+        "bin": "1012982",
+        "bbl": "1007350061",
+        "nta": "Hudson Yards-Chelsea-Flatiron-Union Square"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.996471,
+          40.756593
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1059547",
+      "properties": {
+        "facility_name": "Engine 37/Ladder 40",
+        "address": "415 West 125 Street",
+        "borough": "Manhattan",
+        "postcode": "10027",
+        "community_board": 109,
+        "community_council": 7,
+        "census_tract": "20901",
+        "bin": "1059547",
+        "bbl": "1019660061",
+        "nta": "Morningside Heights"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.9546,
+          40.811921
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1072190",
+      "properties": {
+        "facility_name": "Engine 39/Ladder 16",
+        "address": "157 E 67th St",
+        "borough": "Manhattan",
+        "postcode": "10065",
+        "community_board": 108,
+        "community_council": 4,
+        "census_tract": "120",
+        "bin": "1072190",
+        "bbl": "1014020029",
+        "nta": "Upper East Side-Carnegie Hill"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.963612,
+          40.767062
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1000867",
+      "properties": {
+        "facility_name": "Engine 4/Ladder 15",
+        "address": "42 South Street",
+        "borough": "Manhattan",
+        "postcode": "10005",
+        "community_board": 101,
+        "community_council": 1,
+        "census_tract": "7",
+        "bin": "1000867",
+        "bbl": "1000350001",
+        "nta": "Battery Park City-Lower Manhattan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.007717,
+          40.703694
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1028836",
+      "properties": {
+        "facility_name": "Engine 40/Ladder 35",
+        "address": "131 Amsterdam Avenue",
+        "borough": "Manhattan",
+        "postcode": "10023",
+        "community_board": 107,
+        "community_council": 6,
+        "census_tract": "149",
+        "bin": "1028836",
+        "bbl": "1011370061",
+        "nta": "Lincoln Square"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.984225,
+          40.774562
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1044059",
+      "properties": {
+        "facility_name": "Engine 44",
+        "address": "221 East 75 Street",
+        "borough": "Manhattan",
+        "postcode": "10021",
+        "community_board": 108,
+        "community_council": 4,
+        "census_tract": "134",
+        "bin": "1044059",
+        "bbl": "1014300010",
+        "nta": "Lenox Hill-Roosevelt Island"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.958154,
+          40.771454
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1056999",
+      "properties": {
+        "facility_name": "Engine 47",
+        "address": "500 West 113 Street",
+        "borough": "Manhattan",
+        "postcode": "10025",
+        "community_board": 109,
+        "community_council": 7,
+        "census_tract": "199",
+        "bin": "1056999",
+        "bbl": "1018840038",
+        "nta": "Morningside Heights"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.962932,
+          40.804946
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1006520",
+      "properties": {
+        "facility_name": "Engine 5",
+        "address": "340 East 14 Street",
+        "borough": "Manhattan",
+        "postcode": "10003",
+        "community_board": 103,
+        "community_council": 2,
+        "census_tract": "40",
+        "bin": "1006520",
+        "bbl": "1004550028",
+        "nta": "East Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.983407,
+          40.731494
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1051850",
+      "properties": {
+        "facility_name": "Engine 53/Ladder 43",
+        "address": "1836 Third Avenue",
+        "borough": "Manhattan",
+        "postcode": "10029",
+        "community_board": 111,
+        "community_council": 8,
+        "census_tract": "166",
+        "bin": "1051850",
+        "bbl": "1016290040",
+        "nta": "East Harlem South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.946985,
+          40.788923
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1066722",
+      "properties": {
+        "facility_name": "Engine 55",
+        "address": "363 Broome Street",
+        "borough": "Manhattan",
+        "postcode": "10013",
+        "community_board": 102,
+        "community_council": 1,
+        "census_tract": "41",
+        "bin": "1066722",
+        "bbl": "1004700012",
+        "nta": "SoHo-TriBeCa-Civic Center-Little Italy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.99576,
+          40.719841
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1051632",
+      "properties": {
+        "facility_name": "Engine 58/Ladder 26",
+        "address": "1367 Fifth Avenue",
+        "borough": "Manhattan",
+        "postcode": "10029",
+        "community_board": 111,
+        "community_council": 9,
+        "census_tract": "184",
+        "bin": "1051632",
+        "bbl": "1016180014",
+        "nta": "East Harlem North"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.947333,
+          40.798913
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1058225",
+      "properties": {
+        "facility_name": "Engine 59/Ladder 30",
+        "address": "111 West 133 Street",
+        "borough": "Manhattan",
+        "postcode": "10030",
+        "community_board": 110,
+        "community_council": 9,
+        "census_tract": "226",
+        "bin": "1058225",
+        "bbl": "1019180024",
+        "nta": "Central Harlem North-Polo Grounds"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.94245,
+          40.813332
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1001287",
+      "properties": {
+        "facility_name": "Engine 6",
+        "address": "49 Beekman Street",
+        "borough": "Manhattan",
+        "postcode": "10038",
+        "community_board": 101,
+        "community_council": 1,
+        "census_tract": "1501",
+        "bin": "1001287",
+        "bbl": "1000930030",
+        "nta": "Battery Park City-Lower Manhattan"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.005395,
+          40.709971
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1076256",
+      "properties": {
+        "facility_name": "Engine 65",
+        "address": "33 West 43 Street",
+        "borough": "Manhattan",
+        "postcode": "10036",
+        "community_board": 105,
+        "community_council": 4,
+        "census_tract": "96",
+        "bin": "1076256",
+        "bbl": "1012590018",
+        "nta": "Midtown-Midtown South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.981979,
+          40.754975
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1085743",
+      "properties": {
+        "facility_name": "Engine 67",
+        "address": "518 West 170 Street",
+        "borough": "Manhattan",
+        "postcode": "10032",
+        "community_board": 112,
+        "community_council": 10,
+        "census_tract": "253",
+        "bin": "1085743",
+        "bbl": "1021260035",
+        "nta": "Washington Heights South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.937195,
+          40.841279
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1032079",
+      "properties": {
+        "facility_name": "Engine 74",
+        "address": "120 West 83 Street",
+        "borough": "Manhattan",
+        "postcode": "10024",
+        "community_board": 107,
+        "community_council": 6,
+        "census_tract": "169",
+        "bin": "1032079",
+        "bbl": "1012130041",
+        "nta": "Upper West Side"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.974602,
+          40.784697
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1075504",
+      "properties": {
+        "facility_name": "Engine 80/Ladder 23",
+        "address": "503 West 139 Street",
+        "borough": "Manhattan",
+        "postcode": "10031",
+        "community_board": 109,
+        "community_council": 7,
+        "census_tract": "225",
+        "bin": "1075504",
+        "bbl": "1020710027",
+        "nta": "Hamilton Heights"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.950762,
+          40.821948
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1062872",
+      "properties": {
+        "facility_name": "Engine 84/Ladder 34",
+        "address": "513 West 161 Street",
+        "borough": "Manhattan",
+        "postcode": "10032",
+        "community_board": 112,
+        "community_council": 7,
+        "census_tract": "245",
+        "bin": "1062872",
+        "bbl": "1021200046",
+        "nta": "Washington Heights South"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.940959,
+          40.835918
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1003898",
+      "properties": {
+        "facility_name": "Engine 9/Ladder 6",
+        "address": "75 Canal Street",
+        "borough": "Manhattan",
+        "postcode": "10002",
+        "community_board": 103,
+        "community_council": 1,
+        "census_tract": "16",
+        "bin": "1003898",
+        "bbl": "1003000030",
+        "nta": "Chinatown"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.992834,
+          40.715408
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1052473",
+      "properties": {
+        "facility_name": "Engine 91",
+        "address": "242 East 111 Street",
+        "borough": "Manhattan",
+        "postcode": "10029",
+        "community_board": 111,
+        "community_council": 8,
+        "census_tract": "180",
+        "bin": "1052473",
+        "bbl": "1016600030",
+        "nta": "East Harlem North"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.940791,
+          40.793843
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1064801",
+      "properties": {
+        "facility_name": "Engine 95/Ladder 36",
+        "address": "29 Vermilyea Avenue",
+        "borough": "Manhattan",
+        "postcode": "10034",
+        "community_board": 112,
+        "community_council": 10,
+        "census_tract": "291",
+        "bin": "1064801",
+        "bbl": "1022240015",
+        "nta": "Marble Hill-Inwood"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.925154,
+          40.864897
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1002150",
+      "properties": {
+        "facility_name": "Ladder 8",
+        "address": "14 N. Moore Street",
+        "borough": "Manhattan",
+        "postcode": "10013",
+        "community_board": 101,
+        "community_council": 1,
+        "census_tract": "33",
+        "bin": "1002150",
+        "bbl": "1001890035",
+        "nta": "SoHo-TriBeCa-Civic Center-Little Italy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.00662,
+          40.719574
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1001647",
+      "properties": {
+        "facility_name": "Manhattan Borough Command/Battalion 1/Engine 7/Ladder 1",
+        "address": "100 Duane Street",
+        "borough": "Manhattan",
+        "postcode": "10007",
+        "community_board": 101,
+        "community_council": 1,
+        "census_tract": "33",
+        "bin": "1001647",
+        "bbl": "1001500025",
+        "nta": "SoHo-TriBeCa-Civic Center-Little Italy"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.0063,
+          40.715339
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1086681",
+      "properties": {
+        "facility_name": "Marine 1",
+        "address": "20 Rear Bloomfield Street",
+        "borough": "Manhattan",
+        "postcode": "10014",
+        "community_board": 102,
+        "community_council": 3,
+        "census_tract": "79",
+        "bin": "1086681",
+        "bbl": "1006510105",
+        "nta": "West Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.011815,
+          40.740647
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1070109",
+      "properties": {
+        "facility_name": "Rescue 1",
+        "address": "530 West 43 Street",
+        "borough": "Manhattan",
+        "postcode": "10036",
+        "community_board": 104,
+        "community_council": 3,
+        "census_tract": "129",
+        "bin": "1070109",
+        "bbl": "1010710049",
+        "nta": "Clinton"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -73.996616,
+          40.760727
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "1010686",
+      "properties": {
+        "facility_name": "Squad 18",
+        "address": "132 West 10 Street",
+        "borough": "Manhattan",
+        "postcode": "10014",
+        "community_board": 102,
+        "community_council": 3,
+        "census_tract": "71",
+        "bin": "1010686",
+        "bbl": "1006100051",
+        "nta": "West Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.000381,
+          40.734518
+        ]
+      }
+    }
+  ]
+}

@@ -2,8 +2,8 @@
 
 > 此文件由 `scripts/generate-catalog-reference.mjs` 从版本化 Dataset / Tool catalog 生成，请勿手工维护清单。
 
-- Tool catalog：`geoharness.builtin` / schema `1.0` / 13 tools
-- Dataset catalogs：1
+- Tool catalog：`geoharness.builtin` / schema `1.0` / 14 tools
+- Dataset catalogs：2
 
 ## Built-in Tools
 
@@ -21,6 +21,7 @@
 | `calculate_geometry` | `1.0.0` | `vector.geometry-calculate` | `add-layer` | yes | 120000 ms |
 | `nearest_features` | `1.0.0` | `vector.nearest` | `add-layer` | yes | 120000 ms |
 | `analyze_distribution` | `1.0.0` | `vector.distribution` | `none` | no | 120000 ms |
+| `inspect_satellite_view` | `0.3.0` | `imagery.visual-inspection` | `add-overlay` | no | 120000 ms |
 | `export_layer` | `1.0.0` | `vector.export` | `export` | no | 120000 ms |
 
 ## Dataset Catalogs
@@ -28,6 +29,7 @@
 | Dataset | Region / CRS | Snapshot | Layers | License |
 | --- | --- | --- | --- | --- |
 | `nyc-core-official` | Manhattan, New York City / `OGC:CRS84` | 2026-08-27 | `buildings`, `roads`, `rivers`, `districts`, `lower_manhattan_buildings` | NYC Open Data Terms of Use |
+| `nyc-fire-coverage-official` | Lower Manhattan, New York City / `OGC:CRS84` | 2026-08-31 | `coverage_buildings`, `firehouses`, `coverage_districts` | NYC Open Data Terms of Use |
 
 ## Extension Gate
 

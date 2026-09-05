@@ -43,21 +43,23 @@ async function execute(ctx, name, args, callId) {
   })
 }
 
-test('the GeoHarness host plugin registers dataset discovery plus the 12 GIS Tool schemas', async () => {
+test('the GeoHarness host plugin registers dataset discovery plus 13 GIS and imagery Tool schemas', async () => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-phase5-schemas-'))
   try {
     const ctx = await setup(temporary)
     const schemas = ctx.tools.schemas()
     const names = schemas.map(schema => schema.name)
-    assert.equal(names.length, 13)
+    assert.equal(names.length, 14)
     const expectedNames = [
       'discover_datasets', 'inspect_dataset', 'list_layers', 'transform_crs', 'create_buffer',
       'spatial_filter', 'spatial_join', 'clip_layer', 'aggregate_by_region',
-      'calculate_geometry', 'nearest_features', 'analyze_distribution', 'export_layer',
+      'calculate_geometry', 'nearest_features', 'analyze_distribution', 'inspect_satellite_view', 'export_layer',
     ]
     assert.deepEqual(names, expectedNames)
     const listSchema = schemas.find(schema => schema.name === 'list_layers')
-    assert.deepEqual(listSchema.parameters.properties.dataset_id.enum, ['nyc-core-official'])
+    assert.deepEqual(listSchema.parameters.properties.dataset_id.enum, [
+      'nyc-core-official', 'nyc-fire-coverage-official',
+    ])
     const assembly = await ctx.systemPrompt.assemble()
     assert.deepEqual(assembly.tools.map(tool => tool.name), [...names].sort())
   } finally {
@@ -72,7 +74,9 @@ test('Harness ToolRuntime executes a complete river-buffer workflow through the 
     const discovered = await execute(ctx, 'discover_datasets', {}, 'phase5-discover')
     assert.equal(discovered.isError, false)
     assert.equal(discovered.value.success, true)
-    assert.deepEqual(discovered.value.data.datasets.map(dataset => dataset.id), ['nyc-core-official'])
+    assert.deepEqual(discovered.value.data.datasets.map(dataset => dataset.id), [
+      'nyc-core-official', 'nyc-fire-coverage-official',
+    ])
 
     const listed = await execute(ctx, 'list_layers', { dataset_id: 'nyc-core-official' }, 'phase5-list')
     assert.equal(listed.isError, false)

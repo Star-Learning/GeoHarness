@@ -48,6 +48,32 @@ function agentWorkspacePayload(payload) {
   return { workspaceKey }
 }
 
+function imageryViewPayload(payload) {
+  const workspace = agentWorkspacePayload(payload)
+  const bbox = payload?.bbox
+  const zoom = payload?.zoom
+  if (workspace === null || !Array.isArray(bbox) || bbox.length !== 4
+    || bbox.some(value => typeof value !== 'number' || !Number.isFinite(value))
+    || !(bbox[0] >= -180 && bbox[0] < bbox[2] && bbox[2] <= 180)
+    || !(bbox[1] >= -85.05112878 && bbox[1] < bbox[3] && bbox[3] <= 85.05112878)
+    || !Number.isSafeInteger(zoom) || zoom < 0 || zoom > 19) return null
+  return { ...workspace, bbox, zoom }
+}
+
+function imageryPreferencePayload(payload) {
+  const workspace = agentWorkspacePayload(payload)
+  const inspectionId = payload?.inspection_id
+  const visible = payload?.visible
+  const opacity = payload?.opacity
+  if (workspace === null || typeof inspectionId !== 'string' || !RESULT_ASSET_ID.test(inspectionId)
+    || (visible === undefined && opacity === undefined)
+    || (visible !== undefined && typeof visible !== 'boolean')
+    || (opacity !== undefined && (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1))) {
+    return null
+  }
+  return { ...workspace, inspectionId, visible, opacity }
+}
+
 function resultRequestPayload(payload) {
   const workspace = agentWorkspacePayload(payload)
   if (workspace === null) return null
@@ -270,6 +296,54 @@ export function registerGeoRpc(ctx) {
   }
 
   return ctx.connection.rpc.handle('/geoharness', async (endpoint, payload, signal) => {
+    if (endpoint === 'imagery/view') {
+      const request = imageryViewPayload(payload)
+      if (request === null) return badRequest('A valid bounded satellite viewport is required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'imagery_view', workspaceKey: request.workspaceKey,
+          view: { bbox: request.bbox, zoom: request.zoom },
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'imagery/latest') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      try {
+        const value = await ctx.geo.execute({ action: 'imagery_latest', workspaceKey: request.workspaceKey }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'imagery/target') {
+      const request = agentWorkspacePayload(payload)
+      if (request === null) return badRequest('A valid workspace_key is required')
+      try {
+        const value = await ctx.geo.execute({ action: 'imagery_target', workspaceKey: request.workspaceKey }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
+    if (endpoint === 'imagery/preference') {
+      const request = imageryPreferencePayload(payload)
+      if (request === null) return badRequest('A valid imagery Layer preference is required')
+      try {
+        const value = await ctx.geo.execute({
+          action: 'imagery_preference', workspaceKey: request.workspaceKey,
+          inspection_id: request.inspectionId,
+          ...request.visible === undefined ? {} : { visible: request.visible },
+          ...request.opacity === undefined ? {} : { opacity: request.opacity },
+        }, signal)
+        return { ok: true, value }
+      } catch (error) {
+        return badRequest((error instanceof Error ? error.message : String(error)).slice(0, 800))
+      }
+    }
     if (endpoint === 'agent/workspace') {
       const request = agentWorkspacePayload(payload)
       if (request === null) return badRequest('A valid workspace_key is required')

@@ -77,6 +77,37 @@ test('CSV import preview detects quoted fields and coordinate mapping before can
   assert.equal(model.suggestCoordinateField(preview.fields, 'latitude'), 'latitude')
 })
 
+test('Agent Markdown becomes safe structured display tokens instead of raw markers', async () => {
+  const { model } = await loadModels()
+  const blocks = model.parseAgentMarkdown([
+    '## 巡检结果',
+    '',
+    '- **行政区内像素**：108502',
+    '- `boundary_clipped`: true',
+    '',
+    '> 仅为 RGB 视觉初筛。',
+    '',
+    '| 类别 | 占比 |',
+    '|---|---:|',
+    '| 植被 | **35.5%** |',
+    '',
+    '[来源](https://www.openstreetmap.org/copyright)',
+  ].join('\n'))
+  assert.deepEqual(Array.from(blocks, block => block.type), [
+    'heading', 'unordered-list', 'blockquote', 'table', 'paragraph',
+  ])
+  assert.equal(blocks[0].level, 2)
+  assert.equal(blocks[1].items[0][0].type, 'strong')
+  assert.equal(blocks[1].items[1][0].type, 'code')
+  assert.equal(blocks[3].headers.length, 2)
+  assert.equal(blocks[3].rows[0][1][0].type, 'strong')
+  assert.equal(blocks[4].content[0].type, 'link')
+
+  const unsafe = model.parseAgentMarkdown('<script>alert(1)</script>')
+  assert.equal(unsafe[0].content[0].type, 'text')
+  assert.equal(unsafe[0].content[0].text, '<script>alert(1)</script>')
+})
+
 test('map scale and temporary Layer styling remain bounded', async () => {
   const { model, registry } = await loadModels()
   assert.match(model.mapScaleLabel([-74.02, 40.69, -73.95, 40.73], 1), /^≈ [\d.]+ (m|km)$/u)
@@ -89,6 +120,11 @@ test('map scale and temporary Layer styling remain bounded', async () => {
   assert.deepEqual({ ...changed[0].style }, { color: '#abcdef', fillOpacity: 0, lineWidth: 6 })
   assert.equal(registry.setLayerStyle(changed, layer.id, { color: 'red' })[0].style.color, '#abcdef')
   assert.equal(registry.resetLayerStyle(changed, layer.id)[0].style.color, '#e11d48')
+  assert.equal(model.mapLayerOpacity(1, 'input'), 0.32)
+  assert.equal(model.mapLayerOpacity(1, 'intermediate'), 0.42)
+  assert.equal(model.mapLayerOpacity(1, 'final'), 0.68)
+  assert.equal(model.mapLayerOpacity(0.4, 'final', true), 0.328)
+  assert.equal(model.mapLayerOpacity(2, 'other'), 0.55)
 })
 
 test('production UI contains synchronized status, charts, grouped layers and presentation controls', async () => {
@@ -99,10 +135,13 @@ test('production UI contains synchronized status, charts, grouped layers and pre
   for (const marker of [
     'gh-execution-strip', 'buildFeatureFlow', 'buildNumericStatistics', 'groupWorkspaceLayers',
     'Intermediate layers', 'Final result layers', 'gh-map-legend', 'mapScaleLabel',
-    'parseCsvPreview', '筛选当前 100 行属性', 'requestFullscreen',
+    'parseCsvPreview', '筛选当前 100 行属性', 'setPresentationMode(current => !current)',
+    'MarkdownContent', 'parseAgentMarkdown', 'gh-map-inspection-progress',
   ]) assert.ok(client.includes(marker), `client is missing ${marker}`)
   for (const selector of [
     '.gh-execution-strip', '.gh-result-flow', '.gh-stat-chart', '.gh-map-legend',
     '.gh-layer-style-controls', '.gh-table-controls', '.gh-shell.is-presentation',
+    '.gh-agent .gh-panel-heading', '.gh-plan-list li:not(:last-child)::after',
+    '.gh-markdown', '.gh-map-inspection-progress', '.gh-inspection-spinner',
   ]) assert.ok(styles.includes(selector), `styles are missing ${selector}`)
 })

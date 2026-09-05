@@ -1,0 +1,34 @@
+{
+  "$schema": "../../../bundle/geoharness-bundle/catalog/schemas/dataset-catalog.schema.json",
+  "schema_version": "1.0",
+  "id": "nyc-fire-coverage-official",
+  "title": "Lower Manhattan Fire Coverage Official Data",
+  "description": "Audited NYC official building footprints, FDNY firehouse points, and Community District boundaries for agent-planned straight-line fire-service coverage screening. The catalog exposes data capabilities only and does not prescribe a workflow or expected result.",
+  "region": "Lower Manhattan, New York City",
+  "crs": "OGC:CRS84",
+  "snapshot_date": "2026-08-31",
+  "publishers": [
+    "New York City Fire Department",
+    "NYC Department of City Planning",
+    "NYC Office of Technology and Innovation"
+  ],
+  "layers": [
+    {
+      "name": "coverage_buildings",
+      "path": "../../scenarios/01-building-data-inspection/data/buildings.geojson",
+      "description": "360 official Lower Manhattan building footprints from the audited 2026-08-27 snapshot."
+    },
+    {
+      "name": "firehouses",
+      "path": "../../topics/02-firehouse-coverage/data/firehouses.geojson",
+      "description": "48 Manhattan FDNY firehouse locations from NYC Open Data snapshot 2026-08-31."
+    },
+    {
+      "name": "coverage_districts",
+      "path": "../../scenarios/03-building-statistics-by-district/data/districts.geojson",
+      "description": "Official Lower Manhattan Community District boundaries from the audited 2026-08-27 snapshot."
+    }
+  ],
+  "license": "NYC Open Data Terms of Use",
+  "source_audit": "../../topics/02-firehouse-coverage/data/source.json"
+}

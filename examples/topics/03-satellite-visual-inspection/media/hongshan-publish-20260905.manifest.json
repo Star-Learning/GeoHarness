@@ -1,0 +1,249 @@
+{
+  "schema_version": "1.0",
+  "session_id": "session-f9bb5bfa-d16b-41d0-98d3-3ab93c5459f2",
+  "prompt": "全程中文巡检武汉市洪山区卫星影像，200字简报，附分类表与局限。",
+  "source_dimensions": {
+    "(1920, 1080)": 649,
+    "(2560, 1440)": 140
+  },
+  "source_capture": "supported-browser screenshots, requested 8 fps; not native 60 fps recording",
+  "capture_limitations": "One bounded capture call timed out after frame 613; all persisted frames retained. Viewport changed from 1080p to 1440p mid-capture. Output normalized with Lanczos. No missing frames inside either saved sequence; unrecorded inter-chunk waits are omitted.",
+  "edit_timeline": [
+    {
+      "source": "final-recording",
+      "first_frame": 1,
+      "last_frame": 16,
+      "speed": 0.5,
+      "start_seconds": 0.0,
+      "end_seconds": 4.0,
+      "caption": "一句话，让 GIS Agent 巡检洪山区"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 17,
+      "last_frame": 105,
+      "speed": 2,
+      "start_seconds": 4.0,
+      "end_seconds": 9.5,
+      "caption": "01  理解需求，选择影像巡检工具"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 106,
+      "last_frame": 150,
+      "speed": 1,
+      "start_seconds": 9.5,
+      "end_seconds": 15.125,
+      "caption": "02  从当前视图飞往目标区域"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 151,
+      "last_frame": 180,
+      "speed": 1,
+      "start_seconds": 15.125,
+      "end_seconds": 18.875,
+      "caption": "03  校验行政边界，锁定分析范围"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 181,
+      "last_frame": 337,
+      "speed": 3,
+      "start_seconds": 18.875,
+      "end_seconds": 25.375,
+      "caption": "04  获取影像，处理行政区内像素"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 338,
+      "last_frame": 516,
+      "speed": 3,
+      "start_seconds": 25.375,
+      "end_seconds": 32.875,
+      "caption": "05  蒙版已生成，Agent 整理报告"
+    },
+    {
+      "source": "final-recording",
+      "first_frame": 517,
+      "last_frame": 613,
+      "speed": 1,
+      "start_seconds": 32.875,
+      "end_seconds": 45.0,
+      "caption": "06  Agent 输出中文报告与分类表"
+    },
+    {
+      "source": "final-ending",
+      "first_frame": 1,
+      "last_frame": 48,
+      "speed": 1,
+      "start_seconds": 45.0,
+      "end_seconds": 51.0,
+      "caption": "07  查看结构化结果，管理分析图层"
+    },
+    {
+      "source": "final-ending",
+      "first_frame": 49,
+      "last_frame": 72,
+      "speed": 1,
+      "start_seconds": 51.0,
+      "end_seconds": 54.0,
+      "caption": "蒙版也是图层：一键对照卫星底图"
+    },
+    {
+      "source": "final-ending",
+      "first_frame": 73,
+      "last_frame": 112,
+      "speed": 1,
+      "start_seconds": 54.0,
+      "end_seconds": 59.0,
+      "caption": "调整透明度，让结果与影像同时可见"
+    },
+    {
+      "source": "final-ending",
+      "first_frame": 113,
+      "last_frame": 176,
+      "speed": 1,
+      "start_seconds": 59.0,
+      "end_seconds": 67.0,
+      "caption": "从一句需求，到地图、图层与报告"
+    }
+  ],
+  "duration_seconds": 67.0,
+  "output_resolution": [
+    1920,
+    1080
+  ],
+  "output_fps": 60,
+  "report_detail_view": "During chapter 06 only, the same 1440p frame report crop (2070,380,2550,1275) is enlarged to 510x951 for legibility and labelled as a detail view.",
+  "frame_rate_conversion": "frame repetition, no synthetic UI/text/analysis frames",
+  "audio": "Original synthesized low-volume ambient accompaniment. No external music or samples.",
+  "layout_verification": {
+    "agent": {
+      "bottom": 1068,
+      "height": 1006,
+      "left": 1428,
+      "right": 1908,
+      "top": 62,
+      "width": 480,
+      "x": 1428,
+      "y": 62
+    },
+    "agentScroll": {
+      "bottom": 911,
+      "height": 781,
+      "left": 1429,
+      "right": 1907,
+      "top": 130,
+      "width": 478,
+      "x": 1429,
+      "y": 130
+    },
+    "composer": {
+      "bottom": 1056,
+      "height": 126,
+      "left": 1440,
+      "right": 1896,
+      "top": 930,
+      "width": 456,
+      "x": 1440,
+      "y": 930
+    },
+    "map": {
+      "bottom": 893,
+      "height": 766,
+      "left": 13,
+      "right": 1413,
+      "top": 127,
+      "width": 1400,
+      "x": 13,
+      "y": 127
+    },
+    "session": "session-f9bb5bfa-d16b-41d0-98d3-3ab93c5459f2",
+    "shell": {
+      "bottom": 1080,
+      "height": 1080,
+      "left": 0,
+      "right": 1920,
+      "top": 0,
+      "width": 1920,
+      "x": 0,
+      "y": 0
+    },
+    "stage": "result",
+    "summary": {
+      "bottom": 1033,
+      "height": 123,
+      "left": 27,
+      "right": 1399,
+      "top": 910,
+      "width": 1372,
+      "x": 27,
+      "y": 910
+    },
+    "viewport": [
+      1920,
+      1080
+    ]
+  },
+  "analysis": {
+    "inspection_id": "inspection-99f92bd6a39a4946",
+    "created_at": "2026-09-05T02:53:24.224311+00:00",
+    "tile_count": 12,
+    "tile_zoom": 11,
+    "pixel_width": 683,
+    "pixel_height": 533,
+    "analysis_scope": {
+      "type": "administrative-boundary",
+      "boundary_clipped": true,
+      "analysis_pixel_count": 108502,
+      "boundary_source": "OpenStreetMap Nominatim",
+      "boundary_label": "洪山区, 武汉市, 湖北省, 中国"
+    },
+    "categories": [
+      {
+        "category": "water",
+        "pixel_count": 22,
+        "pixel_ratio": 0.000203,
+        "heuristic_confidence": 0.622
+      },
+      {
+        "category": "vegetation",
+        "pixel_count": 38537,
+        "pixel_ratio": 0.355173,
+        "heuristic_confidence": 0.636
+      },
+      {
+        "category": "built_up",
+        "pixel_count": 9690,
+        "pixel_ratio": 0.089307,
+        "heuristic_confidence": 0.697
+      },
+      {
+        "category": "bare_ground",
+        "pixel_count": 53593,
+        "pixel_ratio": 0.493936,
+        "heuristic_confidence": 0.742
+      }
+    ],
+    "classified_pixel_ratio": 0.938619,
+    "method": "bounded RGB colour-dominance and edge heuristics",
+    "overlay_layer": {
+      "layer_id": "raster_inspection-99f92bd6a39a4946",
+      "name": "Satellite visual screening mask",
+      "layer_type": "raster-overlay",
+      "source": "derived",
+      "visible": true,
+      "opacity": 0.52
+    }
+  },
+  "boundary_cache": {
+    "mode": "explicit-session-cache",
+    "captured_at": "2026-09-01T12:15:18.642026+00:00",
+    "source_session": "session-56f725db-26b5-41e1-b960-4ae7c37a272b",
+    "note": "地名与行政边界使用历史真实缓存；影像重新请求，分类重新计算。"
+  },
+  "final_status": "success",
+  "video": "hongshan-publish-20260905.mp4",
+  "sha256": "12f3d58a51f23db57f8448c7cf924b28bcd82f629fcc099e338a1bbe6ce9a157"
+}

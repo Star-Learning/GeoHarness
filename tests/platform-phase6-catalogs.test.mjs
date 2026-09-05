@@ -49,23 +49,28 @@ test('versioned catalogs are the single registration and generated-document sour
   assert.equal(datasetSchema.$id, 'https://geoharness.dev/schemas/dataset-catalog-1.0.json')
 
   const tools = mergeToolCatalogs([loadBuiltinToolCatalog()])
-  assert.equal(tools.length, 13)
+  assert.equal(tools.length, 14)
   assert.deepEqual(tools.map(tool => tool.name), [
     'discover_datasets', 'inspect_dataset', 'list_layers', 'transform_crs', 'create_buffer',
     'spatial_filter', 'spatial_join', 'clip_layer', 'aggregate_by_region',
-    'calculate_geometry', 'nearest_features', 'analyze_distribution', 'export_layer',
+    'calculate_geometry', 'nearest_features', 'analyze_distribution', 'inspect_satellite_view', 'export_layer',
   ])
-  assert.ok(tools.every(tool => tool.version === '1.0.0' && tool.output.contract === 'ToolResult@1.0'))
+  assert.ok(tools.every(tool => tool.output.contract === 'ToolResult@1.0'))
+  assert.equal(tools.find(tool => tool.name === 'inspect_satellite_view').version, '0.3.0')
+  assert.equal(tools.find(tool => tool.name === 'inspect_satellite_view').parameters.place_name.type, 'string')
 
   const datasets = loadDatasetCatalogs(datasetRoot)
-  assert.equal(datasets.length, 1)
-  assert.equal(datasets[0].id, 'nyc-core-official')
-  assert.deepEqual(datasets[0].layers.map(layer => layer.name), [
+  assert.deepEqual(datasets.map(dataset => dataset.id), [
+    'nyc-core-official', 'nyc-fire-coverage-official',
+  ])
+  const coreDataset = datasets.find(dataset => dataset.id === 'nyc-core-official')
+  assert.deepEqual(coreDataset.layers.map(layer => layer.name), [
     'buildings', 'roads', 'rivers', 'districts', 'lower_manhattan_buildings',
   ])
   const reference = await readFile(join(repositoryRoot, 'docs', 'architecture', 'catalog-reference.md'), 'utf8')
   for (const tool of tools) assert.ok(reference.includes(`| \`${tool.name}\` |`))
   assert.match(reference, /`nyc-core-official`/u)
+  assert.match(reference, /`nyc-fire-coverage-official`/u)
 })
 
 test('a fixture Tool registers and executes without changing Agent, Layer or Result Center UI code', async () => {
@@ -85,7 +90,7 @@ test('a fixture Tool registers and executes without changing Agent, Layer or Res
     toolCatalogs: [fixture],
     executors: { fixture_layer_note: executor },
   })
-  assert.equal(diagnostics.registered.length, 14)
+  assert.equal(diagnostics.registered.length, 15)
   assert.deepEqual(diagnostics.unavailable, [])
   const schema = ctx.tools.schemas().find(item => item.name === 'fixture_layer_note')
   assert.equal(schema.description, fixture.tools[0].description)
@@ -117,7 +122,7 @@ test('a fixture Tool registers and executes without changing Agent, Layer or Res
 test('missing executors and incompatible manifests fail explicitly', async () => {
   const fixture = await fixtureCatalog()
   const { ctx, diagnostics } = await contextWithCatalog({ toolCatalogs: [fixture] })
-  assert.equal(diagnostics.registered.length, 13)
+  assert.equal(diagnostics.registered.length, 14)
   assert.deepEqual(diagnostics.unavailable.map(item => item.capability), ['vector.fixture-note'])
   assert.equal(ctx.tools.schemas().some(item => item.name === 'fixture_layer_note'), false)
   const assembly = await ctx.systemPrompt.assemble()
@@ -149,9 +154,13 @@ test('dataset discovery publishes capabilities without leaking server paths', as
     agent: { session: { id: 'catalog-session' } },
   })
   assert.equal(result.value.success, true)
-  assert.equal(result.value.data.datasets[0].id, 'nyc-core-official')
+  assert.deepEqual(result.value.data.datasets.map(dataset => dataset.id), [
+    'nyc-core-official', 'nyc-fire-coverage-official',
+  ])
   assert.equal(result.value.data.datasets[0].layers.includes('buildings'), true)
   assert.doesNotMatch(JSON.stringify(result.value), /\.\.\/|\\scenarios\\|\/scenarios\//u)
   const listLayers = ctx.tools.schemas().find(item => item.name === 'list_layers')
-  assert.deepEqual(listLayers.parameters.properties.dataset_id.enum, ['nyc-core-official'])
+  assert.deepEqual(listLayers.parameters.properties.dataset_id.enum, [
+    'nyc-core-official', 'nyc-fire-coverage-official',
+  ])
 })

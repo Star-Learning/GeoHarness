@@ -7,6 +7,14 @@ from typing import Any
 
 from .operations import GeoTools
 from .imports import import_capabilities, import_uploaded_layer
+from .imagery import (
+    clear_imagery,
+    inspect_satellite_view,
+    latest_imagery_inspection,
+    latest_imagery_target,
+    save_imagery_view,
+    set_imagery_preference,
+)
 from .models import DatasetCatalog
 from .regression import ScenarioRegression
 from .registry import LayerRegistry
@@ -144,7 +152,16 @@ def dispatch(payload: dict[str, Any]) -> Any:
             return replay.result.model_dump(mode="json")
         before = {item.layer_id for item in registry.list_layers()}
         try:
-            result = GeoTools(registry).execute(tool, step_id=step_id, **parameters)
+            result = (
+                inspect_satellite_view(
+                    workspace_root,
+                    step_id=step_id,
+                    focus_categories=parameters.get("focus_categories"),
+                    place_name=parameters.get("place_name"),
+                )
+                if tool == "inspect_satellite_view"
+                else GeoTools(registry).execute(tool, step_id=step_id, **parameters)
+            )
             created = [
                 item.layer_id for item in registry.list_layers() if item.layer_id not in before
             ]
@@ -174,6 +191,19 @@ def dispatch(payload: dict[str, Any]) -> Any:
             raise
     if action == "import_capabilities":
         return import_capabilities(int(payload.get("max_upload_bytes", 20 * 1024 * 1024)))
+    if action == "imagery_view":
+        return save_imagery_view(workspace_root, dict(payload.get("view", {})))
+    if action == "imagery_latest":
+        return latest_imagery_inspection(workspace_root)
+    if action == "imagery_target":
+        return latest_imagery_target(workspace_root)
+    if action == "imagery_preference":
+        return set_imagery_preference(
+            workspace_root,
+            inspection_id=str(payload["inspection_id"]),
+            visible=payload.get("visible"),
+            opacity=payload.get("opacity"),
+        )
     if action == "import_upload":
         return import_uploaded_layer(
             registry,
@@ -208,6 +238,7 @@ def dispatch(payload: dict[str, Any]) -> Any:
     if action == "workspace_reset":
         registry.clear()
         workspace.reset_assets()
+        clear_imagery(workspace_root)
         return workspace.manifest().model_dump(mode="json")
     if action == "layer_details":
         value = registry.details(

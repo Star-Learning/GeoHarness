@@ -33,7 +33,7 @@
             }
           },
           "timeout_ms": { "type": "integer", "minimum": 100, "maximum": 600000 },
-          "map_effect": { "enum": ["none", "add-layer", "export"] }
+          "map_effect": { "enum": ["none", "add-layer", "add-overlay", "export"] }
         }
       }
     }

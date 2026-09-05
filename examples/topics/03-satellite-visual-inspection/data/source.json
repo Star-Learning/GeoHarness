@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "source": "Esri World Imagery display tiles",
+  "endpoint": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  "geocoder_endpoint": "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates",
+  "boundary_endpoint": "https://nominatim.openstreetmap.org/search",
+  "boundary_source": "OpenStreetMap Nominatim",
+  "boundary_attribution": "OpenStreetMap contributors",
+  "boundary_license": "Open Data Commons Open Database License (ODbL) 1.0",
+  "attribution": "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+  "acquisition": "runtime, explicitly authorized current viewport or Esri-geocoded user-named place, at most 16 tiles",
+  "stored_runtime_assets": ["preview.jpg", "overlay.png", "latest.json"],
+  "repository_imagery_policy": "Runtime imagery pixels are not committed; only source metadata and the product Demo are tracked.",
+  "method": "bounded RGB colour-dominance and edge heuristics",
+  "classes": ["water", "vegetation", "built_up", "bare_ground"],
+  "limitations": [
+    "Visual screening only; not radiometrically calibrated source imagery.",
+    "Tile dates and sensors may vary within one view.",
+    "Pixel shares are not geodesic areas.",
+    "No multispectral indices or temporal change detection are performed.",
+    "OpenStreetMap boundaries are real community-maintained polygons, not an official or legal boundary source."
+  ]
+}

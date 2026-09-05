@@ -3,8 +3,24 @@ import { join } from 'node:path'
 
 const DEFAULT_INTERVAL_MS = 250
 
-function frameName(index) {
-  return `frame-${String(index).padStart(6, '0')}.png`
+export function detectScreenshotFormat(bytes) {
+  if (
+    bytes?.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return { extension: '.png', mediaType: 'image/png' }
+  }
+  if (bytes?.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { extension: '.jpg', mediaType: 'image/jpeg' }
+  }
+  throw new Error('Browser screenshot returned an unsupported image format')
+}
+
+export function frameName(index, extension) {
+  return `frame-${String(index).padStart(6, '0')}${extension}`
 }
 
 function delay(milliseconds) {
@@ -26,10 +42,19 @@ export async function captureFrames(tab, outputDirectory, options = {}) {
 
   await mkdir(outputDirectory, { recursive: true })
   const startedAt = Date.now()
+  const frames = []
+  let screenshotFormat = null
   for (let offset = 0; offset < count; offset += 1) {
     const frameIndex = startIndex + offset
-    const bytes = await tab.screenshot({ fullPage: false })
-    await writeFile(join(outputDirectory, frameName(frameIndex)), bytes)
+    const capturedAt = Date.now()
+    const bytes = await tab.screenshot({ fullPage: options.fullPage ?? true })
+    const currentFormat = detectScreenshotFormat(bytes)
+    screenshotFormat ??= currentFormat
+    if (currentFormat.extension !== screenshotFormat.extension) {
+      throw new Error('Browser screenshot format changed during one recording chunk')
+    }
+    await writeFile(join(outputDirectory, frameName(frameIndex, screenshotFormat.extension)), bytes)
+    frames.push({ index: frameIndex, timestampMs: capturedAt - startedAt })
     const nextDeadline = startedAt + (offset + 1) * intervalMs
     const remaining = nextDeadline - Date.now()
     if (remaining > 0) await delay(remaining)
@@ -39,7 +64,11 @@ export async function captureFrames(tab, outputDirectory, options = {}) {
     lastFrame: startIndex + count - 1,
     frameCount: count,
     intervalMs,
+    frameExtension: screenshotFormat.extension,
+    frameMediaType: screenshotFormat.mediaType,
     elapsedMs: Date.now() - startedAt,
+    startedAt,
+    frames,
   }
 }
 
@@ -51,11 +80,18 @@ export async function captureHold(tab, outputDirectory, options = {}) {
   if (!Number.isInteger(count) || count < 1) throw new Error('count must be a positive integer')
 
   await mkdir(outputDirectory, { recursive: true })
-  const bytes = await tab.screenshot({ fullPage: false })
+  const bytes = await tab.screenshot({ fullPage: options.fullPage ?? true })
+  const screenshotFormat = detectScreenshotFormat(bytes)
   for (let offset = 0; offset < count; offset += 1) {
-    await writeFile(join(outputDirectory, frameName(startIndex + offset)), bytes)
+    await writeFile(join(outputDirectory, frameName(startIndex + offset, screenshotFormat.extension)), bytes)
   }
-  return { firstFrame: startIndex, lastFrame: startIndex + count - 1, frameCount: count }
+  return {
+    firstFrame: startIndex,
+    lastFrame: startIndex + count - 1,
+    frameCount: count,
+    frameExtension: screenshotFormat.extension,
+    frameMediaType: screenshotFormat.mediaType,
+  }
 }
 
 /** Read only the visible, non-secret execution state needed by the recorder. */

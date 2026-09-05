@@ -56,3 +56,14 @@ test('the Agent video catalog and encoder define seven independent 1080p outputs
     assert.ok(encoder.includes(marker), `encoder is missing ${marker}`)
   }
 })
+
+test('the recorder preserves the Browser screenshot byte format in frame names', async () => {
+  const recorder = await import('../scripts/agent-video-recorder.mjs')
+  const png = recorder.detectScreenshotFormat(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  const jpeg = recorder.detectScreenshotFormat(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0]))
+
+  assert.deepEqual(png, { extension: '.png', mediaType: 'image/png' })
+  assert.deepEqual(jpeg, { extension: '.jpg', mediaType: 'image/jpeg' })
+  assert.equal(recorder.frameName(7, jpeg.extension), 'frame-000007.jpg')
+  assert.throws(() => recorder.detectScreenshotFormat(Uint8Array.from([0x00, 0x01])))
+})

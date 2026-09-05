@@ -28,11 +28,37 @@ import {
   buildFeatureFlow,
   buildNumericStatistics,
   groupWorkspaceLayers,
+  mapLayerOpacity,
   mapScaleLabel,
+  parseAgentMarkdown,
   parseCsvPreview,
   suggestCoordinateField,
   type CsvPreview,
+  type MarkdownInlineToken,
 } from './ui-model'
+import {
+  createGeoViewFlight,
+  createMercatorProjection,
+  geoBoundsForView,
+  interpolateMercatorView,
+  overviewEsriWorldImageryTiles,
+  reprojectRasterTile,
+  retainRasterTiles,
+  visibleEsriWorldImageryTiles,
+  visibleGeographicBounds,
+  type GeoBounds,
+  type MercatorProjection,
+  type RasterTile,
+} from './raster-basemap'
+import {
+  browserLocationPermission,
+  locationAccuracyLabel,
+  locationViewportBounds,
+  requestBrowserLocation,
+  shouldAutoRequestBrowserLocation,
+  type BrowserLocation,
+  type BrowserLocationFailure,
+} from './browser-location'
 
 declare const __GE0HARNESS_CSS__: string
 
@@ -81,6 +107,95 @@ interface SelectedFeature {
   featureIndex: number
 }
 
+interface ImageryView {
+  bbox: [number, number, number, number]
+  zoom: number
+}
+
+interface RasterOverlayLayer {
+  layer_id: string
+  name: string
+  layer_type: 'raster-overlay'
+  source: 'derived'
+  visible: boolean
+  opacity: number
+}
+
+interface AdministrativeBoundary {
+  label: string
+  bbox: [number, number, number, number]
+  geometry: GeoJsonGeometry
+  coordinate_count: number
+  osm_type: string
+  osm_id: number | null
+  source: string
+  attribution: string
+  license: string
+  license_url: string
+}
+
+interface ResolvedPlace {
+  query: string
+  label: string
+  score: number
+  bbox: [number, number, number, number]
+  source: string
+  administrative_boundary?: AdministrativeBoundary | null
+  cache_provenance?: { mode: string, captured_at: string, note: string }
+}
+
+interface ImageryTarget {
+  schema_version: '1.0'
+  target_id: string
+  step_id: string
+  query: string | null
+  status: 'resolving' | 'ready' | 'complete' | 'failed'
+  phase: 'resolving-place' | 'acquiring-imagery' | 'classifying-pixels' | 'finalizing-result' | 'complete' | 'failed'
+  progress: number
+  message: string
+  bbox: [number, number, number, number] | null
+  resolved_place: ResolvedPlace | null
+  tile_count?: number
+  tile_zoom?: number
+  error?: string
+}
+
+interface ImageryInspection {
+  schema_version: '1.0'
+  inspection_id: string
+  target_id?: string
+  created_at: string
+  source: string
+  attribution: string
+  bbox: [number, number, number, number]
+  tile_zoom: number
+  tile_count: number
+  pixel_width: number
+  pixel_height: number
+  categories: Array<{
+    category: 'water' | 'vegetation' | 'built_up' | 'bare_ground'
+    pixel_count: number
+    pixel_ratio: number
+    heuristic_confidence: number
+  }>
+  classified_pixel_ratio: number
+  method: string
+  limitations: string[]
+  overlay_mime_type: string
+  overlay_base64: string
+  overlay_layer: RasterOverlayLayer
+  preview_mime_type: string
+  preview_base64: string
+  resolved_place: ResolvedPlace | null
+  analysis_scope?: {
+    type: 'map-view' | 'administrative-boundary'
+    boundary_clipped: boolean
+    analysis_pixel_count: number
+    boundary_source: string | null
+    boundary_label: string | null
+  }
+}
+
 function installStyles() {
   if (typeof document === 'undefined') return
   if (document.querySelector(`style[data-plugin=${JSON.stringify(PACKAGE_NAME)}]`) !== null) return
@@ -92,6 +207,54 @@ function installStyles() {
 
 function BrandMark() {
   return <span className="gh-brand-mark" aria-hidden="true">⌖</span>
+}
+
+function renderMarkdownInline(tokens: readonly MarkdownInlineToken[], keyPrefix: string) {
+  return tokens.map((token, index) => {
+    const key = `${keyPrefix}-${index}`
+    if (token.type === 'strong') return <strong key={key}>{token.text}</strong>
+    if (token.type === 'emphasis') return <em key={key}>{token.text}</em>
+    if (token.type === 'code') return <code key={key}>{token.text}</code>
+    if (token.type === 'link') return <a key={key} href={token.href} target="_blank" rel="noreferrer">{token.text}</a>
+    if (token.type === 'break') return <br key={key} />
+    return <React.Fragment key={key}>{token.text}</React.Fragment>
+  })
+}
+
+function MarkdownContent({ text, streaming = false }: { text: string, streaming?: boolean }) {
+  const blocks = React.useMemo(() => parseAgentMarkdown(text), [text])
+  return <div className="gh-markdown">
+    {blocks.map((block, index) => {
+      const key = `markdown-${index}`
+      const content = renderMarkdownInline(block.content ?? [], key)
+      if (block.type === 'heading') {
+        if (block.level === 1) return <h1 key={key}>{content}</h1>
+        if (block.level === 2) return <h2 key={key}>{content}</h2>
+        if (block.level === 3) return <h3 key={key}>{content}</h3>
+        return <h4 key={key}>{content}</h4>
+      }
+      if (block.type === 'unordered-list' || block.type === 'ordered-list') {
+        const items = (block.items ?? []).map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>
+          {renderMarkdownInline(item, `${key}-${itemIndex}`)}
+        </li>)
+        return block.type === 'unordered-list' ? <ul key={key}>{items}</ul> : <ol key={key}>{items}</ol>
+      }
+      if (block.type === 'blockquote') return <blockquote key={key}>{content}</blockquote>
+      if (block.type === 'code') return <pre key={key} data-language={block.language ?? ''}><code>{block.code}</code></pre>
+      if (block.type === 'table') return <div className="gh-markdown-table" key={key}><table>
+        <thead><tr>{(block.headers ?? []).map((cell, cellIndex) => <th key={`${key}-head-${cellIndex}`}>
+          {renderMarkdownInline(cell, `${key}-head-${cellIndex}`)}
+        </th>)}</tr></thead>
+        <tbody>{(block.rows ?? []).map((row, rowIndex) => <tr key={`${key}-row-${rowIndex}`}>
+          {row.map((cell, cellIndex) => <td key={`${key}-cell-${rowIndex}-${cellIndex}`}>
+            {renderMarkdownInline(cell, `${key}-cell-${rowIndex}-${cellIndex}`)}
+          </td>)}
+        </tr>)}</tbody>
+      </table></div>
+      return <p key={key}>{content}</p>
+    })}
+    {streaming && <i className="gh-stream-cursor" />}
+  </div>
 }
 
 function coordinateArrays(value: unknown, target: [number, number][]) {
@@ -169,46 +332,359 @@ function featureLabel(feature: GeoJsonFeature, index: number) {
   return label === undefined ? `Feature ${index + 1}` : String(label)
 }
 
+function SatelliteTile({ tile, onHealth }: {
+  tile: RasterTile
+  onHealth: (ready: boolean) => void
+}) {
+  const [ready, setReady] = React.useState(false)
+  return <image
+    className={`gh-raster-tile${ready ? ' is-ready' : ''}`}
+    href={tile.url} x={tile.x} y={tile.y} width={tile.width} height={tile.height}
+    preserveAspectRatio="none"
+    onLoad={() => { setReady(true); onHealth(true) }}
+    onError={() => onHealth(false)}
+  />
+}
+
+function SatelliteDetail({ tiles, projection, onHealth }: {
+  tiles: readonly RasterTile[]
+  projection: MercatorProjection
+  onHealth: (ready: boolean) => void
+}) {
+  const [retained, setRetained] = React.useState<readonly RasterTile[]>(tiles)
+  const sourceKey = tiles.map(tile => tile.key).join('|')
+  React.useEffect(() => {
+    setRetained(previous => retainRasterTiles(previous, tiles))
+  }, [sourceKey])
+  const sources = retainRasterTiles(retained, tiles).sort((a, b) => a.zoom - b.zoom)
+  return <g className="gh-raster-detail">{sources.map(tile => <SatelliteTile
+    key={tile.key} tile={reprojectRasterTile(tile, projection)} onHealth={onHealth}
+  />)}</g>
+}
+
 function GeoMap({
+  sessionId,
+  presentationMode,
   layers,
+  workspaceReady,
   selected,
   highlightedLayerIds,
   runStatus,
+  inspection,
+  imageryTarget,
+  onViewChange,
   onSelect,
 }: {
+  sessionId: string
+  presentationMode: boolean
   layers: readonly LayerRecord[]
+  workspaceReady: boolean
   selected: SelectedFeature | null
   highlightedLayerIds: ReadonlySet<string>
   runStatus: 'ready' | 'running' | 'success' | 'failed'
+  inspection: ImageryInspection | null
+  imageryTarget: ImageryTarget | null
+  onViewChange: (view: ImageryView) => Promise<void>
   onSelect: (value: SelectedFeature | null) => void
 }) {
   const [zoom, setZoom] = React.useState(1)
   const [pan, setPan] = React.useState({ x: 0, y: 0 })
-  const [canvasMode, setCanvasMode] = React.useState<'grid' | 'plain'>('grid')
-  const [legendOpen, setLegendOpen] = React.useState(true)
+  const [canvasMode, setCanvasMode] = React.useState<'satellite' | 'grid' | 'plain'>('satellite')
+  const [rasterHealth, setRasterHealth] = React.useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [legendOpen, setLegendOpen] = React.useState(false)
+  const [userLocation, setUserLocation] = React.useState<BrowserLocation | null>(null)
+  const [locationStatus, setLocationStatus] = React.useState<'waiting' | 'checking' | 'prompt' | 'requesting' | 'ready' | BrowserLocationFailure>('waiting')
+  const [imageryViewStatus, setImageryViewStatus] = React.useState<'idle' | 'syncing' | 'ready' | 'error'>('idle')
+  const [flightPhase, setFlightPhase] = React.useState<'idle' | 'zooming-out' | 'travelling' | 'zooming-in' | 'arrived'>('idle')
+  const [flightProgress, setFlightProgress] = React.useState(0)
+  const [inspectionStage, setInspectionStage] = React.useState<'idle' | 'flight' | 'boundary-resolving' | 'boundary-ready' | 'inspection' | 'result'>('idle')
+  const [inspectionDisplayProgress, setInspectionDisplayProgress] = React.useState(0)
+  const locationRequest = React.useRef(0)
   const drag = React.useRef<{ x: number, y: number, panX: number, panY: number } | null>(null)
-  const bounds = React.useMemo(() => layerBounds(layers), [layers])
-  const project = React.useMemo(() => {
-    const [minX, minY, maxX, maxY] = bounds
-    const width = Math.max(maxX - minX, 0.000001)
-    const height = Math.max(maxY - minY, 0.000001)
-    const scale = Math.min(900 / width, 600 / height)
-    const offsetX = (1000 - width * scale) / 2
-    const offsetY = (700 - height * scale) / 2
-    return ([x, y]: [number, number]): [number, number] => [
-      offsetX + (x - minX) * scale,
-      700 - (offsetY + (y - minY) * scale),
-    ]
-  }, [bounds])
+  const activeInspection = imageryTarget !== null && imageryTarget.target_id !== inspection?.target_id
+    ? null
+    : inspection
+  const analysisPlace = imageryTarget?.resolved_place ?? activeInspection?.resolved_place ?? null
+  const analysisBounds = imageryTarget?.bbox ?? activeInspection?.bbox ?? null
+  const analysisTargetId = imageryTarget?.target_id
+    ?? (activeInspection?.resolved_place === null ? null : activeInspection?.inspection_id ?? null)
+  const targetBounds = React.useMemo<GeoBounds>(
+    () => analysisBounds !== null
+      ? analysisBounds
+      : layers.length > 0
+        ? layerBounds(layers)
+      : userLocation === null || presentationMode
+        ? layerBounds([])
+        : locationViewportBounds(userLocation),
+    [layers, analysisBounds, userLocation, presentationMode],
+  )
+  const [bounds, setBounds] = React.useState<GeoBounds>(targetBounds)
+  const boundsRef = React.useRef<GeoBounds>(targetBounds)
+  const cameraView = React.useRef({ zoom, pan })
+  cameraView.current = { zoom, pan }
+  const flightRequest = React.useRef(0)
+  const flightArrivalTimer = React.useRef<number | null>(null)
+  const boundaryRevealTimer = React.useRef<number | null>(null)
+  const inspectionRevealTimer = React.useRef<number | null>(null)
+  const inspectionResultTimer = React.useRef<number | null>(null)
+  const inspectionMinimumElapsed = React.useRef(false)
+  const lastFlightTargetId = React.useRef<string | null>(null)
+  const activeInspectionRef = React.useRef<ImageryInspection | null>(activeInspection)
+  activeInspectionRef.current = activeInspection
+  const latestTarget = React.useRef({ targetBounds, imageryTarget })
+  latestTarget.current = { targetBounds, imageryTarget }
+  const namedTargetReady = analysisPlace !== null && analysisBounds !== null
+  const viewKey = namedTargetReady ? 'named-target' : targetBounds.join(',')
+  const projection = React.useMemo(() => createMercatorProjection(bounds), [bounds])
+  const project = projection.project
+  const rasterTiles = React.useMemo(
+    () => visibleEsriWorldImageryTiles(projection, zoom, pan),
+    [projection, zoom, pan],
+  )
+  const rasterTileZoom = rasterTiles[0]?.zoom ?? 0
+  const overviewTiles = React.useMemo(() => overviewEsriWorldImageryTiles(projection), [projection])
+  const geographicView = React.useMemo(
+    () => visibleGeographicBounds(projection, zoom, pan),
+    [projection, zoom, pan],
+  )
+  React.useEffect(() => setImageryViewStatus('idle'), [sessionId])
+  React.useEffect(() => {
+    lastFlightTargetId.current = null
+    setFlightPhase('idle')
+    setFlightProgress(0)
+    setInspectionStage('idle')
+    setInspectionDisplayProgress(0)
+    inspectionMinimumElapsed.current = false
+  }, [sessionId])
+  React.useEffect(() => {
+    if (canvasMode === 'satellite') setRasterHealth('loading')
+  }, [canvasMode])
+  React.useEffect(() => {
+    const request = ++flightRequest.current
+    let animationFrame = 0
+    const cleanup = () => {
+      if (flightRequest.current === request) ++flightRequest.current
+      window.cancelAnimationFrame(animationFrame)
+      if (flightArrivalTimer.current !== null) window.clearTimeout(flightArrivalTimer.current)
+      if (boundaryRevealTimer.current !== null) window.clearTimeout(boundaryRevealTimer.current)
+      if (inspectionRevealTimer.current !== null) window.clearTimeout(inspectionRevealTimer.current)
+      if (inspectionResultTimer.current !== null) window.clearTimeout(inspectionResultTimer.current)
+    }
+    if (flightArrivalTimer.current !== null) window.clearTimeout(flightArrivalTimer.current)
+    if (boundaryRevealTimer.current !== null) window.clearTimeout(boundaryRevealTimer.current)
+    if (inspectionRevealTimer.current !== null) window.clearTimeout(inspectionRevealTimer.current)
+    if (inspectionResultTimer.current !== null) window.clearTimeout(inspectionResultTimer.current)
+    const current = geoBoundsForView(boundsRef.current, cameraView.current.zoom, cameraView.current.pan)
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const targetChanged = analysisTargetId !== null
+      && analysisPlace !== null
+      && analysisBounds !== null
+      && lastFlightTargetId.current !== analysisTargetId
+    if (targetChanged) {
+      lastFlightTargetId.current = analysisTargetId
+      inspectionMinimumElapsed.current = false
+    }
+    const applyBounds = (next: GeoBounds) => {
+      boundsRef.current = next
+      setBounds(next)
+    }
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+    if (targetChanged) applyBounds(current)
+    if (!targetChanged) {
+      applyBounds(targetBounds)
+      setFlightPhase('idle')
+      setFlightProgress(0)
+      if (analysisTargetId === null) setInspectionStage('idle')
+      return cleanup
+    }
+    const revealBoundaryThenInspection = () => {
+      setFlightPhase('idle')
+      setInspectionStage('boundary-resolving')
+      const waitForBoundary = () => {
+        if (flightRequest.current !== request) return
+        if (latestTarget.current.imageryTarget?.status === 'resolving') {
+          boundaryRevealTimer.current = window.setTimeout(waitForBoundary, 250)
+          return
+        }
+        const boundaryBounds = latestTarget.current.targetBounds
+        const arrivedBounds = boundsRef.current
+        const showBoundary = () => {
+          applyBounds(boundaryBounds)
+          setInspectionStage('boundary-ready')
+          inspectionRevealTimer.current = window.setTimeout(() => {
+            if (flightRequest.current !== request) return
+            setInspectionStage('inspection')
+            inspectionResultTimer.current = window.setTimeout(() => {
+              if (flightRequest.current !== request) return
+              inspectionMinimumElapsed.current = true
+              if (activeInspectionRef.current !== null) setInspectionStage('result')
+            }, 1800)
+          }, 1100)
+        }
+        if (reducedMotion || boundaryBounds.every((value, index) => Math.abs(value - arrivedBounds[index]) < 1e-7)) {
+          showBoundary()
+        } else {
+          // Real boundary extents can differ from the geocoder's candidate.
+          // Ease into that refinement instead of snapping after the flight.
+          const startedAt = performance.now()
+          const settle = (now: number) => {
+            if (flightRequest.current !== request) return
+            const progress = Math.min(1, (now - startedAt) / 850)
+            applyBounds(interpolateMercatorView(arrivedBounds, boundaryBounds, progress))
+            if (progress < 1) animationFrame = window.requestAnimationFrame(settle)
+            else showBoundary()
+          }
+          animationFrame = window.requestAnimationFrame(settle)
+        }
+      }
+      boundaryRevealTimer.current = window.setTimeout(waitForBoundary, 900)
+    }
+    setInspectionStage('flight')
+    if (reducedMotion) {
+      applyBounds(targetBounds)
+      setFlightPhase('arrived')
+      setFlightProgress(1)
+      flightArrivalTimer.current = window.setTimeout(revealBoundaryThenInspection, 650)
+      return cleanup
+    }
+    const flight = createGeoViewFlight(current, targetBounds)
+    const startedAt = performance.now()
+    const animate = (now: number) => {
+      if (flightRequest.current !== request) return
+      const progress = Math.min(1, (now - startedAt) / flight.duration)
+      setFlightProgress(progress)
+      setFlightPhase(progress < .3 ? 'zooming-out' : progress < .7 ? 'travelling' : 'zooming-in')
+      applyBounds(flight.sample(progress))
+      if (progress < 1) {
+        animationFrame = window.requestAnimationFrame(animate)
+        return
+      }
+      applyBounds(targetBounds)
+      setFlightPhase('arrived')
+      setFlightProgress(1)
+      flightArrivalTimer.current = window.setTimeout(revealBoundaryThenInspection, 900)
+    }
+    animationFrame = window.requestAnimationFrame(animate)
+    return cleanup
+  }, [
+    sessionId,
+    analysisTargetId,
+    viewKey,
+  ])
+  React.useEffect(() => {
+    if (inspectionStage === 'inspection' && inspectionMinimumElapsed.current && activeInspection !== null) {
+      setInspectionStage('result')
+    }
+  }, [inspectionStage, activeInspection])
+  React.useEffect(() => {
+    if (inspectionStage !== 'inspection') {
+      setInspectionDisplayProgress(inspectionStage === 'result' ? 1 : 0)
+      return
+    }
+    const startedAt = performance.now()
+    const duration = 1800
+    let animationFrame = 0
+    const animate = (now: number) => {
+      const elapsed = Math.min(duration, now - startedAt)
+      const progress = elapsed / duration
+      const observed = activeInspectionRef.current !== null ? 1 : Math.min(.95, latestTarget.current.imageryTarget?.progress ?? .3)
+      setInspectionDisplayProgress(Math.min(observed, 1 - ((1 - progress) ** 3)))
+      if (elapsed < duration || observed < 1) animationFrame = window.requestAnimationFrame(animate)
+    }
+    animationFrame = window.requestAnimationFrame(animate)
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [inspectionStage, analysisTargetId])
+  React.useEffect(() => {
+    const request = ++locationRequest.current
+    setUserLocation(null)
+    if (!workspaceReady || layers.length > 0) {
+      setLocationStatus('waiting')
+      return
+    }
+    setLocationStatus('checking')
+    void browserLocationPermission().then(async permission => {
+      if (locationRequest.current !== request) return
+      if (!shouldAutoRequestBrowserLocation(permission)) {
+        setLocationStatus(permission)
+        return
+      }
+      setLocationStatus('requesting')
+      const result = await requestBrowserLocation()
+      if (locationRequest.current !== request) return
+      if (result.ok) {
+        setUserLocation(result.location)
+        setLocationStatus('ready')
+      } else {
+        setLocationStatus(result.reason)
+      }
+    })
+  }, [sessionId, workspaceReady, layers.length])
+  const locateCurrentPosition = async () => {
+    const request = ++locationRequest.current
+    setLocationStatus('requesting')
+    const result = await requestBrowserLocation()
+    if (locationRequest.current !== request) return
+    if (result.ok) {
+      setUserLocation(result.location)
+      setLocationStatus('ready')
+    } else {
+      setUserLocation(null)
+      setLocationStatus(result.reason)
+    }
+  }
   const visibleLayers = layers.filter(layer => layer.visible)
   const centerLongitude = ((bounds[0] + bounds[2]) / 2).toFixed(4)
   const centerLatitude = ((bounds[1] + bounds[3]) / 2).toFixed(4)
   const visibleCrs = [...new Set(visibleLayers.map(layer => layer.crs))]
+  const locationPoint = userLocation === null ? null : project([userLocation.longitude, userLocation.latitude])
+  const locationAccuracyRadius = userLocation === null || locationPoint === null
+    ? 0
+    : Math.max(7, Math.min(85, Math.abs(project([
+        userLocation.longitude + userLocation.accuracy / (111_320 * Math.max(0.05, Math.cos(userLocation.latitude * Math.PI / 180))),
+        userLocation.latitude,
+      ])[0] - locationPoint[0])))
   const orderedLayers = [...visibleLayers].sort((left, right) => {
     const order: Record<string, number> = { districts: 0, rivers: 1, roads: 2, buildings: 3 }
     return (order[left.name] ?? 4) - (order[right.name] ?? 4)
   })
+  const layerGroups = React.useMemo(() => groupWorkspaceLayers(layers), [layers])
+  const inputLayerIds = React.useMemo(() => new Set(layerGroups.input.map(layer => layer.id)), [layerGroups])
+  const intermediateLayerIds = React.useMemo(() => new Set(layerGroups.intermediate.map(layer => layer.id)), [layerGroups])
+  const finalLayerIds = React.useMemo(() => new Set(layerGroups.final.map(layer => layer.id)), [layerGroups])
+  const displayOpacity = (layer: LayerRecord) => {
+    const role = inputLayerIds.has(layer.id)
+      ? 'input'
+      : intermediateLayerIds.has(layer.id)
+        ? 'intermediate'
+        : finalLayerIds.has(layer.id)
+          ? 'final'
+          : 'other'
+    const focused = highlightedLayerIds.has(layer.id) || selected?.layer.id === layer.id
+    return mapLayerOpacity(layer.opacity, role, focused)
+  }
   const highlightedLayers = visibleLayers.filter(layer => highlightedLayerIds.has(layer.id))
+  const inspectionFrame = activeInspection === null ? null : (() => {
+    const [left, bottom] = project([activeInspection.bbox[0], activeInspection.bbox[1]])
+    const [right, top] = project([activeInspection.bbox[2], activeInspection.bbox[3]])
+    return { x: Math.min(left, right), y: Math.min(top, bottom), width: Math.abs(right - left), height: Math.abs(bottom - top) }
+  })()
+  const administrativeBoundary = analysisPlace?.administrative_boundary ?? null
+  const boundaryRevealed = inspectionStage === 'boundary-ready' || inspectionStage === 'inspection' || inspectionStage === 'result'
+  const administrativeBoundaryPaths = administrativeBoundary === null || !boundaryRevealed
+    ? []
+    : geometryPaths(administrativeBoundary.geometry, project).filter(Boolean)
+  const administrativeBoundaryPath = administrativeBoundaryPaths.join(' ')
+  const inspectionRevealed = inspectionStage === 'result'
+  const flightLabel = flightPhase === 'zooming-out'
+    ? '正在缩小当前区域'
+    : flightPhase === 'travelling'
+      ? `正在移动到 ${analysisPlace?.label ?? '目标区域'}`
+      : flightPhase === 'zooming-in'
+        ? '正在放大行政区范围'
+        : flightPhase === 'arrived'
+          ? '已锁定行政区边界'
+          : ''
   const focusFrame = highlightedLayers.length === 0 ? null : (() => {
     const [minX, minY, maxX, maxY] = layerBounds(highlightedLayers)
     const [left, bottom] = project([minX, minY])
@@ -225,7 +701,13 @@ function GeoMap({
   })()
 
   return (
-    <section className={`gh-map is-${canvasMode}`} aria-label="Map workspace">
+    <section
+      className={`gh-map is-${canvasMode}`}
+      aria-label="Map workspace"
+      data-map-flight={flightPhase}
+      data-inspection-stage={inspectionStage}
+      data-boundary-clipped={boundaryRevealed && administrativeBoundary !== null ? 'true' : 'false'}
+    >
       <div className="gh-map-toolbar" aria-label="Map controls">
         <button type="button" onClick={() => setZoom(value => Math.min(5, value * 1.35))} aria-label="Zoom in">+</button>
         <button type="button" onClick={() => setZoom(value => Math.max(0.7, value / 1.35))} aria-label="Zoom out">−</button>
@@ -233,14 +715,49 @@ function GeoMap({
         <button
           type="button"
           aria-label="Toggle map canvas"
-          aria-pressed={canvasMode === 'grid'}
-          title="切换网格底图"
-          onClick={() => setCanvasMode(value => value === 'grid' ? 'plain' : 'grid')}
-        >#</button>
+          aria-pressed={canvasMode === 'satellite'}
+          title="切换卫星 / 网格 / 纯色底图"
+          onClick={() => setCanvasMode(value => value === 'satellite' ? 'grid' : value === 'grid' ? 'plain' : 'satellite')}
+        ><small>{canvasMode === 'satellite' ? 'SAT' : canvasMode === 'grid' ? 'GRID' : 'PLAIN'}</small></button>
+        {canvasMode === 'satellite' && <button
+          type="button"
+          className={`gh-map-imagery is-${imageryViewStatus}`}
+          aria-label="Prepare satellite visual inspection"
+          title="将当前地图视野保存到本地 Session，供 Agent 视觉巡检"
+          disabled={imageryViewStatus === 'syncing'}
+          onClick={() => {
+            setImageryViewStatus('syncing')
+            void onViewChange({ bbox: [...geographicView], zoom: rasterTileZoom })
+              .then(() => setImageryViewStatus('ready'))
+              .catch(() => setImageryViewStatus('error'))
+          }}
+        ><small>{imageryViewStatus === 'syncing' ? '…' : imageryViewStatus === 'ready' ? '✓' : imageryViewStatus === 'error' ? '!' : 'AI'}</small></button>}
+        {layers.length === 0 && <button
+          type="button"
+          className={`gh-map-locate is-${locationStatus}`}
+          aria-label="Locate current position"
+          title="定位到当前位置"
+          disabled={!workspaceReady || locationStatus === 'checking' || locationStatus === 'requesting'}
+          onClick={() => { void locateCurrentPosition() }}
+        >{locationStatus === 'requesting' || locationStatus === 'checking' ? '…' : '◎'}</button>}
       </div>
       <div className="gh-map-label">
-        <span>{layers.length > 0 ? 'CANONICAL WORKSPACE' : 'AGENT WORKSPACE'}</span>
-        <small>{centerLatitude}° N · {Math.abs(Number(centerLongitude)).toFixed(4)}° W · {visibleCrs.join(' / ') || 'CRS84'}</small>
+        <span>{flightPhase !== 'idle' && flightPhase !== 'arrived'
+          ? 'FLYING TO ANALYSIS AREA'
+          : inspectionStage === 'boundary-resolving'
+            ? 'RESOLVING ADMIN BOUNDARY'
+            : inspectionStage === 'boundary-ready'
+              ? 'ADMIN BOUNDARY READY'
+          : boundaryRevealed && administrativeBoundary !== null
+            ? 'ADMIN BOUNDARY ANALYSIS'
+            : layers.length > 0
+              ? 'CANONICAL WORKSPACE'
+              : activeInspection !== null
+                ? 'RASTER ANALYSIS VIEW'
+                : userLocation !== null && !presentationMode
+                  ? 'YOUR LOCATION · LOCAL ONLY'
+                  : 'AGENT WORKSPACE'}</span>
+        <small>{Math.abs(Number(centerLatitude)).toFixed(4)}° {Number(centerLatitude) >= 0 ? 'N' : 'S'} · {Math.abs(Number(centerLongitude)).toFixed(4)}° {Number(centerLongitude) >= 0 ? 'E' : 'W'} · {visibleCrs.join(' / ') || 'CRS84'}</small>
       </div>
       <svg
         className="gh-map-canvas"
@@ -271,6 +788,45 @@ function GeoMap({
         onClick={() => onSelect(null)}
       >
         <g transform={`translate(${500 + pan.x} ${350 + pan.y}) scale(${zoom}) translate(-500 -350)`}>
+          {canvasMode === 'satellite' && <g className="gh-map-raster" aria-label="Esri World Imagery satellite basemap">
+            {overviewTiles.map(tile => <image key={tile.key} href={tile.url} x={tile.x} y={tile.y} width={tile.width} height={tile.height} preserveAspectRatio="none" />)}
+            <SatelliteDetail tiles={rasterTiles} projection={projection} onHealth={ready => {
+              setRasterHealth(value => ready ? 'ready' : value === 'ready' ? value : 'unavailable')
+            }} />
+            <rect className="gh-map-raster-shade" x="-2000" y="-2000" width="5000" height="5000" />
+          </g>}
+          {boundaryRevealed && administrativeBoundaryPath !== '' && <g className="gh-admin-boundary" aria-label="Administrative boundary clip">
+            <path
+              className="gh-admin-boundary-outside"
+              d={`M-3000,-3000 H4000 V3700 H-3000 Z ${administrativeBoundaryPath}`}
+              fillRule="evenodd"
+            />
+            <g className="gh-admin-boundary-outline">
+              {administrativeBoundaryPaths.map((path, index) => <path
+                key={`administrative-boundary-${index}`}
+                d={path}
+                fill="none"
+                fillRule="evenodd"
+                vectorEffect="non-scaling-stroke"
+              />)}
+            </g>
+          </g>}
+          {inspectionRevealed && activeInspection !== null && activeInspection.overlay_layer.visible && inspectionFrame !== null && <image
+            className="gh-imagery-inspection-overlay"
+            href={`data:${activeInspection.overlay_mime_type};base64,${activeInspection.overlay_base64}`}
+            x={inspectionFrame.x}
+            y={inspectionFrame.y}
+            width={inspectionFrame.width}
+            height={inspectionFrame.height}
+            preserveAspectRatio="none"
+            opacity={activeInspection.overlay_layer.opacity}
+            aria-label="Satellite visual inspection overlay"
+          />}
+          {!presentationMode && layers.length === 0 && analysisPlace === null && locationPoint !== null && <g className="gh-user-location" transform={`translate(${locationPoint[0]} ${locationPoint[1]})`} aria-label="Current computer location">
+            <circle className="gh-user-location-accuracy" r={locationAccuracyRadius} />
+            <circle className="gh-user-location-pulse" r="15" />
+            <circle className="gh-user-location-dot" r="6" vectorEffect="non-scaling-stroke" />
+          </g>}
           {orderedLayers.map(layer => layer.data.features.map((feature, featureIndex) => {
             const isSelected = selected?.layer.id === layer.id && selected.featureIndex === featureIndex
             const select = (event: React.MouseEvent) => {
@@ -284,7 +840,7 @@ function GeoMap({
                 isSelected ? 'is-selected' : '',
                 highlightedLayerIds.has(layer.id) ? 'is-step-highlighted' : '',
               ].filter(Boolean).join(' '),
-              opacity: layer.opacity,
+              opacity: displayOpacity(layer),
               stroke: layer.style.color,
               strokeWidth: isSelected ? layer.style.lineWidth + 2.4 : layer.style.lineWidth,
               vectorEffect: 'non-scaling-stroke' as const,
@@ -330,21 +886,79 @@ function GeoMap({
           </g>}
         </g>
       </svg>
-      {layers.length === 0 && <div className="gh-map-empty-card">
-        <span className="gh-eyebrow">MAP WORKSPACE</span>
-        <strong>No registered layers</strong>
-        <p>点击顶部“导入数据”上传自己的矢量文件，或在右侧原生 Harness 对话框让 Agent 发现可用数据。</p>
+      {flightPhase !== 'idle' && <div className={`gh-map-flight is-${flightPhase}`} role="status" aria-live="polite">
+        <span>MAP FLIGHT · {Math.round(flightProgress * 100)}%</span>
+        <strong>{flightLabel}</strong>
+        <i><b style={{ width: `${Math.round(flightProgress * 100)}%` }} /></i>
       </div>}
-      {visibleLayers.length > 0 && <aside className={`gh-map-legend${legendOpen ? ' is-open' : ''}`} aria-label="Map legend">
+      {(inspectionStage === 'boundary-resolving' || inspectionStage === 'boundary-ready') && imageryTarget !== null && <div
+        className={`gh-map-boundary-progress is-${inspectionStage === 'boundary-ready' ? 'ready' : 'resolving'}`}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="gh-inspection-spinner" aria-hidden="true"><i /><i /><i /></div>
+        <span><small>ADMINISTRATIVE BOUNDARY · {inspectionStage === 'boundary-ready' ? 'READY' : 'RESOLVING'}</small>
+          <strong>{inspectionStage === 'boundary-ready' ? '行政区边界解析完成' : '正在解析行政区边界'}</strong>
+          <em>{analysisPlace?.label ?? imageryTarget.query ?? '目标区域'}{analysisPlace?.cache_provenance ? ' · 真实边界缓存' : ''}</em>
+        </span>
+        <b><i style={{ width: inspectionStage === 'boundary-ready' ? '100%' : '58%' }} /></b>
+      </div>}
+      {inspectionStage === 'inspection' && imageryTarget !== null && imageryTarget.status !== 'failed' && <div className="gh-map-inspection-progress" role="status" aria-live="polite">
+        <div className="gh-inspection-spinner" aria-hidden="true"><i /><i /><i /></div>
+        <span><small>IMAGERY INSPECTION · {Math.round(inspectionDisplayProgress * 100)}%</small>
+          <strong>正在执行区内像素巡检与蒙版生成</strong>
+          <em>{analysisPlace?.label ?? imageryTarget.query ?? '当前地图视野'}</em>
+        </span>
+        <b><i style={{ width: `${Math.round(inspectionDisplayProgress * 100)}%` }} /></b>
+      </div>}
+      {(inspectionStage === 'inspection' || inspectionStage === 'result') && imageryTarget?.status === 'failed' && <div className="gh-map-inspection-progress is-failed" role="alert">
+        <span><small>IMAGERY INSPECTION · FAILED</small><strong>影像巡检未完成</strong><em>{imageryTarget.error ?? imageryTarget.message}</em></span>
+      </div>}
+      {presentationMode && runStatus === 'ready' && layers.length === 0 && activeInspection === null && imageryTarget === null && <div className="gh-map-empty-card">
+        <span className="gh-eyebrow">PRESENTATION VIEW</span><strong>输入一个地点，开始影像巡检</strong>
+        <p>演示模式使用公开起始视野，隐藏电脑定位。分析仍由真实 Agent 和工具执行。</p>
+      </div>}
+      {!presentationMode && runStatus === 'ready' && layers.length === 0 && activeInspection === null && imageryTarget === null && <div className={`gh-map-empty-card is-location-${locationStatus}`}>
+        <span className="gh-eyebrow">{locationStatus === 'ready' ? 'CURRENT LOCATION' : 'MAP WORKSPACE'}</span>
+        <strong>{locationStatus === 'ready' ? '已定位到当前位置' : locationStatus === 'requesting' || locationStatus === 'checking' ? '正在准备定位…' : '新会话尚无地图数据'}</strong>
+        <p>{locationStatus === 'ready' && userLocation !== null
+          ? `${locationAccuracyLabel(userLocation.accuracy)} · 坐标只用于当前浏览器地图，不会自动发送给 Agent。`
+          : locationStatus === 'denied'
+            ? '定位权限已关闭。请在浏览器中允许位置权限，并确认 Windows「隐私和安全性 → 位置」已开启。'
+            : locationStatus === 'unavailable'
+              ? '系统暂时无法确定位置。请开启 Windows「隐私和安全性 → 位置」后重试。'
+              : locationStatus === 'timeout'
+                ? '定位请求超时。请开启 Windows「隐私和安全性 → 位置」后重试。'
+                : locationStatus === 'unsupported'
+                  ? '当前浏览器不支持定位，可继续导入数据或让 Agent 发现数据。'
+                  : '允许定位后，空会话会显示当前位置；分析数据加载后地图会自动切换到数据范围。'}</p>
+        {(locationStatus === 'prompt' || locationStatus === 'denied' || locationStatus === 'unavailable' || locationStatus === 'timeout') && <button type="button" onClick={() => { void locateCurrentPosition() }}>定位到当前位置</button>}
+      </div>}
+      {(visibleLayers.length > 0 || activeInspection?.overlay_layer.visible) && <aside className={`gh-map-legend${legendOpen ? ' is-open' : ''}`} aria-label="Map legend">
         <button type="button" aria-expanded={legendOpen} onClick={() => setLegendOpen(open => !open)}>
-          <span>Legend</span><small>{visibleLayers.length}</small><i>{legendOpen ? '−' : '+'}</i>
+          <span>Legend</span><small>{visibleLayers.length + (activeInspection?.overlay_layer.visible ? 1 : 0)}</small><i>{legendOpen ? '−' : '+'}</i>
         </button>
-        {legendOpen && <div>{visibleLayers.slice(-7).reverse().map(layer => <span key={layer.id}>
-          <i style={{ background: layer.style.color }} /><b title={layer.name}>{layer.name}</b><small>{Math.round(layer.opacity * 100)}%</small>
-        </span>)}{visibleLayers.length > 7 && <em>+ {visibleLayers.length - 7} more visible layers</em>}</div>}
+        {legendOpen && <div>{activeInspection?.overlay_layer.visible && <span key={activeInspection.overlay_layer.layer_id}>
+          <i className="is-raster-overlay" /><b title={activeInspection.overlay_layer.name}>{activeInspection.overlay_layer.name}</b><small>{Math.round(activeInspection.overlay_layer.opacity * 100)}%</small>
+        </span>}{visibleLayers.slice(-6).reverse().map(layer => <span key={layer.id}>
+          <i style={{ background: layer.style.color }} /><b title={layer.name}>{layer.name}</b><small>{Math.round(displayOpacity(layer) * 100)}%</small>
+        </span>)}{visibleLayers.length > 6 && <em>+ {visibleLayers.length - 6} more visible layers</em>}</div>}
+      </aside>}
+      {inspectionRevealed && activeInspection !== null && <aside className="gh-imagery-inspection-card" aria-label="Satellite visual inspection result">
+        <header><span><small>VISUAL SCREENING</small><b>{analysisPlace?.label ?? '卫星影像'} · 视觉初筛</b></span><em>RGB 启发式</em></header>
+        <div>{activeInspection.categories.map(item => <span className={`is-${item.category}`} key={item.category}>
+          <i /><small>{{ water: '水体外观', vegetation: '植被外观', built_up: '建成区外观', bare_ground: '裸地外观' }[item.category] ?? item.category}</small><b>{(item.pixel_ratio * 100).toFixed(1)}%</b><em>{Math.round(item.heuristic_confidence * 100)}% conf.</em>
+        </span>)}</div>
+        <footer>{activeInspection.analysis_scope?.boundary_clipped
+          ? `${activeInspection.analysis_scope.analysis_pixel_count.toLocaleString()} 区内像素 · ${analysisPlace?.cache_provenance ? '真实边界缓存裁剪' : '行政边界裁剪'} · z${activeInspection.tile_zoom}`
+          : `${activeInspection.pixel_width}×${activeInspection.pixel_height} px · z${activeInspection.tile_zoom}`} · 仅视觉初筛，不代表实测面积</footer>
       </aside>}
       <div className="gh-map-scale"><span /> <b>{mapScaleLabel(bounds, zoom)}</b><small>{zoom.toFixed(1)}×</small></div>
-      <div className="gh-map-attribution">{layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · local vector canvas</div>
+      <div className="gh-map-attribution">
+        {canvasMode === 'satellite'
+          ? `卫星影像 © Esri · ${administrativeBoundary === null ? '' : '边界 © OpenStreetMap contributors · ODbL · '}${rasterHealth === 'ready' ? '在线' : rasterHealth === 'unavailable' ? '不可用，已回退' : '加载中'}`
+          : `${layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · local vector canvas`}
+      </div>
       {selected !== null && <aside className="gh-feature-inspector" aria-label="Feature inspection">
         <button type="button" onClick={() => onSelect(null)} aria-label="Close feature inspection">×</button>
         <span className="gh-eyebrow">FEATURE INSPECTION</span>
@@ -581,6 +1195,10 @@ interface GeoHarnessInjected {
     setLayerPreference(layerId: string, preference: Partial<LayerDisplayPreference>): Promise<void>
     runs(): Promise<AgentRunManifest[]>
     result(runId?: string): Promise<ResultCenter | null>
+    saveImageryView(view: ImageryView): Promise<void>
+    imageryTarget(): Promise<ImageryTarget | null>
+    imageryInspection(): Promise<ImageryInspection | null>
+    setImageryPreference(inspectionId: string, preference: Partial<Pick<RasterOverlayLayer, 'visible' | 'opacity'>>): Promise<void>
     download(assetType: 'export' | 'run', assetId: string): Promise<ResultDownload>
     diagnostics(): Promise<ResultDownload>
   }
@@ -752,11 +1370,67 @@ function renderLayerRow(
   )
 }
 
+function renderRasterOverlayRow(
+  inspection: ImageryInspection,
+  onPreference: (preference: Partial<Pick<RasterOverlayLayer, 'visible' | 'opacity'>>) => void,
+) {
+  const layer = inspection.overlay_layer
+  return (
+    <article
+      className="gh-layer-row gh-raster-layer-row"
+      data-layer-id={layer.layer_id}
+      data-layer-name={layer.name}
+      key={layer.layer_id}
+    >
+      <button
+        type="button"
+        className={layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle'}
+        aria-label={`${layer.visible ? 'Hide' : 'Show'} ${layer.name}`}
+        aria-pressed={layer.visible}
+        onClick={() => onPreference({ visible: !layer.visible })}
+      ><span className="is-raster-overlay" /></button>
+      <div className="gh-layer-meta">
+        <div className="gh-layer-open gh-raster-layer-meta">
+          <strong>{layer.name}<em className="gh-output-check">✓</em></strong>
+          <small>Raster Overlay · {inspection.pixel_width}×{inspection.pixel_height} px</small>
+          <small>{inspection.resolved_place?.label ?? 'current viewport'} · inspect_satellite_view</small>
+        </div>
+        <div className="gh-raster-opacity-control">
+          <button
+            type="button"
+            aria-label={`Decrease ${layer.name} opacity`}
+            disabled={layer.opacity <= 0}
+            onClick={() => onPreference({ opacity: Math.max(0, Math.round((layer.opacity - 0.1) * 100) / 100) })}
+          >−</button>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={layer.opacity}
+            aria-label={`${layer.name} opacity`}
+            onChange={event => onPreference({ opacity: Number(event.currentTarget.value) })}
+          />
+          <output>{Math.round(layer.opacity * 100)}%</output>
+          <button
+            type="button"
+            aria-label={`Increase ${layer.name} opacity`}
+            disabled={layer.opacity >= 1}
+            onClick={() => onPreference({ opacity: Math.min(1, Math.round((layer.opacity + 0.1) * 100) / 100) })}
+          >+</button>
+        </div>
+      </div>
+    </article>
+  )
+}
+
 function GeoHarnessLayerPanel({
   onClose,
   selectedLayerId,
   onInspect,
   onPreference,
+  inspection,
+  onImageryPreference,
   layerStatuses,
   statisticsCount,
 }: {
@@ -764,18 +1438,21 @@ function GeoHarnessLayerPanel({
   selectedLayerId: string | null
   onInspect: (layerId: string) => void
   onPreference: (layerId: string, preference: Partial<LayerDisplayPreference>) => void
+  inspection: ImageryInspection | null
+  onImageryPreference: (preference: Partial<Pick<RasterOverlayLayer, 'visible' | 'opacity'>>) => void
   layerStatuses: Readonly<Record<string, AgentToolStep['status']>>
   statisticsCount: number
 }) {
   const workspace = useLayerWorkspace()
   const groups = groupWorkspaceLayers(workspace.layers)
-  const visibleCount = workspace.layers.filter(layer => layer.visible).length
+  const totalLayerCount = workspace.layers.length + (inspection === null ? 0 : 1)
+  const visibleCount = workspace.layers.filter(layer => layer.visible).length + (inspection?.overlay_layer.visible ? 1 : 0)
   return (
     <section className="gh-sidebar-layers gh-map-layer-panel" aria-label="Layer panel">
       <div className="gh-sidebar-layer-heading">
         <span><b>Layers</b><small>Verified Agent workspace</small></span>
         <span className="gh-layer-panel-actions">
-          <span className="gh-panel-count">{workspace.layers.length}</span>
+          <span className="gh-panel-count">{totalLayerCount}</span>
           <button type="button" className="gh-layer-panel-close" aria-label="关闭图层面板" onClick={onClose}>×</button>
         </span>
       </div>
@@ -785,6 +1462,12 @@ function GeoHarnessLayerPanel({
           workspace.sessionId ?? '', layer, workspace.highlightedLayerIds,
           selectedLayerId, onInspect, onPreference,
         ))}
+      </div>
+      <div className="gh-layer-section-label"><span>Raster analysis layers</span><small>{inspection === null ? 0 : 1}</small></div>
+      <div className="gh-layer-list gh-raster-layer-list" aria-label="Raster analysis layers">
+        {inspection === null
+          ? <p className="gh-output-empty">影像巡检完成后，蒙版会作为 Raster Layer 显示在这里。</p>
+          : renderRasterOverlayRow(inspection, onImageryPreference)}
       </div>
       <div className="gh-layer-section-label"><span>Intermediate layers</span><small>{groups.intermediate.length}</small></div>
       <div className="gh-layer-list gh-output-list" aria-label="Task output layers">
@@ -1093,6 +1776,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [agentStream, setAgentStream] = React.useState<AgentStreamItem[]>([])
   const [agentAnswer, setAgentAnswer] = React.useState('')
   const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent')
+  const [workspaceReady, setWorkspaceReady] = React.useState(false)
   const [layerPanelOpen, setLayerPanelOpen] = React.useState(false)
   const [importCapabilities, setImportCapabilities] = React.useState<ImportCapabilities>({
     schema_version: '1.0',
@@ -1112,6 +1796,8 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const [layerDetailsError, setLayerDetailsError] = React.useState<string | null>(null)
   const [runManifests, setRunManifests] = React.useState<AgentRunManifest[]>([])
   const [resultCenter, setResultCenter] = React.useState<ResultCenter | null>(null)
+  const [imageryInspection, setImageryInspection] = React.useState<ImageryInspection | null>(null)
+  const [imageryTarget, setImageryTarget] = React.useState<ImageryTarget | null>(null)
   const [downloadingAsset, setDownloadingAsset] = React.useState<string | null>(null)
   const [downloadError, setDownloadError] = React.useState<string | null>(null)
   const fileInput = React.useRef<HTMLInputElement | null>(null)
@@ -1125,12 +1811,11 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const bootstrapSession = React.useRef<string | null>(null)
   const lastRunManifestKey = React.useRef<string | null>(null)
   const agentScroll = React.useRef<HTMLDivElement | null>(null)
-  const previousLayerCount = React.useRef(0)
+  const followAgentStream = React.useRef(true)
   const layerState = useLayerWorkspace()
   const layers = layerState.sessionId === sessionId ? layerState.layers : []
 
   React.useEffect(() => {
-    previousLayerCount.current = 0
     activeGoalSeq.current = null
     lastAutoStepId.current = null
     lastRunStatus.current = 'ready'
@@ -1138,6 +1823,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     lastWorkspaceSession.current = null
     bootstrapSession.current = null
     setLayerPanelOpen(false)
+    setWorkspaceReady(false)
     setImportDraft(null)
     setImportPhase('idle')
     setImportProgress(0)
@@ -1149,15 +1835,19 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     setFocusedLayerId(null)
     setRunManifests([])
     setResultCenter(null)
+    setImageryInspection(null)
+    setImageryTarget(null)
     setDownloadingAsset(null)
     setDownloadError(null)
     lastRunManifestKey.current = null
   }, [sessionId])
 
   React.useEffect(() => {
-    const update = () => setPresentationMode(document.fullscreenElement !== null)
-    document.addEventListener('fullscreenchange', update)
-    return () => document.removeEventListener('fullscreenchange', update)
+    const exit = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPresentationMode(false)
+    }
+    document.addEventListener('keydown', exit)
+    return () => document.removeEventListener('keydown', exit)
   }, [])
 
   // Hydrate canonical state independently from Session history. Workspace is
@@ -1178,14 +1868,18 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
         setWorkspaceStatus(`${workspace.layers.length} verified layers`)
       } catch (error) {
         if (!disposed) setWorkspaceStatus(error instanceof Error ? error.message : String(error))
+      } finally {
+        if (!disposed) setWorkspaceReady(true)
       }
-      const [capabilities, runs] = await Promise.all([
+      const [capabilities, runs, inspection] = await Promise.all([
         agent.importCapabilities().catch(() => null),
         agent.runs().catch(() => [] as AgentRunManifest[]),
+        agent.imageryInspection().catch(() => null),
       ])
       if (disposed) return
       if (capabilities !== null) setImportCapabilities(capabilities)
       setRunManifests(runs)
+      setImageryInspection(inspection)
       const latest = runs.at(-1)
       if (latest !== undefined) {
         try {
@@ -1204,21 +1898,51 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
     }
   }, [agent, sessionId])
 
-  React.useEffect(() => {
-    if (previousLayerCount.current === 0 && layers.length > 0) setLayerPanelOpen(true)
-    previousLayerCount.current = layers.length
-  }, [layers.length])
-
   const streamRevision = agentStream.map(item => `${item.id}:${item.status}:${item.text.length}`).join('|')
   React.useEffect(() => {
     const panel = agentScroll.current
     if (panel === null) return
-    panel.scrollTop = runStatus === 'ready' ? 0 : panel.scrollHeight
+    if (runStatus === 'ready') {
+      panel.scrollTop = 0
+      followAgentStream.current = true
+    } else if (followAgentStream.current) {
+      const stream = panel.querySelector<HTMLElement>('.gh-agent-result')
+      if (stream) panel.scrollTop = Math.max(0, stream.offsetTop + stream.offsetHeight - panel.clientHeight - panel.offsetTop + 12)
+    }
   }, [runStatus, streamRevision, taskSteps.length])
+
+  React.useEffect(() => {
+    const root = shell.current?.closest<HTMLElement>('[data-conversation-scroll]')
+    if (!root) return
+    let frame = 0
+    const update = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const seat = root.querySelector<HTMLElement>('[data-composer-seat]')
+        const height = Math.ceil(seat?.getBoundingClientRect().height ?? 190)
+        root.style.setProperty('--gh-composer-reserve', `${height + 30}px`)
+        const width = root.clientWidth
+        root.style.setProperty('--gh-agent-column-width', `${width <= 760 ? width - 24 : Math.min(480, Math.max(320, Math.round(width * .32)))}px`)
+      })
+    }
+    const resize = new ResizeObserver(update)
+    resize.observe(root)
+    const seat = root.querySelector<HTMLElement>('[data-composer-seat]')
+    if (seat) resize.observe(seat)
+    const mutations = new MutationObserver(() => {
+      const currentSeat = root.querySelector<HTMLElement>('[data-composer-seat]')
+      if (currentSeat) resize.observe(currentSeat)
+      update()
+    })
+    mutations.observe(root, { childList: true, subtree: true })
+    update()
+    return () => { resize.disconnect(); mutations.disconnect(); cancelAnimationFrame(frame); root.style.removeProperty('--gh-composer-reserve'); root.style.removeProperty('--gh-agent-column-width') }
+  }, [sessionId])
 
   React.useEffect(() => {
     layerWorkspace.activate(sessionId)
     let disposed = false
+    let resourcesBusy = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = async () => {
       try {
@@ -1227,6 +1951,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
         const humanGoal = latestHumanGoal(history.events)
         let workspaceSeq = -1
         let runManifestKey = 'empty'
+        let hasRunningTools = false
         setRunHistoryCount(humanGoalCount(history.events))
         if (humanGoal === null) {
           setRunStatus('ready')
@@ -1243,9 +1968,11 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             lastAutoStepId.current = null
             setSelectedStepId(null)
             setResultCenter(null)
+            setImageryTarget(null)
           }
           setGoal(humanGoal.text)
           const projection = projectAgentHistory(history.events, humanGoal.seq)
+          hasRunningTools = projection.steps.some(step => step.status === 'running')
           workspaceSeq = projection.maxSeq
           runManifestKey = `${humanGoal.seq}:${projection.steps.map(step => `${step.id}:${step.status}`).join('|')}:${projection.finished}`
           const status = projection.finished ? (projection.succeeded ? 'success' : 'failed') : 'running'
@@ -1254,6 +1981,29 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           setAgentAnswer(projection.answer)
           setRunStatus(status)
           setRunError(projection.error)
+          const imageryStep = [...projection.steps].reverse().find(step => step.name === 'inspect_satellite_view')
+          if (imageryStep?.status === 'running') {
+            const target = await agent.imageryTarget().catch(() => null)
+            const expectedStepId = typeof imageryStep.arguments.step_id === 'string'
+              ? imageryStep.arguments.step_id
+              : imageryStep.id
+            if (!disposed && target !== null && target.step_id === expectedStepId) {
+              setImageryTarget(target)
+              setWorkspaceStatus(target.message)
+            }
+          } else if (imageryStep?.status === 'failed') {
+            const target = await agent.imageryTarget().catch(() => null)
+            const expectedStepId = typeof imageryStep.arguments.step_id === 'string'
+              ? imageryStep.arguments.step_id
+              : imageryStep.id
+            if (!disposed && target !== null && target.step_id === expectedStepId) setImageryTarget({
+              ...target,
+              status: 'failed',
+              phase: 'failed',
+              message: imageryStep.summary ?? '影像巡检未完成',
+              error: imageryStep.summary ?? target.error,
+            })
+          }
           const activeStep = projection.steps.find(step => step.status === 'running')
           if (activeStep !== undefined && lastAutoStepId.current !== activeStep.id) {
             lastAutoStepId.current = activeStep.id
@@ -1264,6 +2014,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           }
           lastRunStatus.current = status
         }
+        // Canonical result/workspace reads can queue behind a long-running Tool.
+        // Never await those reads in the native history + progress polling loop.
+        const refreshResources = async () => {
         if (bootstrapSession.current !== sessionId && lastRunManifestKey.current !== runManifestKey) {
           try {
             const runs = await agent.runs()
@@ -1279,6 +2032,12 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               } catch {
                 // The next polling cycle retries while the canonical result projection catches up.
               }
+            }
+            const inspection = await agent.imageryInspection().catch(() => null)
+            if (!disposed && inspection !== null) {
+              setImageryInspection(inspection)
+              const target = await agent.imageryTarget().catch(() => null)
+              if (!disposed && target !== null) setImageryTarget(target)
             }
             if (resultReady && (humanGoal === null || (current !== undefined
               && (current.max_event_seq === workspaceSeq || current.status !== 'running')))) {
@@ -1305,6 +2064,11 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
           }
         } else if (lastWorkspaceSeq.current === null) {
           lastWorkspaceSeq.current = workspaceSeq
+        }
+        }
+        if (!hasRunningTools && !resourcesBusy) {
+          resourcesBusy = true
+          void refreshResources().catch(() => {}).finally(() => { resourcesBusy = false })
         }
       } catch (error) {
         if (!disposed) {
@@ -1358,6 +2122,27 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   const importBusy = importPhase === 'reading' || importPhase === 'uploading'
   const inspectedLayer = inspectedLayerId === null ? null : layers.find(layer => layer.id === inspectedLayerId) ?? null
   const recentRunManifests = runManifests.slice(-3).reverse()
+  const syncImageryView = React.useCallback(async (view: ImageryView) => {
+    try {
+      await agent.saveImageryView(view)
+      setWorkspaceStatus('satellite view ready for local Agent inspection')
+    } catch (error) {
+      setWorkspaceStatus(error instanceof Error ? error.message : String(error))
+      throw error
+    }
+  }, [agent])
+  const persistImageryPreference = React.useCallback((preference: Partial<Pick<RasterOverlayLayer, 'visible' | 'opacity'>>) => {
+    const current = imageryInspection
+    if (current === null) return
+    setImageryInspection({
+      ...current,
+      overlay_layer: { ...current.overlay_layer, ...preference },
+    })
+    void agent.setImageryPreference(current.inspection_id, preference).catch(error => {
+      setImageryInspection(value => value?.inspection_id === current.inspection_id ? current : value)
+      setWorkspaceStatus(error instanceof Error ? error.message : String(error))
+    })
+  }, [agent, imageryInspection])
 
   React.useEffect(() => {
     if (inspectedLayerId !== null && inspectedLayer === null) {
@@ -1399,12 +2184,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   }
 
   const togglePresentationMode = async () => {
-    if (document.fullscreenElement !== null) {
-      await document.exitFullscreen()
-      return
-    }
-    const target = shell.current?.closest('[data-conversation-scroll]') ?? shell.current
-    await target?.requestFullscreen()
+    // Keep the native composer and its model popovers in the same document.
+    // Browser fullscreen can silently exit on input focus in embedded browsers.
+    setPresentationMode(current => !current)
   }
 
   const refreshCanonicalWorkspace = async () => {
@@ -1555,15 +2337,15 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
   }
 
   return (
-    <main ref={shell} className={`gh-shell${presentationMode ? ' is-presentation' : ''}`} data-geoharness-plugin="loaded" data-geoharness-phase="10" data-geoharness-agent="native" data-conversation-composer-overlay="">
+    <main ref={shell} className={`gh-shell${presentationMode ? ' is-presentation' : ''}`} data-geoharness-plugin="loaded" data-geoharness-session={sessionId} data-geoharness-phase="10" data-geoharness-agent="native" data-conversation-composer-overlay="">
       <header className="gh-topbar">
         <div className="gh-brand">
           <BrandMark />
-          <span><strong>GeoHarness</strong><small>Agentic GIS · local workspace</small></span>
+          <span><strong>GeoHarness</strong><small>空间分析，由对话开始</small></span>
         </div>
         <div className="gh-launcher">
           {importPhase !== 'idle' && <span className={`gh-import-summary is-${importPhase}`}>{importPhase === 'success' ? '✓' : importBusy ? '…' : '!'} {importMessage}</span>}
-          <span className={`gh-status is-${runStatus}`}><i /> {runStatus === 'running' ? `Agent 正在执行 · ${progress}%` : runStatus === 'failed' ? 'Agent 执行失败' : runStatus === 'success' ? 'Agent 运行完成' : 'Native Harness Agent'} · {layers.length} layers · {featureCount} features</span>
+          <span className={`gh-status is-${runStatus}`}><i /> {runStatus === 'running' ? `Agent 正在执行 · ${progress}%` : runStatus === 'failed' ? 'Agent 执行失败' : runStatus === 'success' ? 'Agent 运行完成' : 'Native Harness Agent'} · {layers.length + (imageryInspection === null ? 0 : 1)} layers · {featureCount} features</span>
           <button type="button" className="gh-presentation-button" onClick={() => {
             void togglePresentationMode().catch(reason => setWorkspaceStatus(reason instanceof Error ? reason.message : String(reason)))
           }}><span aria-hidden="true">{presentationMode ? '↙' : '↗'}</span> {presentationMode ? '退出演示' : '演示模式'}</button>
@@ -1636,10 +2418,16 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
       <section className="gh-workspace">
         <section className={`gh-map-stage is-${runStatus}${highlightedLayerIds.size > 0 ? ' has-focus' : ''}`}>
           <GeoMap
+            sessionId={sessionId}
+            presentationMode={presentationMode}
             layers={layers}
+            workspaceReady={workspaceReady}
             selected={selectedFeature}
             highlightedLayerIds={highlightedLayerIds}
             runStatus={runStatus}
+            inspection={imageryInspection}
+            imageryTarget={imageryTarget}
+            onViewChange={syncImageryView}
             onSelect={value => {
               setSelectedFeature(value)
               if (value !== null) focusLayer(value.layer.id, true)
@@ -1659,7 +2447,7 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
             aria-controls="geoharness-layer-panel"
             onClick={() => setLayerPanelOpen(open => !open)}
           >
-            <span aria-hidden="true">▱</span> Layers <small>{layers.length}</small>
+            <span aria-hidden="true">▱</span> Layers <small>{layers.length + (imageryInspection === null ? 0 : 1)}</small>
           </button>
           {layerPanelOpen && <div className="gh-map-layer-drawer" id="geoharness-layer-panel">
             <GeoHarnessLayerPanel
@@ -1667,6 +2455,8 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               selectedLayerId={inspectedLayerId}
               onInspect={layerId => focusLayer(layerId, true)}
               onPreference={persistLayerPreference}
+              inspection={imageryInspection}
+              onImageryPreference={persistImageryPreference}
               layerStatuses={layerStatuses}
               statisticsCount={resultCenter?.statistics.length ?? 0}
             />
@@ -1690,17 +2480,22 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
 
         <aside className="gh-panel gh-agent" aria-label="Agent workspace">
           <div className="gh-panel-heading">
-            <span><b>Agent workspace</b><small>Goal → Plan → Tools → Layers</small></span>
+            <span><b>Agent Workspace</b><small>实时执行 · 分析与结果</small></span>
             <span className={`gh-agent-state is-${runStatus}`}>{runStatus}</span>
           </div>
-          <div className="gh-agent-scroll" ref={agentScroll}>
-            <section className="gh-agent-block">
-              <span className="gh-eyebrow">GOAL</span>
+          <div className="gh-agent-scroll" ref={agentScroll} onScroll={event => {
+            const panel = event.currentTarget
+            const stream = panel.querySelector<HTMLElement>('.gh-agent-result')
+            const end = stream ? stream.offsetTop + stream.offsetHeight - panel.offsetTop : panel.scrollHeight
+            followAgentStream.current = end - panel.scrollTop - panel.clientHeight < 80
+          }}>
+            <section className="gh-agent-block gh-goal">
+              <span className="gh-eyebrow">当前任务</span>
               <p>{goal}</p>
             </section>
-            <section className="gh-agent-block">
-              <span className="gh-eyebrow">LIVE AGENT TOOL TRACE</span>
-              {taskSteps.length === 0 && <p className="gh-result-empty">这里不加载预设 Plan；Harness Agent 实际发起 Tool Call 后，步骤才会逐项出现。</p>}
+            <section className="gh-agent-block gh-tool-trace">
+              <span className="gh-eyebrow">执行步骤 <small>{successfulSteps.length} / {taskSteps.length}</small></span>
+              {taskSteps.length === 0 && <p className="gh-result-empty">{runStatus === 'running' ? 'Agent 正在理解需求，准备分析工具…' : '输入地点或分析需求，Agent 将逐步展示执行过程。'}</p>}
               <ol className="gh-plan-list" data-task-graph="agent-generated">
                 {taskSteps.map((step, index) => <li
                   className={`is-${step.status}${selectedStepId === step.id ? ' is-selected' : ''}`}
@@ -1720,20 +2515,22 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
                 </li>)}
               </ol>
             </section>
-            <section className="gh-agent-block gh-current-step">
-              <span className="gh-eyebrow">CURRENT STEP</span>
+            {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
+            <details className="gh-agent-block gh-current-step">
+              <summary className="gh-eyebrow">运行信息与诊断</summary>
               <div><span>Driver</span><b>Native Harness Agent</b></div>
               <div><span>Model</span><b>原生输入栏可切换</b></div>
               <div><span>Tools</span><b>{successfulSteps.length}/{taskSteps.length} success</b></div>
-              <div><span>Outputs</span><b>{derivedLayers.length} layers</b></div>
+              <div><span>Outputs</span><b>{derivedLayers.length + (imageryInspection === null ? 0 : 1)} layers</b></div>
               <div><span>Turns</span><b>{runHistoryCount}</b></div>
               <div><span>Session</span><b title={sessionId}>{sessionId.slice(0, 12)}</b></div>
               <div><span>Map</span><b className="is-teal">{workspaceStatus}</b></div>
               <button type="button" className="gh-diagnostics-button" disabled={downloadingAsset !== null} onClick={() => { void downloadDiagnostics() }}>
                 {downloadingAsset === 'diagnostic' ? '正在生成诊断…' : '导出结构化诊断'}
               </button>
-              {runError !== null && <p className="gh-run-error" role="alert">{runError}</p>}
-            </section>
+            </details>
+            <details className="gh-agent-disclosure">
+              <summary>结果数据与下载</summary>
             <ResultCenterPanel
               result={resultCenter}
               downloading={downloadingAsset}
@@ -1743,8 +2540,9 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
               onLayerFocus={layerId => setFocusedLayerId(layerId)}
               focusedLayerId={focusedLayerId}
             />
-            <section className="gh-agent-block gh-run-history" aria-label="Agent Run history">
-              <span className="gh-eyebrow">RUN MANIFEST · REVISIONS</span>
+            </details>
+            <details className="gh-agent-block gh-run-history" aria-label="Agent Run history">
+              <summary className="gh-eyebrow">运行历史 · {recentRunManifests.length}</summary>
               {recentRunManifests.length === 0 && <p className="gh-result-empty">Native Session 产生 Tool Call 后，这里会恢复可核查的运行记录。</p>}
               {recentRunManifests.map(run => <article className={`is-${run.status}`} key={run.run_id}>
                 <header><b>Turn {run.turn}</b><small>{run.status} · {run.provider ?? 'provider'} / {run.model ?? 'model'}</small></header>
@@ -1757,27 +2555,29 @@ function GeoHarnessShell({ agent, sessionId }: GeoHarnessSessionProps) {
                 {run.tool_calls.length > 0 && <small>{run.tool_calls.map(call => `${call.name} ${call.status === 'success' ? '✓' : call.status === 'failed' ? '!' : '…'}`).join(' · ')}</small>}
                 {run.errors.length > 0 && <small className="is-error">{run.errors.map(error => `${error.classification}: ${error.message}`).join(' · ')}</small>}
               </article>)}
-            </section>
+            </details>
             <section className={`gh-agent-block gh-agent-result is-${runStatus}`} aria-label="Agent result">
               <div className="gh-stream-heading">
-                <span className="gh-eyebrow">AGENT STREAM</span>
+                <span className="gh-eyebrow">Agent 实时输出</span>
                 <small>{runStatus === 'running' ? 'LIVE' : runStatus.toUpperCase()} · {successfulSteps.length}/{taskSteps.length} tools</small>
               </div>
               {agentStream.length === 0
-                ? <p className="gh-result-empty">{runStatus === 'running'
-                    ? '已提交给模型，等待首个流式 token…'
-                    : agentAnswer === '' ? 'Agent 的完整流式输出会显示在这里。' : agentAnswer}</p>
+                ? runStatus === 'running'
+                  ? <p className="gh-result-empty">已提交给模型，等待首个流式 token…</p>
+                  : agentAnswer === ''
+                    ? <p className="gh-result-empty">Agent 的完整流式输出会显示在这里。</p>
+                    : <MarkdownContent text={agentAnswer} />
                 : <div className="gh-stream-list" aria-live="polite">
                     {agentStream.map(item => item.kind === 'retry'
                       ? <div className="gh-stream-retry" data-stream-status={item.status} key={item.id}>↻ {item.text}</div>
                       : item.kind === 'reasoning'
                         ? <details className="gh-stream-reasoning" open={item.status === 'streaming'} key={item.id}>
                             <summary>Reasoning · Turn {item.turn} / Step {item.step}</summary>
-                            <p>{item.text}{item.status === 'streaming' && <i className="gh-stream-cursor" />}</p>
+                            <MarkdownContent text={item.text} streaming={item.status === 'streaming'} />
                           </details>
                         : <article className="gh-stream-text" data-stream-status={item.status} key={item.id}>
                             <small>Agent · Turn {item.turn} / Step {item.step}</small>
-                            <p>{item.text}{item.status === 'streaming' && <i className="gh-stream-cursor" />}</p>
+                            <MarkdownContent text={item.text} streaming={item.status === 'streaming'} />
                           </article>)}
                   </div>}
               <div className="gh-result-trace">
@@ -1891,6 +2691,40 @@ export function apply(ctx: ClientContext) {
           if (response.value === null) return null
           if (typeof response.value !== 'object') throw new Error('Result Center returned an invalid projection')
           return response.value as ResultCenter
+        },
+        saveImageryView: async view => {
+          const response = await connection.rpc.call('/geoharness', 'imagery/view', {
+            workspace_key: sessionId,
+            bbox: view.bbox,
+            zoom: view.zoom,
+          })
+          if (!response.ok) throw new Error(response.error?.message ?? 'Satellite viewport could not be synchronized')
+        },
+        imageryInspection: async () => {
+          const response = await connection.rpc.call('/geoharness', 'imagery/latest', {
+            workspace_key: sessionId,
+          })
+          if (!response.ok) throw new Error(response.error?.message ?? 'Satellite inspection result is unavailable')
+          if (response.value === null) return null
+          if (typeof response.value !== 'object') throw new Error('Satellite inspection returned an invalid projection')
+          return response.value as ImageryInspection
+        },
+        imageryTarget: async () => {
+          const response = await connection.rpc.call('/geoharness', 'imagery/target', {
+            workspace_key: sessionId,
+          })
+          if (!response.ok) throw new Error(response.error?.message ?? 'Satellite inspection target is unavailable')
+          if (response.value === null) return null
+          if (typeof response.value !== 'object') throw new Error('Satellite inspection target returned an invalid projection')
+          return response.value as ImageryTarget
+        },
+        setImageryPreference: async (inspectionId, preference) => {
+          const response = await connection.rpc.call('/geoharness', 'imagery/preference', {
+            workspace_key: sessionId,
+            inspection_id: inspectionId,
+            ...preference,
+          })
+          if (!response.ok) throw new Error(response.error?.message ?? 'Imagery Layer display preference could not be saved')
         },
         download: async (assetType, assetId) => {
           const response = await connection.rpc.call('/geoharness', 'result/download', {

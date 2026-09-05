@@ -8,8 +8,8 @@ GeoHarness 不建立第二套聊天、Planner 或 LLM 运行时。Host 订阅当
 `SessionStore` 的 append-only `session/event`，把真实用户轮次投影成可恢复的 Run Manifest：
 
 ```text
-user/message(source.kind=user)
-→ turn/start
+turn/start
+→ user/message(source.kind=user)
 → request/header / request/context
 → tool/call ↔ tool/result
 → assistant/message
@@ -20,6 +20,11 @@ user/message(source.kind=user)
 
 正式页面的流式文本仍直接来自 Connection `sessions.history`；Run Manifest 只保存结构化执行摘要，
 不替代原生 Session，也不保存 `assistant/chunk` 中的隐藏 reasoning。
+
+当前验证的 DeepSeek Harness `0.1.1-rc.2` 会先 append `turn/start`，再 append 属于该轮的
+`user/message`；早期测试与部分兼容路径采用相反顺序。projector 因此暂存尚未绑定 Goal 的
+turn start，并在真实 `source.kind=user` 消息到达时完成关联；同时继续接受先 message 后 start。
+这样首轮不会遗漏，后续轮次也不会把上一轮 Prompt 错绑到当前 Run。
 
 ## Schema
 

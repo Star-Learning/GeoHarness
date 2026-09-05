@@ -27,7 +27,8 @@ def test_python_tool_implementations_match_the_host_manifest(scenarios_root: Pat
     path = repository_root / "bundle" / "geoharness-bundle" / "catalog" / "builtin-tools.json"
     manifest = json.loads(path.read_text(encoding="utf-8"))
     host_backend_tools = [
-        tool["name"] for tool in manifest["tools"] if tool["name"] != "discover_datasets"
+        tool["name"] for tool in manifest["tools"]
+        if tool["name"] not in {"discover_datasets", "inspect_satellite_view"}
     ]
     assert host_backend_tools == list(TOOL_NAMES)
     assert all(tool["output"]["contract"] == "ToolResult@1.0" for tool in manifest["tools"])

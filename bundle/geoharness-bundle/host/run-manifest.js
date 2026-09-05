@@ -117,7 +117,9 @@ function newRun(sessionId, turn, goal, userEventSeq, event) {
 /** Fold canonical Native Harness events into versioned, reasoning-free Agent Run manifests. */
 export function projectRunManifests(sessionId, events) {
   const runs = new Map()
+  const turnStarts = new Map()
   let latestGoal = null
+  let consumedGoalSeq = -1
   let activeTurn = null
   let currentProvider = null
   let currentModel = null
@@ -128,15 +130,35 @@ export function projectRunManifests(sessionId, events) {
     if (event.type === 'user/message') {
       const source = record(data.source)
       const value = contentText(data.content)
-      if (source.kind === 'user' && value !== '') latestGoal = { text: value, seq: event.seq }
+      if (source.kind === 'user' && value !== '') {
+        latestGoal = { text: value, seq: event.seq }
+        // Current Harness releases append turn/start before the user/message
+        // that owns the turn. Older releases used the opposite order. Bind a
+        // pending turn as soon as its real user request arrives so both event
+        // orders produce the same canonical Run Manifest.
+        if (activeTurn !== null && !runs.has(activeTurn)) {
+          const started = turnStarts.get(activeTurn)
+          if (started !== undefined) {
+            const run = newRun(sessionId, activeTurn, latestGoal.text, latestGoal.seq, started)
+            run.provider = currentProvider
+            run.model = currentModel
+            runs.set(activeTurn, run)
+            consumedGoalSeq = latestGoal.seq
+          }
+        }
+      }
       continue
     }
-    if (event.type === 'turn/start' && Number.isSafeInteger(data.turn) && data.turn > 0 && latestGoal !== null) {
+    if (event.type === 'turn/start' && Number.isSafeInteger(data.turn) && data.turn > 0) {
       activeTurn = data.turn
-      const run = newRun(sessionId, activeTurn, latestGoal.text, latestGoal.seq, event)
-      run.provider = currentProvider
-      run.model = currentModel
-      runs.set(activeTurn, run)
+      turnStarts.set(activeTurn, event)
+      if (latestGoal !== null && latestGoal.seq > consumedGoalSeq) {
+        const run = newRun(sessionId, activeTurn, latestGoal.text, latestGoal.seq, event)
+        run.provider = currentProvider
+        run.model = currentModel
+        runs.set(activeTurn, run)
+        consumedGoalSeq = latestGoal.seq
+      }
       continue
     }
     const turn = Number.isSafeInteger(data.turn) && data.turn > 0 ? data.turn : activeTurn

@@ -29,6 +29,160 @@ export interface LayerGroups {
   final: LayerRecord[]
 }
 
+export type MarkdownInlineToken = {
+  type: 'text' | 'strong' | 'emphasis' | 'code' | 'link' | 'break'
+  text: string
+  href?: string
+}
+
+export type MarkdownBlock = {
+  type: 'paragraph' | 'heading' | 'unordered-list' | 'ordered-list' | 'blockquote' | 'code' | 'table'
+  level?: number
+  language?: string
+  items?: MarkdownInlineToken[][]
+  content?: MarkdownInlineToken[]
+  code?: string
+  headers?: MarkdownInlineToken[][]
+  rows?: MarkdownInlineToken[][][]
+}
+
+export type MapLayerRole = 'input' | 'intermediate' | 'final' | 'other'
+
+function inlineTokens(value: string): MarkdownInlineToken[] {
+  const tokens: MarkdownInlineToken[] = []
+  const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]\n]+\]\((?:https?:\/\/|mailto:)[^)\s]+\)|\n)/u
+  let remaining = value
+  while (remaining !== '') {
+    const match = pattern.exec(remaining)
+    if (match === null) {
+      tokens.push({ type: 'text', text: remaining })
+      break
+    }
+    if (match.index > 0) tokens.push({ type: 'text', text: remaining.slice(0, match.index) })
+    const marker = match[0]
+    if (marker === '\n') {
+      tokens.push({ type: 'break', text: '' })
+    } else if (marker.startsWith('`')) {
+      tokens.push({ type: 'code', text: marker.slice(1, -1) })
+    } else if (marker.startsWith('**') || marker.startsWith('__')) {
+      tokens.push({ type: 'strong', text: marker.slice(2, -2) })
+    } else if (marker.startsWith('*') || marker.startsWith('_')) {
+      tokens.push({ type: 'emphasis', text: marker.slice(1, -1) })
+    } else {
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/u.exec(marker)
+      tokens.push(link === null
+        ? { type: 'text', text: marker }
+        : { type: 'link', text: link[1], href: link[2] })
+    }
+    remaining = remaining.slice(match.index + marker.length)
+  }
+  return tokens
+}
+
+function isBlockStart(line: string) {
+  return /^\s*(?:```|#{1,4}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/u.test(line)
+}
+
+function tableCells(line: string) {
+  const normalized = line.trim().replace(/^\|/u, '').replace(/\|$/u, '')
+  return normalized.split('|').map(cell => cell.trim())
+}
+
+function isTableSeparator(line: string) {
+  const cells = tableCells(line)
+  return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/u.test(cell))
+}
+
+/**
+ * Parse a deliberately bounded Markdown subset for native Agent text. React
+ * renders the returned tokens, so model-authored HTML is always escaped and
+ * links are restricted to explicit http(s)/mailto Markdown syntax.
+ */
+export function parseAgentMarkdown(value: string): MarkdownBlock[] {
+  const lines = value.replace(/\r\n?/gu, '\n').split('\n')
+  const blocks: MarkdownBlock[] = []
+  for (let index = 0; index < lines.length;) {
+    const line = lines[index]
+    if (line.trim() === '') {
+      index += 1
+      continue
+    }
+    const fence = /^\s*```([\w+-]*)\s*$/u.exec(line)
+    if (fence !== null) {
+      const code: string[] = []
+      index += 1
+      while (index < lines.length && !/^\s*```\s*$/u.test(lines[index])) {
+        code.push(lines[index])
+        index += 1
+      }
+      if (index < lines.length) index += 1
+      blocks.push({ type: 'code', language: fence[1] || undefined, code: code.join('\n') })
+      continue
+    }
+    if (line.includes('|') && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+      const headers = tableCells(line).map(inlineTokens)
+      const rows: MarkdownInlineToken[][][] = []
+      index += 2
+      while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
+        const cells = tableCells(lines[index])
+        rows.push(headers.map((_, cellIndex) => inlineTokens(cells[cellIndex] ?? '')))
+        index += 1
+      }
+      blocks.push({ type: 'table', headers, rows })
+      continue
+    }
+    const heading = /^(#{1,4})\s+(.+)$/u.exec(line.trim())
+    if (heading !== null) {
+      blocks.push({ type: 'heading', level: heading[1].length, content: inlineTokens(heading[2]) })
+      index += 1
+      continue
+    }
+    const unordered = /^\s*[-*+]\s+(.+)$/u.exec(line)
+    if (unordered !== null) {
+      const items: MarkdownInlineToken[][] = []
+      while (index < lines.length) {
+        const item = /^\s*[-*+]\s+(.+)$/u.exec(lines[index])
+        if (item === null) break
+        items.push(inlineTokens(item[1]))
+        index += 1
+      }
+      blocks.push({ type: 'unordered-list', items })
+      continue
+    }
+    const ordered = /^\s*\d+[.)]\s+(.+)$/u.exec(line)
+    if (ordered !== null) {
+      const items: MarkdownInlineToken[][] = []
+      while (index < lines.length) {
+        const item = /^\s*\d+[.)]\s+(.+)$/u.exec(lines[index])
+        if (item === null) break
+        items.push(inlineTokens(item[1]))
+        index += 1
+      }
+      blocks.push({ type: 'ordered-list', items })
+      continue
+    }
+    if (/^\s*>/u.test(line)) {
+      const quote: string[] = []
+      while (index < lines.length) {
+        const item = /^\s*>\s?(.*)$/u.exec(lines[index])
+        if (item === null) break
+        quote.push(item[1])
+        index += 1
+      }
+      blocks.push({ type: 'blockquote', content: inlineTokens(quote.join('\n')) })
+      continue
+    }
+    const paragraph: string[] = [line.trim()]
+    index += 1
+    while (index < lines.length && lines[index].trim() !== '' && !isBlockStart(lines[index])) {
+      paragraph.push(lines[index].trim())
+      index += 1
+    }
+    blocks.push({ type: 'paragraph', content: inlineTokens(paragraph.join('\n')) })
+  }
+  return blocks
+}
+
 function uniqueResultLayers(layers: readonly ResultLayerLike[]) {
   const seen = new Set<string>()
   return layers.filter(layer => {
@@ -102,6 +256,23 @@ export function groupWorkspaceLayers(layers: readonly LayerRecord[]): LayerGroup
     intermediate: derived.filter(layer => referencedParents.has(layer.id)),
     final: derived.filter(layer => !referencedParents.has(layer.id)),
   }
+}
+
+/**
+ * Keep imagery readable beneath dense vector workflows. The persisted Layer
+ * opacity remains the user's master control; this role-aware multiplier is a
+ * map-only presentation rule and never changes canonical data or preferences.
+ */
+export function mapLayerOpacity(opacity: number, role: MapLayerRole, focused = false) {
+  const master = Math.max(0, Math.min(1, opacity))
+  if (focused) return master * 0.82
+  const multiplier: Record<MapLayerRole, number> = {
+    input: 0.32,
+    intermediate: 0.42,
+    final: 0.68,
+    other: 0.55,
+  }
+  return master * multiplier[role]
 }
 
 function parseRows(text: string, delimiter: ',' | ';' | '\t') {

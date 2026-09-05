@@ -120,6 +120,10 @@ export class LocalPythonGeoProvider {
     delete payload.datasetId
     if (request.action === 'load_scenario') payload.scenario_id = scenarioId
     if (request.action === 'load_dataset') payload.dataset_id = datasetId
+    // The imagery Tool publishes target.json atomically before its slower tile
+    // acquisition/classification stages. Let the UI read that progress snapshot
+    // concurrently instead of waiting behind the same-Workspace Tool queue.
+    if (request.action === 'imagery_target') return this.run(payload, signal)
     const previous = this.workspaceQueues.get(workspaceId) ?? Promise.resolve()
     const operation = previous.catch(() => {}).then(() => this.run(payload, signal))
     this.workspaceQueues.set(workspaceId, operation)

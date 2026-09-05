@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "hc8x-tcnd",
+  "title": "FDNY Firehouse Listing",
+  "publisher": "New York City Fire Department (FDNY)",
+  "source_url": "https://data.cityofnewyork.us/d/hc8x-tcnd",
+  "api_query_url": "https://data.cityofnewyork.us/resource/hc8x-tcnd.json?$limit=1000&$order=facilityname",
+  "snapshot_date": "2026-08-31",
+  "feature_count": 48,
+  "sha256": "2ec2442ce78671f1a4963c32f9166b18cf0a43033d37085a19f489a3f3609eac",
+  "license": "NYC Open Data Terms of Use"
+}

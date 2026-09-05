@@ -586,12 +586,153 @@ window.__ModuleLoader__.load({
       './ui-model': (module, exports, require) => {
         "use strict";
         Object.defineProperty(exports, "__esModule", { value: true });
+        exports.parseAgentMarkdown = parseAgentMarkdown;
         exports.buildFeatureFlow = buildFeatureFlow;
         exports.buildNumericStatistics = buildNumericStatistics;
         exports.groupWorkspaceLayers = groupWorkspaceLayers;
+        exports.mapLayerOpacity = mapLayerOpacity;
         exports.parseCsvPreview = parseCsvPreview;
         exports.suggestCoordinateField = suggestCoordinateField;
         exports.mapScaleLabel = mapScaleLabel;
+        function inlineTokens(value) {
+            const tokens = [];
+            const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]\n]+\]\((?:https?:\/\/|mailto:)[^)\s]+\)|\n)/u;
+            let remaining = value;
+            while (remaining !== '') {
+                const match = pattern.exec(remaining);
+                if (match === null) {
+                    tokens.push({ type: 'text', text: remaining });
+                    break;
+                }
+                if (match.index > 0)
+                    tokens.push({ type: 'text', text: remaining.slice(0, match.index) });
+                const marker = match[0];
+                if (marker === '\n') {
+                    tokens.push({ type: 'break', text: '' });
+                }
+                else if (marker.startsWith('`')) {
+                    tokens.push({ type: 'code', text: marker.slice(1, -1) });
+                }
+                else if (marker.startsWith('**') || marker.startsWith('__')) {
+                    tokens.push({ type: 'strong', text: marker.slice(2, -2) });
+                }
+                else if (marker.startsWith('*') || marker.startsWith('_')) {
+                    tokens.push({ type: 'emphasis', text: marker.slice(1, -1) });
+                }
+                else {
+                    const link = /^\[([^\]]+)\]\(([^)]+)\)$/u.exec(marker);
+                    tokens.push(link === null
+                        ? { type: 'text', text: marker }
+                        : { type: 'link', text: link[1], href: link[2] });
+                }
+                remaining = remaining.slice(match.index + marker.length);
+            }
+            return tokens;
+        }
+        function isBlockStart(line) {
+            return /^\s*(?:```|#{1,4}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/u.test(line);
+        }
+        function tableCells(line) {
+            const normalized = line.trim().replace(/^\|/u, '').replace(/\|$/u, '');
+            return normalized.split('|').map(cell => cell.trim());
+        }
+        function isTableSeparator(line) {
+            const cells = tableCells(line);
+            return cells.length > 1 && cells.every(cell => /^:?-{3,}:?$/u.test(cell));
+        }
+        /**
+         * Parse a deliberately bounded Markdown subset for native Agent text. React
+         * renders the returned tokens, so model-authored HTML is always escaped and
+         * links are restricted to explicit http(s)/mailto Markdown syntax.
+         */
+        function parseAgentMarkdown(value) {
+            const lines = value.replace(/\r\n?/gu, '\n').split('\n');
+            const blocks = [];
+            for (let index = 0; index < lines.length;) {
+                const line = lines[index];
+                if (line.trim() === '') {
+                    index += 1;
+                    continue;
+                }
+                const fence = /^\s*```([\w+-]*)\s*$/u.exec(line);
+                if (fence !== null) {
+                    const code = [];
+                    index += 1;
+                    while (index < lines.length && !/^\s*```\s*$/u.test(lines[index])) {
+                        code.push(lines[index]);
+                        index += 1;
+                    }
+                    if (index < lines.length)
+                        index += 1;
+                    blocks.push({ type: 'code', language: fence[1] || undefined, code: code.join('\n') });
+                    continue;
+                }
+                if (line.includes('|') && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+                    const headers = tableCells(line).map(inlineTokens);
+                    const rows = [];
+                    index += 2;
+                    while (index < lines.length && lines[index].includes('|') && lines[index].trim() !== '') {
+                        const cells = tableCells(lines[index]);
+                        rows.push(headers.map((_, cellIndex) => inlineTokens(cells[cellIndex] ?? '')));
+                        index += 1;
+                    }
+                    blocks.push({ type: 'table', headers, rows });
+                    continue;
+                }
+                const heading = /^(#{1,4})\s+(.+)$/u.exec(line.trim());
+                if (heading !== null) {
+                    blocks.push({ type: 'heading', level: heading[1].length, content: inlineTokens(heading[2]) });
+                    index += 1;
+                    continue;
+                }
+                const unordered = /^\s*[-*+]\s+(.+)$/u.exec(line);
+                if (unordered !== null) {
+                    const items = [];
+                    while (index < lines.length) {
+                        const item = /^\s*[-*+]\s+(.+)$/u.exec(lines[index]);
+                        if (item === null)
+                            break;
+                        items.push(inlineTokens(item[1]));
+                        index += 1;
+                    }
+                    blocks.push({ type: 'unordered-list', items });
+                    continue;
+                }
+                const ordered = /^\s*\d+[.)]\s+(.+)$/u.exec(line);
+                if (ordered !== null) {
+                    const items = [];
+                    while (index < lines.length) {
+                        const item = /^\s*\d+[.)]\s+(.+)$/u.exec(lines[index]);
+                        if (item === null)
+                            break;
+                        items.push(inlineTokens(item[1]));
+                        index += 1;
+                    }
+                    blocks.push({ type: 'ordered-list', items });
+                    continue;
+                }
+                if (/^\s*>/u.test(line)) {
+                    const quote = [];
+                    while (index < lines.length) {
+                        const item = /^\s*>\s?(.*)$/u.exec(lines[index]);
+                        if (item === null)
+                            break;
+                        quote.push(item[1]);
+                        index += 1;
+                    }
+                    blocks.push({ type: 'blockquote', content: inlineTokens(quote.join('\n')) });
+                    continue;
+                }
+                const paragraph = [line.trim()];
+                index += 1;
+                while (index < lines.length && lines[index].trim() !== '' && !isBlockStart(lines[index])) {
+                    paragraph.push(lines[index].trim());
+                    index += 1;
+                }
+                blocks.push({ type: 'paragraph', content: inlineTokens(paragraph.join('\n')) });
+            }
+            return blocks;
+        }
         function uniqueResultLayers(layers) {
             const seen = new Set();
             return layers.filter(layer => {
@@ -661,6 +802,23 @@ window.__ModuleLoader__.load({
                 intermediate: derived.filter(layer => referencedParents.has(layer.id)),
                 final: derived.filter(layer => !referencedParents.has(layer.id)),
             };
+        }
+        /**
+         * Keep imagery readable beneath dense vector workflows. The persisted Layer
+         * opacity remains the user's master control; this role-aware multiplier is a
+         * map-only presentation rule and never changes canonical data or preferences.
+         */
+        function mapLayerOpacity(opacity, role, focused = false) {
+            const master = Math.max(0, Math.min(1, opacity));
+            if (focused)
+                return master * 0.82;
+            const multiplier = {
+                input: 0.32,
+                intermediate: 0.42,
+                final: 0.68,
+                other: 0.55,
+            };
+            return master * multiplier[role];
         }
         function parseRows(text, delimiter) {
             const rows = [];
@@ -739,6 +897,358 @@ window.__ModuleLoader__.load({
         }
 
       },
+      './raster-basemap': (module, exports, require) => {
+        "use strict";
+        Object.defineProperty(exports, "__esModule", { value: true });
+        exports.interpolateGeoBounds = interpolateGeoBounds;
+        exports.createGeoViewFlightStops = createGeoViewFlightStops;
+        exports.longitudeToWorldX = longitudeToWorldX;
+        exports.latitudeToWorldY = latitudeToWorldY;
+        exports.worldXToLongitude = worldXToLongitude;
+        exports.worldYToLatitude = worldYToLatitude;
+        exports.geoBoundsForView = geoBoundsForView;
+        exports.interpolateMercatorView = interpolateMercatorView;
+        exports.createGeoViewFlight = createGeoViewFlight;
+        exports.createMercatorProjection = createMercatorProjection;
+        exports.rasterZoomForScale = rasterZoomForScale;
+        exports.visibleEsriWorldImageryTiles = visibleEsriWorldImageryTiles;
+        exports.overviewEsriWorldImageryTiles = overviewEsriWorldImageryTiles;
+        exports.retainRasterTiles = retainRasterTiles;
+        exports.reprojectRasterTile = reprojectRasterTile;
+        exports.visibleGeographicBounds = visibleGeographicBounds;
+        const MAX_MERCATOR_LATITUDE = 85.05112878;
+        const TILE_SIZE = 256;
+        const ESRI_WORLD_IMAGERY = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile';
+        function clamp(value, minimum, maximum) {
+            return Math.max(minimum, Math.min(maximum, value));
+        }
+        function boundsCenter(bounds) {
+            return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
+        }
+        function boundsAround(center, longitudeSpan, latitudeSpan) {
+            const boundedLongitudeSpan = clamp(longitudeSpan, 0.0001, 360);
+            const boundedLatitudeSpan = clamp(latitudeSpan, 0.0001, MAX_MERCATOR_LATITUDE * 2);
+            let west = center[0] - boundedLongitudeSpan / 2;
+            let east = center[0] + boundedLongitudeSpan / 2;
+            let south = center[1] - boundedLatitudeSpan / 2;
+            let north = center[1] + boundedLatitudeSpan / 2;
+            if (west < -180) {
+                east += -180 - west;
+                west = -180;
+            }
+            if (east > 180) {
+                west -= east - 180;
+                east = 180;
+            }
+            if (south < -MAX_MERCATOR_LATITUDE) {
+                north += -MAX_MERCATOR_LATITUDE - south;
+                south = -MAX_MERCATOR_LATITUDE;
+            }
+            if (north > MAX_MERCATOR_LATITUDE) {
+                south -= north - MAX_MERCATOR_LATITUDE;
+                north = MAX_MERCATOR_LATITUDE;
+            }
+            return [west, south, east, north];
+        }
+        function interpolateGeoBounds(from, to, progress) {
+            const boundedProgress = clamp(progress, 0, 1);
+            if (boundedProgress === 0)
+                return [...from];
+            if (boundedProgress === 1)
+                return [...to];
+            return [
+                from[0] + (to[0] - from[0]) * boundedProgress,
+                from[1] + (to[1] - from[1]) * boundedProgress,
+                from[2] + (to[2] - from[2]) * boundedProgress,
+                from[3] + (to[3] - from[3]) * boundedProgress,
+            ];
+        }
+        function createGeoViewFlightStops(from, to) {
+            const fromCenter = boundsCenter(from);
+            const toCenter = boundsCenter(to);
+            const fromLongitudeSpan = from[2] - from[0];
+            const fromLatitudeSpan = from[3] - from[1];
+            const toLongitudeSpan = to[2] - to[0];
+            const toLatitudeSpan = to[3] - to[1];
+            const travelLongitude = Math.abs(toCenter[0] - fromCenter[0]);
+            const travelLatitude = Math.abs(toCenter[1] - fromCenter[1]);
+            const flightLongitudeSpan = Math.max(fromLongitudeSpan * 3.4, toLongitudeSpan * 3.4, travelLongitude * 0.55, 0.08);
+            const flightLatitudeSpan = Math.max(fromLatitudeSpan * 3.4, toLatitudeSpan * 3.4, travelLatitude * 0.55, 0.06);
+            return {
+                departure: boundsAround(fromCenter, flightLongitudeSpan, flightLatitudeSpan),
+                approach: boundsAround(toCenter, flightLongitudeSpan, flightLatitudeSpan),
+            };
+        }
+        function longitudeToWorldX(longitude) {
+            return (longitude + 180) / 360;
+        }
+        function latitudeToWorldY(latitude) {
+            const clamped = clamp(latitude, -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE);
+            const radians = clamped * Math.PI / 180;
+            return (1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2;
+        }
+        function worldXToLongitude(worldX) {
+            return worldX * 360 - 180;
+        }
+        function worldYToLatitude(worldY) {
+            return Math.atan(Math.sinh(Math.PI * (1 - 2 * worldY))) * 180 / Math.PI;
+        }
+        /** Zero velocity and acceleration at either end; unlike three stopped tweens. */
+        function smootherStep(value) {
+            const t = clamp(value, 0, 1);
+            return t * t * t * (t * (t * 6 - 15) + 10);
+        }
+        function cameraForBounds(bounds) {
+            const projection = createMercatorProjection(bounds);
+            return {
+                x: (longitudeToWorldX(bounds[0]) + longitudeToWorldX(bounds[2])) / 2,
+                y: (latitudeToWorldY(bounds[1]) + latitudeToWorldY(bounds[3])) / 2,
+                span: 1 / projection.scale,
+            };
+        }
+        function cameraBounds(x, y, span) {
+            // Match the map's 1000×700 viewport and 50 px fit padding. Interpolating a
+            // single Mercator scale avoids aspect-ratio changes halfway through a flight.
+            const halfWidth = 450 * span;
+            const centerY = clamp(y, .000001, 1 - .000001);
+            // At polar edges trim the fitted vertical extent, not the camera center.
+            // Width still determines the same scale, so a wide polar view cannot jump.
+            const halfHeight = Math.min(300 * span, centerY, 1 - centerY);
+            return [worldXToLongitude(x - halfWidth), worldYToLatitude(centerY + halfHeight),
+                worldXToLongitude(x + halfWidth), worldYToLatitude(centerY - halfHeight)];
+        }
+        /** Preserve the user's actual panned/zoomed camera when a named target arrives. */
+        function geoBoundsForView(bounds, zoom, pan) {
+            if (zoom === 1 && pan.x === 0 && pan.y === 0)
+                return [...bounds];
+            const camera = cameraForBounds(bounds);
+            const span = camera.span / zoom;
+            return cameraBounds(camera.x - pan.x * span, camera.y - pan.y * span, span);
+        }
+        /** A short, direct camera adjustment (e.g. candidate extent → real boundary). */
+        function interpolateMercatorView(from, to, progress) {
+            if (progress <= 0)
+                return [...from];
+            if (progress >= 1)
+                return [...to];
+            const a = cameraForBounds(from);
+            const b = cameraForBounds(to);
+            const t = smootherStep(progress);
+            return cameraBounds(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, Math.exp(Math.log(a.span) + Math.log(b.span / a.span) * t));
+        }
+        function createGeoViewFlight(from, to) {
+            const a = cameraForBounds(from);
+            const b = cameraForBounds(to);
+            const distance = Math.hypot(b.x - a.x, b.y - a.y);
+            const near = distance < Math.max(a.span, b.span) * 30;
+            const cruise = Math.min(1 / 900, Math.max(a.span, b.span) * 3.4 + distance / 520);
+            const levels = Math.max(0, Math.log2(cruise / Math.min(a.span, b.span)));
+            const duration = near ? 900 : clamp(2200 + levels * 440 + distance * 1100, 2800, 7600);
+            return {
+                duration,
+                sample(progress) {
+                    if (progress <= 0)
+                        return [...from];
+                    if (progress >= 1)
+                        return [...to];
+                    if (near)
+                        return interpolateMercatorView(from, to, progress);
+                    // Pan overlaps both zoom phases. At the cruise apex pan still has speed,
+                    // so the camera never stops between zoom-out, travel and zoom-in.
+                    const travel = smootherStep((progress - .24) / .52);
+                    const scaleProgress = smootherStep(progress < .5 ? progress * 2 : (progress - .5) * 2);
+                    const startSpan = progress < .5 ? a.span : cruise;
+                    const endSpan = progress < .5 ? cruise : b.span;
+                    const span = Math.exp(Math.log(startSpan) + Math.log(endSpan / startSpan) * scaleProgress);
+                    return cameraBounds(a.x + (b.x - a.x) * travel, a.y + (b.y - a.y) * travel, span);
+                },
+            };
+        }
+        function createMercatorProjection(bounds, width = 1000, height = 700, paddingX = 50, paddingY = 50) {
+            const minWorldX = longitudeToWorldX(bounds[0]);
+            const maxWorldX = longitudeToWorldX(bounds[2]);
+            const minWorldY = latitudeToWorldY(bounds[3]);
+            const maxWorldY = latitudeToWorldY(bounds[1]);
+            const worldWidth = Math.max(maxWorldX - minWorldX, 0.000001);
+            const worldHeight = Math.max(maxWorldY - minWorldY, 0.000001);
+            const scale = Math.min((width - paddingX * 2) / worldWidth, (height - paddingY * 2) / worldHeight);
+            const offsetX = (width - worldWidth * scale) / 2;
+            const offsetY = (height - worldHeight * scale) / 2;
+            return {
+                minWorldX,
+                minWorldY,
+                scale,
+                offsetX,
+                offsetY,
+                width,
+                height,
+                project: ([longitude, latitude]) => [
+                    offsetX + (longitudeToWorldX(longitude) - minWorldX) * scale,
+                    offsetY + (latitudeToWorldY(latitude) - minWorldY) * scale,
+                ],
+            };
+        }
+        function rasterZoomForScale(scale, viewZoom) {
+            return clamp(Math.round(Math.log2(Math.max(scale * viewZoom, TILE_SIZE) / TILE_SIZE)), 0, 19);
+        }
+        function wrapTileX(value, tileCount) {
+            return ((value % tileCount) + tileCount) % tileCount;
+        }
+        function visibleEsriWorldImageryTiles(projection, viewZoom, pan) {
+            const zoom = rasterZoomForScale(projection.scale, viewZoom);
+            const tileCount = 2 ** zoom;
+            const centerX = projection.width / 2;
+            const centerY = projection.height / 2;
+            const baseLeft = centerX + (0 - centerX - pan.x) / viewZoom;
+            const baseRight = centerX + (projection.width - centerX - pan.x) / viewZoom;
+            const baseTop = centerY + (0 - centerY - pan.y) / viewZoom;
+            const baseBottom = centerY + (projection.height - centerY - pan.y) / viewZoom;
+            const worldLeft = projection.minWorldX + (baseLeft - projection.offsetX) / projection.scale;
+            const worldRight = projection.minWorldX + (baseRight - projection.offsetX) / projection.scale;
+            const worldTop = projection.minWorldY + (baseTop - projection.offsetY) / projection.scale;
+            const worldBottom = projection.minWorldY + (baseBottom - projection.offsetY) / projection.scale;
+            const minimumTileX = Math.floor(Math.min(worldLeft, worldRight) * tileCount) - 1;
+            const maximumTileX = Math.floor(Math.max(worldLeft, worldRight) * tileCount) + 1;
+            const minimumTileY = clamp(Math.floor(Math.min(worldTop, worldBottom) * tileCount) - 1, 0, tileCount - 1);
+            const maximumTileY = clamp(Math.floor(Math.max(worldTop, worldBottom) * tileCount) + 1, 0, tileCount - 1);
+            const tileSize = projection.scale / tileCount;
+            const tiles = [];
+            for (let tileY = minimumTileY; tileY <= maximumTileY; tileY += 1) {
+                for (let tileX = minimumTileX; tileX <= maximumTileX; tileX += 1) {
+                    const sourceX = wrapTileX(tileX, tileCount);
+                    tiles.push({
+                        key: `${zoom}/${tileX}/${tileY}`,
+                        url: `${ESRI_WORLD_IMAGERY}/${zoom}/${tileY}/${sourceX}`,
+                        x: projection.offsetX + (tileX / tileCount - projection.minWorldX) * projection.scale,
+                        y: projection.offsetY + (tileY / tileCount - projection.minWorldY) * projection.scale,
+                        width: tileSize + 0.35,
+                        height: tileSize + 0.35,
+                        zoom,
+                    });
+                }
+            }
+            return tiles;
+        }
+        /** Stable low-resolution imagery remains underneath changing detail tiles while flying. */
+        function overviewEsriWorldImageryTiles(projection) {
+            const tiles = [];
+            for (let y = 0; y < 4; y += 1) {
+                for (let x = 0; x < 4; x += 1) {
+                    tiles.push({
+                        key: `overview/2/${x}/${y}`,
+                        url: `${ESRI_WORLD_IMAGERY}/2/${y}/${x}`,
+                        x: projection.offsetX + (x / 4 - projection.minWorldX) * projection.scale,
+                        y: projection.offsetY + (y / 4 - projection.minWorldY) * projection.scale,
+                        width: projection.scale / 4 + .35,
+                        height: projection.scale / 4 + .35,
+                        zoom: 2,
+                    });
+                }
+            }
+            return tiles;
+        }
+        /** Retain recent detail sources across zoom levels; always keep the visible set. */
+        function retainRasterTiles(previous, visible, limit = 128) {
+            const currentKeys = new Set(visible.map(tile => tile.key));
+            const recent = previous.filter(tile => !currentKeys.has(tile.key));
+            const capacity = Math.max(0, limit - visible.length);
+            return [...(capacity === 0 ? [] : recent.slice(-capacity)), ...visible];
+        }
+        /** A retained image must stay geographically registered as the camera moves. */
+        function reprojectRasterTile(tile, projection) {
+            const [zoom, x, y] = tile.key.split('/').map(Number);
+            const count = 2 ** zoom;
+            return {
+                ...tile,
+                x: projection.offsetX + (x / count - projection.minWorldX) * projection.scale,
+                y: projection.offsetY + (y / count - projection.minWorldY) * projection.scale,
+                width: projection.scale / count + .35,
+                height: projection.scale / count + .35,
+            };
+        }
+        function visibleGeographicBounds(projection, viewZoom, pan) {
+            const centerX = projection.width / 2;
+            const centerY = projection.height / 2;
+            const baseLeft = centerX + (0 - centerX - pan.x) / viewZoom;
+            const baseRight = centerX + (projection.width - centerX - pan.x) / viewZoom;
+            const baseTop = centerY + (0 - centerY - pan.y) / viewZoom;
+            const baseBottom = centerY + (projection.height - centerY - pan.y) / viewZoom;
+            const worldLeft = projection.minWorldX + (baseLeft - projection.offsetX) / projection.scale;
+            const worldRight = projection.minWorldX + (baseRight - projection.offsetX) / projection.scale;
+            const worldTop = projection.minWorldY + (baseTop - projection.offsetY) / projection.scale;
+            const worldBottom = projection.minWorldY + (baseBottom - projection.offsetY) / projection.scale;
+            return [
+                Math.max(-180, worldXToLongitude(Math.min(worldLeft, worldRight))),
+                Math.max(-MAX_MERCATOR_LATITUDE, worldYToLatitude(Math.max(worldTop, worldBottom))),
+                Math.min(180, worldXToLongitude(Math.max(worldLeft, worldRight))),
+                Math.min(MAX_MERCATOR_LATITUDE, worldYToLatitude(Math.min(worldTop, worldBottom))),
+            ];
+        }
+
+      },
+      './browser-location': (module, exports, require) => {
+        "use strict";
+        Object.defineProperty(exports, "__esModule", { value: true });
+        exports.browserLocationPermission = browserLocationPermission;
+        exports.shouldAutoRequestBrowserLocation = shouldAutoRequestBrowserLocation;
+        exports.requestBrowserLocation = requestBrowserLocation;
+        exports.locationViewportBounds = locationViewportBounds;
+        exports.locationAccuracyLabel = locationAccuracyLabel;
+        async function browserLocationPermission() {
+            if (typeof navigator === 'undefined' || navigator.geolocation === undefined)
+                return 'unsupported';
+            if (navigator.permissions?.query === undefined)
+                return 'prompt';
+            try {
+                const permission = await navigator.permissions.query({ name: 'geolocation' });
+                return permission.state;
+            }
+            catch {
+                return 'prompt';
+            }
+        }
+        function shouldAutoRequestBrowserLocation(permission) {
+            return permission === 'granted' || permission === 'prompt';
+        }
+        function requestBrowserLocation() {
+            if (typeof navigator === 'undefined' || navigator.geolocation === undefined) {
+                return Promise.resolve({ ok: false, reason: 'unsupported' });
+            }
+            return new Promise(resolve => {
+                navigator.geolocation.getCurrentPosition(position => resolve({
+                    ok: true,
+                    location: {
+                        longitude: position.coords.longitude,
+                        latitude: position.coords.latitude,
+                        accuracy: Math.max(0, position.coords.accuracy),
+                        timestamp: position.timestamp,
+                    },
+                }), error => resolve({
+                    ok: false,
+                    reason: error.code === 1 ? 'denied' : error.code === 3 ? 'timeout' : 'unavailable',
+                }), { enableHighAccuracy: true, timeout: 30_000, maximumAge: 5 * 60_000 });
+            });
+        }
+        function locationViewportBounds(location) {
+            const radiusMetres = Math.max(2_000, Math.min(50_000, location.accuracy * 3));
+            const latitudeDelta = radiusMetres / 111_320;
+            const longitudeDelta = radiusMetres / (111_320 * Math.max(0.05, Math.cos(location.latitude * Math.PI / 180)));
+            return [
+                Math.max(-180, location.longitude - longitudeDelta),
+                Math.max(-85, location.latitude - latitudeDelta),
+                Math.min(180, location.longitude + longitudeDelta),
+                Math.min(85, location.latitude + latitudeDelta),
+            ];
+        }
+        function locationAccuracyLabel(accuracy) {
+            if (!Number.isFinite(accuracy) || accuracy <= 0)
+                return '精度未知';
+            if (accuracy >= 1_000)
+                return `精度约 ${(accuracy / 1_000).toFixed(1)} km`;
+            return `精度约 ${Math.round(accuracy)} m`;
+        }
+
+      },
     };
     const __localCache = {};
     const require = (specifier) => {
@@ -752,7 +1262,7 @@ window.__ModuleLoader__.load({
     };
     const module = { exports: {} };
     const exports = module.exports;
-    const __GE0HARNESS_CSS__ = ".gh-shell,\n.gh-shell * { box-sizing: border-box; }\n\n.gh-shell button,\n.gh-shell input,\n.gh-shell select,\n.gh-shell textarea { font: inherit; }\n\n.gh-shell {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-panel: var(--dsw-specific-menu); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-surface: var(--dsw-alias-bg-layer-1, var(--gh-bg)); --gh-raised: var(--dsw-alias-bg-layer-2, var(--gh-panel));\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-line-strong: var(--dsw-alias-border-l3); --gh-ink: var(--dsw-alias-label-primary);\n  --gh-muted: var(--dsw-alias-label-tertiary); --gh-accent: var(--dsw-alias-state-business-primary);\n  --gh-success: var(--dsw-alias-state-success-primary); --gh-error: var(--dsw-alias-state-error-primary);\n  position: relative; width: 100%; min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 56px minmax(0, 1fr);\n  overflow: hidden; background: var(--gh-bg); color: var(--gh-ink);\n  font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; font-size: 14px;\n}\n\n.gh-topbar {\n  position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px;\n  border-bottom: 1px solid color-mix(in srgb, var(--gh-line) 78%, transparent); background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 45%, transparent);\n}\n.gh-brand, .gh-launcher, .gh-status { display: flex; align-items: center; }\n.gh-brand { gap: 11px; }\n.gh-brand > span:last-child { display: grid; }\n.gh-brand strong { font-size: 16px; font-weight: 650; line-height: 21px; letter-spacing: -.1px; }\n.gh-brand small { color: var(--gh-muted); font-size: 12px; line-height: 17px; }\n.gh-brand-mark {\n  width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 20%, var(--gh-line)); border-radius: 9px;\n  background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-raised)); color: var(--gh-accent); box-shadow: var(--dsw-shadow-lv1); font-size: 18px; line-height: 1;\n}\n.gh-brand-mark--small { width: 18px; height: 18px; border-radius: 4px; font-size: 13px; }\n.gh-launcher { gap: 8px; }\n.gh-launcher > label { color: var(--gh-muted); font-size: 12px; }\n.gh-launcher select {\n  min-width: 250px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--gh-line);\n  border-radius: 6px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px;\n}\n.gh-launcher select:focus { border-color: var(--gh-accent); }\n.gh-status { gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid var(--gh-line); border-radius: 999px; background: var(--gh-raised); color: var(--gh-muted); box-shadow: var(--dsw-shadow-lv1); font-size: 12px; }\n.gh-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--gh-success); }\n.gh-status.is-running i { background: var(--gh-accent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-status.is-failed i { background: var(--gh-error); }\n.gh-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }\n.gh-import-button, .gh-presentation-button { height: 32px; padding: 0 11px; display: flex; align-items: center; gap: 6px; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 42%, var(--gh-line)); border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); color: var(--gh-accent); cursor: pointer; }\n.gh-import-button:hover { background: color-mix(in srgb, var(--gh-accent) 12%, var(--gh-bg)); }\n.gh-presentation-button { border-color: var(--gh-line); background: var(--gh-bg); color: var(--gh-muted); }\n.gh-presentation-button:hover { border-color: color-mix(in srgb, var(--gh-accent) 35%, var(--gh-line)); background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-import-button:disabled { cursor: progress; opacity: .6; }\n.gh-import-summary { max-width: 250px; overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-import-summary.is-success { color: var(--gh-success); }\n.gh-import-summary.is-error { color: var(--gh-error); }\n\n.gh-import-backdrop { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, #000 28%, transparent); backdrop-filter: blur(2px); }\n.gh-import-dialog { width: min(500px, 100%); max-height: min(680px, calc(100% - 24px)); overflow: auto; padding: 0 18px 16px; border: 1px solid var(--gh-line-strong); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv3, 0 18px 50px rgba(0, 0, 0, .2)); }\n.gh-import-dialog > header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); }\n.gh-import-dialog > header > span { display: grid; gap: 2px; }\n.gh-import-dialog > header b { font-size: 15px; }\n.gh-import-dialog > header small, .gh-import-dialog > footer > small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > header button { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--gh-muted); font-size: 19px; cursor: pointer; }\n.gh-import-dialog > header button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-import-file { margin: 15px 0 12px; padding: 11px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-raised); }\n.gh-import-file > span:first-child { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 10%, var(--gh-fill)); color: var(--gh-accent); }\n.gh-import-file > span:last-child { min-width: 0; display: grid; }\n.gh-import-file b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-import-file small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > label, .gh-import-grid label { margin-top: 10px; display: grid; gap: 5px; color: var(--gh-muted); font-size: 11px; }\n.gh-import-dialog input, .gh-import-dialog select { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--gh-line); border-radius: 8px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px; }\n.gh-import-dialog input:focus, .gh-import-dialog select:focus { border-color: var(--gh-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 10%, transparent); }\n.gh-import-dialog input:disabled { opacity: .7; }\n.gh-import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }\n.gh-import-grid label:last-child { grid-column: 1 / -1; }\n.gh-import-preview { margin-top: 12px; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-bg); }\n.gh-import-preview > header { padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--gh-line); }\n.gh-import-preview > header span { font-size: 10px; font-weight: 600; }\n.gh-import-preview > header small { color: var(--gh-muted); font: 8px/1.2 var(--dsw-font-mono), monospace; }\n.gh-import-preview > div { max-height: 128px; overflow: auto; }\n.gh-import-preview table { min-width: 100%; border-collapse: collapse; font: 8px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-import-preview th, .gh-import-preview td { max-width: 150px; padding: 5px 7px; overflow: hidden; border-right: 1px solid var(--gh-line); border-bottom: 1px solid var(--gh-line); text-align: left; text-overflow: ellipsis; }\n.gh-import-preview th { position: sticky; top: 0; background: var(--gh-raised); color: var(--gh-muted); }\n.gh-import-progress { margin-top: 13px; padding: 10px; display: grid; gap: 6px; border-radius: 9px; background: var(--gh-raised); }\n.gh-import-progress > span { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-import-progress > span i { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .2s ease; }\n.gh-import-progress.is-success > span i { background: var(--gh-success); }\n.gh-import-progress.is-error > span i { background: var(--gh-error); }\n.gh-import-progress p { margin: 0; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }\n.gh-import-progress.is-error p { color: var(--gh-error); }\n.gh-import-progress small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > footer { margin-top: 15px; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--gh-line); }\n.gh-import-dialog > footer > small { max-width: 270px; line-height: 1.4; }\n.gh-import-dialog > footer > span { display: flex; gap: 7px; }\n.gh-import-dialog > footer button { height: 32px; padding: 0 12px; border: 1px solid var(--gh-line); border-radius: 8px; cursor: pointer; }\n.gh-import-cancel { background: var(--gh-bg); color: var(--gh-muted); }\n.gh-import-submit { border-color: var(--gh-accent) !important; background: var(--gh-accent); color: white; }\n.gh-import-dialog > footer button:disabled { cursor: progress; opacity: .6; }\n\n.gh-workspace { --gh-agent-column-width: 390px; min-height: 0; display: grid; grid-template-columns: minmax(400px, 1fr) var(--gh-agent-column-width); gap: 12px; padding: 12px 14px 14px; }\n.gh-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv1); }\n.gh-map-stage { position: relative; min-width: 0; min-height: 0; }\n.gh-map-stage > .gh-map { width: 100%; height: 100%; }\n.gh-execution-strip {\n  position: absolute; z-index: 3; top: 14px; left: min(315px, 36%); right: 230px; min-width: 260px; height: 40px; padding: 6px 9px;\n  display: grid; grid-template-columns: 8px minmax(0, 1fr) 82px; align-items: center; gap: 8px; border: 1px solid var(--gh-line); border-radius: 10px;\n  background: color-mix(in srgb, var(--gh-surface) 95%, transparent); box-shadow: var(--dsw-shadow-lv2); backdrop-filter: blur(8px);\n}\n.gh-execution-strip > i { width: 7px; height: 7px; border-radius: 50%; background: var(--gh-muted); }\n.gh-execution-strip > span { min-width: 0; display: grid; }\n.gh-execution-strip > span b, .gh-execution-strip > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-execution-strip > span b { font-size: 10px; font-weight: 600; }\n.gh-execution-strip > span small { color: var(--gh-muted); font-size: 8px; }\n.gh-execution-strip > em { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; font-style: normal; }\n.gh-execution-strip > em > span { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-execution-strip > em > span i { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .25s ease; }\n.gh-execution-strip > em b { color: var(--gh-muted); font: 8px/1 var(--dsw-font-mono), monospace; }\n.gh-execution-strip.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-execution-strip.is-running > i { background: var(--gh-accent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-execution-strip.is-success > i, .gh-execution-strip.is-success > em > span i { background: var(--gh-success); }\n.gh-execution-strip.is-failed > i, .gh-execution-strip.is-failed > em > span i { background: var(--gh-error); }\n.gh-map-layers-toggle {\n  position: absolute; z-index: 5; top: 14px; left: 56px; height: 30px; padding: 0 9px; display: flex; align-items: center; gap: 6px;\n  border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-bg); color: var(--gh-ink); box-shadow: var(--dsw-shadow-lv2); cursor: pointer;\n}\n.gh-map-layers-toggle:hover, .gh-map-layers-toggle[aria-expanded=\"true\"] { background: var(--gh-raised); color: var(--gh-accent); }\n.gh-map-layers-toggle > span { font-size: 15px; }\n.gh-map-layers-toggle > small { min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 6px; background: var(--gh-fill); color: var(--gh-muted); font-size: 9px; }\n.gh-map-layer-drawer { position: absolute; z-index: 4; top: 54px; bottom: 32px; left: 14px; width: min(280px, calc(100% - 28px)); min-height: 0; }\n.gh-map-layer-panel { overflow: hidden; border: 1px solid var(--gh-line); border-radius: 12px; background: color-mix(in srgb, var(--gh-surface) 96%, transparent); box-shadow: var(--dsw-shadow-lv2); }\n.gh-panel-heading { min-height: 62px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-panel-heading > span:first-child { display: grid; gap: 1px; }\n.gh-panel-heading b { font-size: 14px; font-weight: 600; }\n.gh-panel-heading small { color: var(--gh-muted); font-size: 11px; }\n.gh-panel-count { min-width: 24px; height: 24px; display: grid !important; place-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-surface); color: var(--gh-muted); font: 600 11px/1 var(--dsw-font-mono), monospace; }\n.gh-icon-button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; color: var(--gh-accent); cursor: pointer; }\n.gh-icon-button:hover { background: var(--gh-fill-hover); }\n.gh-icon-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }\n.gh-layer-section-label { padding: 11px 13px 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--gh-muted); font-size: 9px; font-weight: 600; letter-spacing: .45px; text-transform: uppercase; }\n.gh-layer-section-label small { min-width: 18px; height: 17px; display: grid; place-items: center; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font: 8px/1 var(--dsw-font-mono), monospace; }\n.gh-layer-list { min-height: 0; max-height: 31%; overflow: auto; padding: 3px 8px 8px; display: grid; align-content: start; gap: 5px; }\n.gh-output-list { max-height: 26%; }\n.gh-final-output-list { max-height: none; flex: 1 1 auto; }\n.gh-layer-row { min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; }\n.gh-layer-row:hover { background: var(--gh-fill-hover); }\n.gh-layer-row.is-data-selected { border-color: color-mix(in srgb, var(--gh-accent) 55%, var(--gh-line)); background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); }\n.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-layer-toggle { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-toggle span { width: 10px; height: 10px; border-radius: 2px; opacity: .25; }\n.gh-layer-toggle.is-visible span { opacity: 1; }\n.gh-layer-meta { min-width: 0; display: grid; gap: 2px; }\n.gh-layer-open { min-width: 0; padding: 0; display: grid; gap: 2px; border: 0; outline: none; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-layer-open:focus-visible { border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 30%, transparent); }\n.gh-layer-meta strong { overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; white-space: nowrap; }\n.gh-output-check { margin-left: 5px; color: var(--gh-success); font-size: 10px; font-style: normal; }\n.gh-layer-meta small { overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-layer-meta input[type=\"range\"] { width: 100%; height: 10px; margin: 4px 0 0; accent-color: var(--gh-accent); cursor: pointer; }\n.gh-layer-style-controls { margin-top: 2px; }\n.gh-layer-style-controls > summary { width: max-content; color: var(--gh-muted); font-size: 9px; cursor: pointer; }\n.gh-layer-style-controls > div { margin-top: 5px; padding: 6px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: end; gap: 6px; border-radius: 7px; background: var(--gh-fill); }\n.gh-layer-style-controls label { min-width: 0; display: grid; gap: 2px; color: var(--gh-muted); font-size: 8px; }\n.gh-layer-style-controls input[type=\"color\"] { width: 28px; height: 22px; padding: 1px; border: 1px solid var(--gh-line); border-radius: 5px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-style-controls input[type=\"range\"] { margin: 0; }\n.gh-layer-style-controls button { height: 23px; padding: 0 6px; border: 1px solid var(--gh-line); border-radius: 5px; background: var(--gh-bg); color: var(--gh-muted); font-size: 8px; cursor: pointer; }\n.gh-layer-statistics-summary { margin: 5px 8px 8px; padding: 7px 8px; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 1px 7px; align-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-layer-statistics-summary > span { grid-row: 1 / 3; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: var(--gh-fill); color: var(--gh-accent); }\n.gh-layer-statistics-summary b { font-size: 9px; }\n.gh-layer-statistics-summary small { color: var(--gh-muted); font-size: 8px; }\n.gh-layer-error, .gh-run-error { margin: 7px 10px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); font-size: 11px; line-height: 1.4; }\n.gh-layer-footer { padding: 9px 12px; display: flex; justify-content: space-between; border-top: 1px solid var(--gh-line); color: var(--gh-muted); font-size: 10px; }\n.gh-sidebar-layers {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-surface: var(--dsw-specific-sidebar-fill); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-ink: var(--dsw-alias-label-primary); --gh-muted: var(--dsw-alias-label-tertiary);\n  --gh-accent: var(--dsw-alias-state-business-primary); --gh-success: var(--dsw-alias-state-success-primary);\n  min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary);\n}\n.gh-sidebar-layer-heading { min-height: 48px; padding: 8px 12px 8px 8px; display: flex; align-items: center; justify-content: space-between; }\n.gh-sidebar-layer-heading > span:first-child { display: grid; gap: 1px; }\n.gh-sidebar-layer-heading b { font-size: 14px; font-weight: 600; }\n.gh-sidebar-layer-heading small { color: var(--dsw-alias-label-tertiary); font-size: 11px; }\n.gh-layer-panel-actions { display: flex; align-items: center; gap: 6px; }\n.gh-layer-panel-close { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--gh-muted); font-size: 17px; line-height: 1; cursor: pointer; }\n.gh-layer-panel-close:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-sidebar-brand-mark { display: inline-grid; place-items: center; border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, var(--dsw-alias-border-l2)); border-radius: 7px; background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--dsw-alias-bg-base)); color: var(--dsw-alias-state-business-primary); font-size: 15px; line-height: 1; }\n.gh-sidebar-brand-name { color: var(--dsw-alias-label-primary); font-size: 17px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }\n.gh-output-row { min-width: 0; padding: 7px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; align-items: center; color: var(--gh-muted); border-radius: 7px; }\n.gh-output-row > i { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; font-size: 10px; font-style: normal; }\n.gh-output-row > span { min-width: 0; display: grid; gap: 2px; }\n.gh-output-row strong, .gh-output-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-output-row strong { color: var(--gh-ink); font-size: 11px; font-weight: 500; }\n.gh-output-row small, .gh-output-empty { color: var(--gh-muted); font-size: 10px; }\n.gh-output-row.is-running > i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-output-row.is-success > i { border-color: var(--gh-success); color: var(--gh-success); }\n.gh-output-row.is-failed > i { border-color: var(--gh-error); color: var(--gh-error); }\n.gh-output-empty { margin: 5px 7px; line-height: 1.5; }\n\n.gh-data-workbench {\n  position: absolute; z-index: 7; right: 14px; bottom: 31px; left: 14px; max-height: min(54%, 520px); min-height: 210px;\n  display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line-strong); border-radius: 13px;\n  background: color-mix(in srgb, var(--gh-surface) 98%, transparent); box-shadow: var(--dsw-shadow-lv3, 0 16px 46px rgba(0, 0, 0, .22));\n}\n.gh-data-workbench > header { min-height: 48px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-data-workbench > header > span { min-width: 0; display: grid; gap: 1px; }\n.gh-data-workbench > header b { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-workbench > header small { overflow: hidden; color: var(--gh-muted); font: 10px/1.35 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-workbench > header button { width: 27px; height: 27px; flex: none; border: 0; border-radius: 7px; background: transparent; color: var(--gh-muted); font-size: 18px; cursor: pointer; }\n.gh-data-workbench > header button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-data-toolbar { min-height: 46px; padding: 7px 10px; display: flex; align-items: end; gap: 7px; border-bottom: 1px solid var(--gh-line); }\n.gh-data-toolbar label { width: min(230px, 32%); display: grid; gap: 3px; color: var(--gh-muted); font-size: 9px; }\n.gh-data-toolbar input { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--gh-line); border-radius: 7px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 11px; }\n.gh-data-toolbar input:focus { border-color: var(--gh-accent); }\n.gh-data-toolbar button, .gh-data-error button { height: 28px; padding: 0 9px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); color: var(--gh-ink); font-size: 10px; cursor: pointer; }\n.gh-data-toolbar button { white-space: nowrap; }\n.gh-data-toolbar button:hover, .gh-data-error button:hover { background: var(--gh-fill-hover); }\n.gh-data-toolbar button:disabled { cursor: default; opacity: .5; }\n.gh-data-toolbar button.is-armed { border-color: var(--gh-error); background: color-mix(in srgb, var(--gh-error) 9%, var(--gh-bg)); color: var(--gh-error); }\n.gh-data-toolbar > span { margin-left: auto; align-self: center; color: var(--gh-muted); font: 10px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-data-error, .gh-data-loading { margin: 8px 10px 0; padding: 7px 9px; display: flex; align-items: center; gap: 8px; border-radius: 8px; font-size: 10px; }\n.gh-data-error { justify-content: space-between; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); }\n.gh-data-loading { color: var(--gh-muted); background: var(--gh-raised); }\n.gh-data-loading i { width: 11px; height: 11px; flex: none; border: 2px solid var(--gh-line); border-top-color: var(--gh-accent); border-radius: 50%; animation: gh-spin .8s linear infinite; }\n.gh-data-summary { padding: 8px 10px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }\n.gh-data-summary > span { min-width: 0; padding: 6px 8px; display: grid; gap: 2px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-data-summary small { overflow: hidden; color: var(--gh-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-summary b { overflow: hidden; font: 600 11px/1.3 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-warnings { margin: 0 10px 7px; padding: 6px 8px; display: grid; gap: 2px; border-radius: 7px; background: color-mix(in srgb, #d97706 10%, transparent); color: #b45309; }\n.gh-data-warnings small { font-size: 9px; line-height: 1.35; }\n.gh-data-fields { padding: 0 10px 7px; display: flex; gap: 5px; overflow-x: auto; flex: none; }\n.gh-data-fields > span { max-width: 180px; padding: 5px 7px; display: grid; gap: 1px; flex: none; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); }\n.gh-data-fields b, .gh-data-fields small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-fields b { font: 600 9px/1.3 var(--dsw-font-mono), monospace; }\n.gh-data-fields small { color: var(--gh-muted); font-size: 8px; }\n.gh-table-controls { padding: 0 10px 7px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }\n.gh-table-controls label { width: min(330px, 55%); height: 29px; padding: 0 7px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); }\n.gh-table-controls label:focus-within { border-color: var(--gh-accent); }\n.gh-table-controls label > span { color: var(--gh-muted); }\n.gh-table-controls input { min-width: 0; height: 100%; flex: 1; border: 0; outline: 0; background: transparent; color: var(--gh-ink); font-size: 10px; }\n.gh-table-controls button { width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-table-controls button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-table-controls small { color: var(--gh-muted); font: 9px/1.3 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-attribute-table-wrap { min-height: 72px; margin: 0 10px; overflow: auto; flex: 1 1 auto; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-bg); }\n.gh-attribute-table { min-width: 100%; border-collapse: separate; border-spacing: 0; font: 9px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-attribute-table th, .gh-attribute-table td { max-width: 230px; padding: 6px 8px; overflow: hidden; border-right: 1px solid var(--gh-line); border-bottom: 1px solid var(--gh-line); text-align: left; text-overflow: ellipsis; }\n.gh-attribute-table th { position: sticky; z-index: 1; top: 0; background: var(--gh-raised); color: var(--gh-muted); font-weight: 600; }\n.gh-attribute-table th button { width: 100%; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 5px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }\n.gh-attribute-table th button:hover { color: var(--gh-accent); }\n.gh-attribute-table th button i { font-size: 8px; font-style: normal; }\n.gh-attribute-table tr:last-child td { border-bottom: 0; }\n.gh-attribute-table th:last-child, .gh-attribute-table td:last-child { border-right: 0; }\n.gh-attribute-table tbody tr { outline: none; cursor: pointer; }\n.gh-attribute-table tbody tr:hover { background: var(--gh-fill-hover); }\n.gh-attribute-table tbody tr.is-selected { background: color-mix(in srgb, var(--gh-accent) 13%, var(--gh-bg)); color: var(--gh-accent); }\n.gh-attribute-table tbody tr:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--gh-accent) 45%, transparent); }\n.gh-data-workbench > footer { min-height: 30px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--gh-muted); font-size: 9px; }\n\n.gh-map {\n  position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 16px; background-color: var(--gh-fill); box-shadow: var(--dsw-shadow-lv1);\n}\n.gh-map.is-grid {\n  background-image: linear-gradient(color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px);\n  background-size: 44px 44px;\n}\n.gh-map.is-plain { background-image: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--gh-accent) 5%, transparent), transparent 58%); }\n.gh-map-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; cursor: grab; touch-action: none; overscroll-behavior: contain; }\n.gh-map-canvas:active { cursor: grabbing; }\n.gh-map-feature { cursor: pointer; transition: filter .12s ease, opacity .12s ease; }\n.gh-map-feature:hover { filter: brightness(.88) saturate(1.15); }\n.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: brightness(1.05) saturate(1.18) drop-shadow(0 0 4px var(--gh-accent)); }\n.gh-map-result-focus { pointer-events: none; color: var(--gh-accent); }\n.gh-map-result-focus rect { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-dasharray: 12 7; opacity: .88; animation: gh-map-dash 1.1s linear infinite; }\n.gh-map-result-focus path { fill: none; stroke: currentColor; stroke-width: 4.2; stroke-linecap: round; opacity: .95; }\n.gh-map-result-focus.is-success { color: #e11d48; }\n.gh-map-result-focus.is-success rect { stroke-width: 3; animation: gh-map-dash 1.15s linear infinite, gh-result-stroke 1.8s ease-out 2; }\n.gh-map-stage.has-focus .gh-map { border-color: color-mix(in srgb, var(--gh-accent) 50%, var(--gh-line)); }\n.gh-map-stage.is-success.has-focus .gh-map { border-color: color-mix(in srgb, #e11d48 58%, var(--gh-line)); box-shadow: var(--dsw-shadow-lv1), 0 0 0 3px color-mix(in srgb, #e11d48 10%, transparent); }\n.gh-map-toolbar { position: absolute; z-index: 2; top: 14px; left: 14px; display: grid; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; box-shadow: var(--dsw-shadow-lv2); }\n.gh-map-toolbar button { width: 30px; height: 29px; border: 0; border-bottom: 1px solid var(--gh-line); background: var(--gh-bg); color: var(--gh-ink); cursor: pointer; }\n.gh-map-toolbar button:last-child { border-bottom: 0; }\n.gh-map-toolbar button:hover { background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-map-label { position: absolute; z-index: 2; top: 12px; right: 14px; max-width: 330px; display: grid; justify-items: end; color: var(--gh-muted); }\n.gh-map-label span { font: 600 10px/1.4 var(--dsw-font-mono), monospace; letter-spacing: 1px; }\n.gh-map-label small { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-label small, .gh-map-scale, .gh-map-attribution { color: var(--gh-muted); font-size: 10px; }\n.gh-map-legend { position: absolute; z-index: 2; top: 55px; right: 14px; width: 196px; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 10px; background: color-mix(in srgb, var(--gh-surface) 94%, transparent); box-shadow: var(--dsw-shadow-lv1); backdrop-filter: blur(8px); }\n.gh-map-legend > button { width: 100%; height: 31px; padding: 0 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-map-legend > button:hover { background: var(--gh-fill-hover); }\n.gh-map-legend > button span { font-size: 10px; font-weight: 600; }\n.gh-map-legend > button small { min-width: 18px; height: 17px; display: grid; place-items: center; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; }\n.gh-map-legend > button i { color: var(--gh-muted); font-style: normal; }\n.gh-map-legend > div { padding: 3px 8px 8px; display: grid; gap: 5px; border-top: 1px solid var(--gh-line); }\n.gh-map-legend > div > span { min-width: 0; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; }\n.gh-map-legend > div > span > i { width: 10px; height: 4px; border-radius: 2px; }\n.gh-map-legend > div b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-legend > div small, .gh-map-legend > div em { color: var(--gh-muted); font-size: 8px; font-style: normal; }\n.gh-map-empty-card { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(330px, calc(100% - 56px)); padding: 23px; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); transform: translate(-50%, -50%); }\n.gh-map-empty-card strong { display: block; margin-top: 4px; font-size: 16px; }\n.gh-map-empty-card p { margin: 6px 0 0; color: var(--gh-muted); font-size: 12px; line-height: 1.5; }\n.gh-eyebrow { color: var(--gh-accent); font-size: 10px; font-weight: 600; letter-spacing: .5px; }\n.gh-map-scale { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: flex; align-items: end; gap: 6px; font-family: var(--dsw-font-mono), monospace; }\n.gh-map-scale span { width: 52px; height: 6px; border: solid var(--gh-muted); border-width: 0 1px 1px; }\n.gh-map-scale b { color: var(--gh-ink); font-size: 9px; font-weight: 600; }\n.gh-map-scale small { color: var(--gh-muted); font-size: 8px; }\n.gh-map-attribution { position: absolute; z-index: 2; right: 12px; bottom: 9px; }\n.gh-feature-inspector { position: absolute; z-index: 3; right: 12px; bottom: 25px; width: min(240px, calc(100% - 70px)); max-height: 250px; overflow: auto; padding: 12px; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-panel); box-shadow: var(--dsw-shadow-lv2); }\n.gh-feature-inspector > button { position: absolute; top: 5px; right: 6px; width: 24px; height: 24px; border: 0; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-feature-inspector > strong { display: block; margin-top: 4px; padding-right: 18px; font-size: 14px; }\n.gh-feature-inspector > small { display: block; margin-top: 2px; color: var(--gh-muted); font-size: 10px; }\n.gh-feature-inspector dl { margin: 9px 0 0; display: grid; grid-template-columns: minmax(65px, .8fr) minmax(0, 1.2fr); gap: 5px 7px; font-size: 10px; }\n.gh-feature-inspector dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; }\n.gh-feature-inspector dd { margin: 0; overflow-wrap: anywhere; font-family: var(--dsw-font-mono), monospace; }\n\n.gh-agent-state { padding: 3px 7px; border-radius: 10px; background: var(--gh-fill); color: var(--gh-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; }\n.gh-agent-state.is-running { color: var(--gh-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-accent) 35%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-agent-state.is-success { color: var(--gh-success); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-success) 30%, transparent); }\n.gh-agent-state.is-failed { color: var(--gh-error); }\n.gh-agent-scroll { min-height: 0; overflow: auto; padding: 11px 11px 210px; display: grid; align-content: start; gap: 9px; background: color-mix(in srgb, var(--gh-fill) 48%, var(--gh-surface)); }\n.gh-agent-block { padding: 12px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 35%, transparent); }\n.gh-agent-block:first-child { padding-top: 12px; }\n.gh-agent-block p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }\n.gh-plan-list { margin: 10px 0 0; padding: 0; display: grid; gap: 9px; list-style: none; }\n.gh-plan-list li { position: relative; color: var(--gh-muted); border-radius: 6px; }\n.gh-step-button { width: 100%; padding: 3px; display: flex; gap: 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-step-button:hover, .gh-plan-list li.is-selected .gh-step-button { background: var(--gh-fill-hover); }\n.gh-plan-list i { width: 21px; height: 21px; display: grid; place-items: center; flex: none; border: 1px solid var(--gh-line); border-radius: 50%; background: var(--gh-bg); font-size: 10px; font-style: normal; }\n.gh-plan-list span { display: grid; gap: 1px; }\n.gh-plan-list b { color: var(--gh-ink); font-size: 12px; font-weight: 500; }\n.gh-plan-list small { font-size: 10px; }\n.gh-plan-list .is-running i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-plan-list .is-running .gh-step-button { outline: 1px solid color-mix(in srgb, var(--gh-accent) 50%, transparent); background: color-mix(in srgb, var(--gh-accent) 7%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-plan-list .is-success i { border-color: var(--gh-success); color: var(--gh-success); font-weight: 600; }\n.gh-plan-list .is-failed i { border-color: var(--gh-error); color: var(--gh-error); font-weight: 600; }\n.gh-current-step { display: grid; gap: 8px; background: var(--gh-raised); }\n.gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }\n.gh-current-step > div span { color: var(--gh-muted); }\n.gh-current-step .is-teal { color: var(--gh-success); }\n.gh-diagnostics-button { width: 100%; padding: 7px 9px; border: 1px solid var(--gh-border); border-radius: 7px; background: var(--gh-fill); color: var(--gh-text); font: 600 10px/1.2 var(--dsw-font-sans), sans-serif; cursor: pointer; }\n.gh-diagnostics-button:hover { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-diagnostics-button:disabled { cursor: wait; opacity: .58; }\n.gh-agent-result { position: relative; display: grid; gap: 8px; transition: border-color .2s ease, box-shadow .2s ease; }\n.gh-agent-result.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-agent-result.is-success { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); animation: gh-result-panel 1.8s ease-out 2; }\n.gh-stream-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }\n.gh-stream-heading small { color: var(--gh-muted); font: 600 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .25px; }\n.gh-stream-list { display: grid; gap: 8px; }\n.gh-stream-text { padding: 9px 10px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-stream-text > small { color: var(--gh-muted); font: 500 9px/1.3 var(--dsw-font-mono), monospace; }\n.gh-stream-text > p,\n.gh-stream-reasoning > p { margin: 5px 0 0; color: var(--gh-ink); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }\n.gh-stream-text[data-stream-status=\"interrupted\"] { border-color: color-mix(in srgb, var(--gh-error) 35%, var(--gh-line)); }\n.gh-stream-reasoning { padding: 8px 10px; border-radius: 8px; background: var(--gh-fill); color: var(--gh-muted); }\n.gh-stream-reasoning > summary { cursor: pointer; font-size: 10px; font-weight: 600; }\n.gh-stream-reasoning > p { color: var(--gh-muted); font-size: 11px; }\n.gh-stream-retry { padding: 7px 9px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 8%, var(--gh-fill)); color: var(--gh-error); font: 500 10px/1.4 var(--dsw-font-mono), monospace; }\n.gh-stream-cursor { display: inline-block; width: 5px; height: 13px; margin-left: 2px; vertical-align: -2px; border-radius: 1px; background: var(--gh-accent); animation: gh-stream-blink .8s steps(1, end) infinite; }\n@keyframes gh-stream-blink { 50% { opacity: 0; } }\n@keyframes gh-spin { to { transform: rotate(360deg); } }\n@keyframes gh-focus-soft { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-accent) 12%, transparent); } }\n@keyframes gh-map-dash { to { stroke-dashoffset: -19; } }\n@keyframes gh-result-panel {\n  0%, 100% { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); }\n  38% { border-color: var(--gh-success); box-shadow: 0 0 0 5px color-mix(in srgb, var(--gh-success) 14%, transparent); }\n}\n@keyframes gh-result-stroke { 0%, 100% { stroke-opacity: .88; } 38% { stroke-opacity: 1; } }\n.gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }\n.gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }\n.gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-agent-result dd { margin: 0; color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-result-trace { display: grid; gap: 5px; }\n.gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }\n.gh-result-trace i { color: var(--gh-success); font-style: normal; }\n.gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }\n.gh-run-history { gap: 7px; }\n.gh-run-history > article { padding: 8px 9px; display: grid; gap: 5px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-run-history > article.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-run-history > article.is-failed { border-color: color-mix(in srgb, var(--gh-error) 45%, var(--gh-line)); }\n.gh-run-history article header { display: flex; align-items: center; justify-content: space-between; gap: 7px; }\n.gh-run-history article header b { font-size: 10px; }\n.gh-run-history article header small, .gh-run-history article > small { overflow: hidden; color: var(--gh-muted); font: 8px/1.4 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-run-history article p { margin: 0; overflow: hidden; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }\n.gh-run-history article > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\n.gh-run-history article > div span { padding: 4px 5px; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; text-align: center; }\n.gh-run-history article > div b { color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-run-history article > small.is-error { color: var(--gh-error); }\n.gh-result-center { display: grid; gap: 9px; }\n.gh-result-center.is-success { border-color: color-mix(in srgb, var(--gh-success) 42%, var(--gh-line)); }\n.gh-result-center.is-failed { border-color: color-mix(in srgb, var(--gh-error) 42%, var(--gh-line)); }\n.gh-result-center > header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }\n.gh-result-center > header > span { min-width: 0; display: grid; gap: 2px; }\n.gh-result-center > header small { overflow: hidden; color: var(--gh-muted); font: 8px/1.3 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-center > header > b { padding: 3px 6px; border-radius: 6px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; text-transform: uppercase; }\n.gh-result-center.is-success > header > b { color: var(--gh-success); }\n.gh-result-center.is-failed > header > b { color: var(--gh-error); }\n.gh-result-answer { margin: 0 !important; padding: 8px 9px; border-left: 3px solid var(--gh-accent); border-radius: 0 7px 7px 0; background: var(--gh-raised); font-size: 11px !important; white-space: pre-wrap; }\n.gh-result-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }\n.gh-result-metrics > span { padding: 5px 6px; display: grid; gap: 1px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-raised); }\n.gh-result-metrics small, .gh-result-provenance small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-metrics b { font: 600 11px/1.3 var(--dsw-font-mono), monospace; }\n.gh-result-flow { display: grid; gap: 5px; }\n.gh-result-flow > small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-flow > div { display: grid; gap: 4px; }\n.gh-result-flow button { min-width: 0; padding: 4px 5px; display: grid; gap: 3px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-result-flow button:hover, .gh-result-flow button.is-focused { border-color: color-mix(in srgb, var(--gh-accent) 40%, var(--gh-line)); background: var(--gh-fill); }\n.gh-result-flow button > span { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; }\n.gh-result-flow button > span b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-flow button > span small { color: var(--gh-muted); font-size: 7px; text-transform: uppercase; }\n.gh-result-flow button > span em { color: var(--gh-ink); font: 8px/1 var(--dsw-font-mono), monospace; font-style: normal; }\n.gh-result-flow button > i { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-result-flow button > i span { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .25s ease; }\n.gh-result-flow button:last-child > i span { background: var(--gh-success); }\n.gh-result-layers, .gh-result-assets { display: grid; gap: 5px; }\n.gh-result-layers > button, .gh-result-assets > button { min-width: 0; padding: 6px 7px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-result-layers > button:hover, .gh-result-assets > button:hover:not(:disabled) { background: var(--gh-fill-hover); border-color: color-mix(in srgb, var(--gh-accent) 35%, var(--gh-line)); }\n.gh-result-layers > button.is-focused { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); }\n.gh-result-layers button > i { width: 20px; height: 20px; display: grid; place-items: center; flex: none; border-radius: 6px; background: var(--gh-fill); color: var(--gh-accent); font-style: normal; }\n.gh-result-layers button > span, .gh-result-assets button > span { min-width: 0; display: grid; gap: 1px; flex: 1; }\n.gh-result-layers b, .gh-result-layers small, .gh-result-assets b, .gh-result-assets small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-layers b, .gh-result-assets b { font-size: 9px; font-weight: 600; }\n.gh-result-layers small, .gh-result-assets small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-section-label { color: var(--gh-muted); font-size: 8px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; }\n.gh-result-statistics { display: grid; gap: 5px; }\n.gh-result-statistics details { padding: 6px 7px; border-radius: 7px; background: var(--gh-fill); }\n.gh-result-statistics summary { overflow: hidden; font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }\n.gh-stat-chart { margin-top: 7px; padding: 6px; display: grid; gap: 5px; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); }\n.gh-stat-chart > span { min-width: 0; display: grid; grid-template-columns: minmax(72px, 1fr) minmax(50px, 1.2fr) auto; align-items: center; gap: 6px; }\n.gh-stat-chart small { overflow: hidden; color: var(--gh-muted); font: 7px/1.2 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-stat-chart > span > i { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-stat-chart > span > i span { height: 100%; display: block; border-radius: inherit; background: color-mix(in srgb, var(--gh-accent) 78%, var(--gh-success)); }\n.gh-stat-chart b { min-width: 34px; font: 7px/1 var(--dsw-font-mono), monospace; text-align: right; }\n.gh-result-statistics dl { margin: 6px 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(70px, auto); gap: 3px 7px; font: 8px/1.35 var(--dsw-font-mono), monospace; }\n.gh-result-statistics dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-statistics dd { margin: 0; max-width: 160px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-provenance { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }\n.gh-result-provenance > span { min-width: 0; padding: 5px 6px; display: grid; gap: 1px; border-radius: 6px; background: var(--gh-fill); }\n.gh-result-provenance > span:nth-child(n + 3) { grid-column: 1 / -1; }\n.gh-result-provenance b { overflow: hidden; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-warnings { padding: 6px 7px; display: grid; gap: 2px; border-radius: 7px; background: color-mix(in srgb, #d97706 9%, transparent); color: #b45309; }\n.gh-result-warnings small { font-size: 8px; line-height: 1.35; }\n.gh-result-assets > button > i { color: var(--gh-accent); font-size: 9px; font-style: normal; }\n.gh-result-assets > button:disabled { cursor: not-allowed; opacity: .55; }\n.gh-result-download-error { margin: 0 !important; padding: 6px 7px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 9%, transparent); color: var(--gh-error); font-size: 9px !important; }\n\n@media (prefers-reduced-motion: reduce) {\n  .gh-layer-row.is-step-highlighted,\n  .gh-agent-state.is-running,\n  .gh-data-loading i,\n  .gh-plan-list .is-running .gh-step-button,\n  .gh-agent-result.is-success,\n  .gh-map-result-focus rect { animation: none; }\n}\n\n[data-conversation-scroll]:has(.gh-shell.is-presentation) { --gh-agent-column-width: 430px; }\n[data-conversation-scroll]:has(.gh-data-workbench) { --gh-agent-column-width: 300px; }\n.gh-workspace:has(.gh-data-workbench) { --gh-agent-column-width: 300px; }\n[data-conversation-scroll]:fullscreen { width: 100vw; height: 100vh; background: var(--dsw-alias-bg-base); }\n[data-conversation-scroll]:fullscreen > [data-slot=\"conversation.session\"] { height: 100%; }\n[data-conversation-scroll]:fullscreen .gh-shell { border-radius: 0; }\n.gh-shell.is-presentation { grid-template-rows: 50px minmax(0, 1fr); }\n.gh-shell.is-presentation .gh-topbar { padding-inline: 22px; }\n.gh-shell.is-presentation .gh-workspace { padding: 10px 12px 12px; }\n\n\n/* The native Harness ConversationRoot still owns the composer and its model\n   selector. GeoHarness only positions that existing seat inside Agent workspace. */\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) {\n  --gh-agent-column-width: 390px;\n  position: relative;\n  overflow: hidden;\n  scrollbar-gutter: auto;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-slot=\"conversation.session\"] {\n  min-height: 0;\n  height: 100%;\n  flex: 1 1 0;\n  overflow: hidden;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] {\n  position: absolute;\n  right: 24px;\n  bottom: 23px;\n  left: auto;\n  z-index: 8;\n  width: calc(var(--gh-agent-column-width) - 20px);\n  --dsh-composer-card-max-width: 100%;\n  --dsh-composer-side-clearance: 0px;\n  background: transparent;\n}\n\n/* Harness renders its empty-session marketing headline above the native\n   composer. In GeoHarness that same area already belongs to Agent workspace,\n   so suppress only this redundant hero row while keeping the native workspace\n   picker, mode selector, composer and model controls intact. */\n[data-phase=\"hero\"]:has([data-geoharness-plugin=\"loaded\"])\n  [data-composer-seat]\n  [data-chain-overlay-fallback=\"conversation.composer\"] > div > div:first-of-type {\n  display: none;\n}\n\n@media (max-width: 1000px) {\n  .gh-workspace { --gh-agent-column-width: 340px; grid-template-columns: minmax(340px, 1fr) var(--gh-agent-column-width); }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 340px; }\n  .gh-launcher .gh-status { display: none; }\n  .gh-import-summary { max-width: 180px; }\n  .gh-execution-strip { top: 56px; right: 14px; left: 105px; min-width: 0; }\n  .gh-map-legend { top: 103px; }\n  .gh-presentation-button { width: 32px; padding: 0; justify-content: center; font-size: 0; }\n  .gh-presentation-button span { font-size: 12px; }\n}\n\n@media (max-width: 1180px) {\n  .gh-data-toolbar { flex-wrap: wrap; }\n  .gh-data-toolbar label { width: min(260px, 55%); flex: 1 1 190px; }\n  .gh-data-toolbar > span { width: 100%; margin-left: 0; }\n}\n@media (max-width: 720px) {\n  .gh-shell { grid-template-rows: auto minmax(0, 1fr); }\n  .gh-topbar { padding: 9px 10px; align-items: stretch; flex-direction: column; gap: 7px; }\n  .gh-launcher select { min-width: 0; flex: 1; }\n  .gh-import-summary { display: none; }\n  .gh-workspace { --gh-agent-column-width: 330px; grid-template-columns: minmax(300px, 1fr) var(--gh-agent-column-width); padding-inline: 8px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 330px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] { right: 18px; width: calc(var(--gh-agent-column-width) - 18px); }\n  .gh-execution-strip { left: 56px; grid-template-columns: 7px minmax(0, 1fr) 55px; }\n  .gh-execution-strip > em { grid-template-columns: minmax(0, 1fr); }\n  .gh-execution-strip > em b { display: none; }\n}\n";
+    const __GE0HARNESS_CSS__ = ".gh-shell,\n.gh-shell * { box-sizing: border-box; }\n\n.gh-shell button,\n.gh-shell input,\n.gh-shell select,\n.gh-shell textarea { font: inherit; }\n\n.gh-shell {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-panel: var(--dsw-specific-menu); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-surface: var(--dsw-alias-bg-layer-1, var(--gh-bg)); --gh-raised: var(--dsw-alias-bg-layer-2, var(--gh-panel));\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-line-strong: var(--dsw-alias-border-l3); --gh-ink: var(--dsw-alias-label-primary);\n  --gh-muted: var(--dsw-alias-label-tertiary); --gh-accent: var(--dsw-alias-state-business-primary);\n  --gh-success: var(--dsw-alias-state-success-primary); --gh-error: var(--dsw-alias-state-error-primary);\n  position: relative; width: 100%; min-width: 0; min-height: 0; height: 100%; display: grid; grid-template-rows: 56px minmax(0, 1fr);\n  overflow: hidden; background: var(--gh-bg); color: var(--gh-ink);\n  font-family: var(--dsw-font-family), Inter, system-ui, sans-serif; font-size: 14px;\n}\n\n.gh-topbar {\n  position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 18px;\n  border-bottom: 1px solid color-mix(in srgb, var(--gh-line) 78%, transparent); background: var(--gh-surface); box-shadow: 0 1px 0 color-mix(in srgb, var(--gh-line) 45%, transparent);\n}\n.gh-brand, .gh-launcher, .gh-status { display: flex; align-items: center; }\n.gh-brand { gap: 11px; }\n.gh-brand > span:last-child { display: grid; }\n.gh-brand strong { font-size: 16px; font-weight: 650; line-height: 21px; letter-spacing: -.1px; }\n.gh-brand small { color: var(--gh-muted); font-size: 12px; line-height: 17px; }\n.gh-brand-mark {\n  width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 20%, var(--gh-line)); border-radius: 9px;\n  background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-raised)); color: var(--gh-accent); box-shadow: var(--dsw-shadow-lv1); font-size: 18px; line-height: 1;\n}\n.gh-brand-mark--small { width: 18px; height: 18px; border-radius: 4px; font-size: 13px; }\n.gh-launcher { gap: 8px; }\n.gh-launcher > label { color: var(--gh-muted); font-size: 12px; }\n.gh-launcher select {\n  min-width: 250px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--gh-line);\n  border-radius: 6px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px;\n}\n.gh-launcher select:focus { border-color: var(--gh-accent); }\n.gh-status { gap: 7px; min-height: 30px; padding: 0 11px; border: 1px solid var(--gh-line); border-radius: 999px; background: var(--gh-raised); color: var(--gh-muted); box-shadow: var(--dsw-shadow-lv1); font-size: 12px; }\n.gh-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--gh-success); }\n.gh-status.is-running i { background: var(--gh-accent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-status.is-failed i { background: var(--gh-error); }\n.gh-file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }\n.gh-import-button, .gh-presentation-button { height: 32px; padding: 0 11px; display: flex; align-items: center; gap: 6px; flex: none; border: 1px solid color-mix(in srgb, var(--gh-accent) 42%, var(--gh-line)); border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); color: var(--gh-accent); cursor: pointer; }\n.gh-import-button:hover { background: color-mix(in srgb, var(--gh-accent) 12%, var(--gh-bg)); }\n.gh-presentation-button { border-color: var(--gh-line); background: var(--gh-bg); color: var(--gh-muted); }\n.gh-presentation-button:hover { border-color: color-mix(in srgb, var(--gh-accent) 35%, var(--gh-line)); background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-import-button:disabled { cursor: progress; opacity: .6; }\n.gh-import-summary { max-width: 250px; overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-import-summary.is-success { color: var(--gh-success); }\n.gh-import-summary.is-error { color: var(--gh-error); }\n\n.gh-import-backdrop { position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, #000 28%, transparent); backdrop-filter: blur(2px); }\n.gh-import-dialog { width: min(500px, 100%); max-height: min(680px, calc(100% - 24px)); overflow: auto; padding: 0 18px 16px; border: 1px solid var(--gh-line-strong); border-radius: 14px; background: var(--gh-surface); box-shadow: var(--dsw-shadow-lv3, 0 18px 50px rgba(0, 0, 0, .2)); }\n.gh-import-dialog > header { min-height: 62px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); }\n.gh-import-dialog > header > span { display: grid; gap: 2px; }\n.gh-import-dialog > header b { font-size: 15px; }\n.gh-import-dialog > header small, .gh-import-dialog > footer > small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > header button { width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--gh-muted); font-size: 19px; cursor: pointer; }\n.gh-import-dialog > header button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-import-file { margin: 15px 0 12px; padding: 11px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--gh-line); border-radius: 10px; background: var(--gh-raised); }\n.gh-import-file > span:first-child { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 10%, var(--gh-fill)); color: var(--gh-accent); }\n.gh-import-file > span:last-child { min-width: 0; display: grid; }\n.gh-import-file b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-import-file small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > label, .gh-import-grid label { margin-top: 10px; display: grid; gap: 5px; color: var(--gh-muted); font-size: 11px; }\n.gh-import-dialog input, .gh-import-dialog select { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--gh-line); border-radius: 8px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 12px; }\n.gh-import-dialog input:focus, .gh-import-dialog select:focus { border-color: var(--gh-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 10%, transparent); }\n.gh-import-dialog input:disabled { opacity: .7; }\n.gh-import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }\n.gh-import-grid label:last-child { grid-column: 1 / -1; }\n.gh-import-preview { margin-top: 12px; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-bg); }\n.gh-import-preview > header { padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--gh-line); }\n.gh-import-preview > header span { font-size: 10px; font-weight: 600; }\n.gh-import-preview > header small { color: var(--gh-muted); font: 8px/1.2 var(--dsw-font-mono), monospace; }\n.gh-import-preview > div { max-height: 128px; overflow: auto; }\n.gh-import-preview table { min-width: 100%; border-collapse: collapse; font: 8px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-import-preview th, .gh-import-preview td { max-width: 150px; padding: 5px 7px; overflow: hidden; border-right: 1px solid var(--gh-line); border-bottom: 1px solid var(--gh-line); text-align: left; text-overflow: ellipsis; }\n.gh-import-preview th { position: sticky; top: 0; background: var(--gh-raised); color: var(--gh-muted); }\n.gh-import-progress { margin-top: 13px; padding: 10px; display: grid; gap: 6px; border-radius: 9px; background: var(--gh-raised); }\n.gh-import-progress > span { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-import-progress > span i { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .2s ease; }\n.gh-import-progress.is-success > span i { background: var(--gh-success); }\n.gh-import-progress.is-error > span i { background: var(--gh-error); }\n.gh-import-progress p { margin: 0; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }\n.gh-import-progress.is-error p { color: var(--gh-error); }\n.gh-import-progress small { color: var(--gh-muted); font-size: 10px; }\n.gh-import-dialog > footer { margin-top: 15px; padding-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--gh-line); }\n.gh-import-dialog > footer > small { max-width: 270px; line-height: 1.4; }\n.gh-import-dialog > footer > span { display: flex; gap: 7px; }\n.gh-import-dialog > footer button { height: 32px; padding: 0 12px; border: 1px solid var(--gh-line); border-radius: 8px; cursor: pointer; }\n.gh-import-cancel { background: var(--gh-bg); color: var(--gh-muted); }\n.gh-import-submit { border-color: var(--gh-accent) !important; background: var(--gh-accent); color: white; }\n.gh-import-dialog > footer button:disabled { cursor: progress; opacity: .6; }\n\n.gh-workspace { --gh-agent-column-width: 344px; min-height: 0; display: grid; grid-template-columns: minmax(440px, 1fr) var(--gh-agent-column-width); gap: 10px; overflow: hidden; padding: 10px 10px 12px; }\n.gh-panel { min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 1px solid color-mix(in srgb, var(--gh-line) 88%, transparent); border-radius: 15px; background: var(--gh-surface); box-shadow: 0 8px 24px color-mix(in srgb, #0f172a 7%, transparent), var(--dsw-shadow-lv1); }\n.gh-map-stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 16px; isolation: isolate; }\n.gh-map-stage > .gh-map { width: 100%; height: 100%; }\n.gh-execution-strip {\n  position: absolute; z-index: 3; top: 12px; left: 164px; right: 12px; min-width: 0; height: 40px; padding: 6px 9px;\n  display: grid; grid-template-columns: 8px minmax(0, 1fr) 82px; align-items: center; gap: 8px; border: 1px solid var(--gh-line); border-radius: 10px;\n  background: color-mix(in srgb, var(--gh-surface) 95%, transparent); box-shadow: var(--dsw-shadow-lv2); backdrop-filter: blur(8px);\n}\n.gh-execution-strip > i { width: 7px; height: 7px; border-radius: 50%; background: var(--gh-muted); }\n.gh-execution-strip > span { min-width: 0; display: grid; }\n.gh-execution-strip > span b, .gh-execution-strip > span small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-execution-strip > span b { font-size: 10px; font-weight: 600; }\n.gh-execution-strip > span small { color: var(--gh-muted); font-size: 8px; }\n.gh-execution-strip > em { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; font-style: normal; }\n.gh-execution-strip > em > span { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-execution-strip > em > span i { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .25s ease; }\n.gh-execution-strip > em b { color: var(--gh-muted); font: 8px/1 var(--dsw-font-mono), monospace; }\n.gh-execution-strip.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-execution-strip.is-running > i { background: var(--gh-accent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-execution-strip.is-success > i, .gh-execution-strip.is-success > em > span i { background: var(--gh-success); }\n.gh-execution-strip.is-failed > i, .gh-execution-strip.is-failed > em > span i { background: var(--gh-error); }\n.gh-map-layers-toggle {\n  position: absolute; z-index: 5; top: 14px; left: 56px; height: 30px; padding: 0 9px; display: flex; align-items: center; gap: 6px;\n  border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-bg); color: var(--gh-ink); box-shadow: var(--dsw-shadow-lv2); cursor: pointer;\n}\n.gh-map-layers-toggle:hover, .gh-map-layers-toggle[aria-expanded=\"true\"] { background: var(--gh-raised); color: var(--gh-accent); }\n.gh-map-layers-toggle > span { font-size: 15px; }\n.gh-map-layers-toggle > small { min-width: 18px; height: 18px; display: grid; place-items: center; border-radius: 6px; background: var(--gh-fill); color: var(--gh-muted); font-size: 9px; }\n.gh-map-layer-drawer { position: absolute; z-index: 4; top: 58px; bottom: 38px; left: 12px; width: min(252px, calc(100% - 24px)); min-height: 0; }\n.gh-map-layer-panel { overflow: hidden; border: 1px solid color-mix(in srgb, var(--gh-line) 82%, transparent); border-radius: 13px; background: color-mix(in srgb, var(--gh-surface) 91%, transparent); box-shadow: 0 12px 32px color-mix(in srgb, #0f172a 14%, transparent); backdrop-filter: blur(14px) saturate(1.1); }\n.gh-panel-heading { min-height: 62px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-panel-heading > span:first-child { display: grid; gap: 1px; }\n.gh-panel-heading b { font-size: 14px; font-weight: 600; }\n.gh-panel-heading small { color: var(--gh-muted); font-size: 11px; }\n.gh-panel-count { min-width: 24px; height: 24px; display: grid !important; place-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-surface); color: var(--gh-muted); font: 600 11px/1 var(--dsw-font-mono), monospace; }\n.gh-icon-button { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; color: var(--gh-accent); cursor: pointer; }\n.gh-icon-button:hover { background: var(--gh-fill-hover); }\n.gh-icon-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }\n.gh-layer-section-label { padding: 11px 13px 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--gh-muted); font-size: 9px; font-weight: 600; letter-spacing: .45px; text-transform: uppercase; }\n.gh-layer-section-label small { min-width: 18px; height: 17px; display: grid; place-items: center; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font: 8px/1 var(--dsw-font-mono), monospace; }\n.gh-layer-list { min-height: 0; max-height: 31%; overflow: auto; padding: 3px 8px 8px; display: grid; align-content: start; gap: 5px; }\n.gh-output-list { max-height: 26%; }\n.gh-final-output-list { max-height: none; flex: 1 1 auto; }\n.gh-raster-layer-list { max-height: 118px; flex: none; }\n.gh-layer-row { min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; padding: 9px 8px; border: 1px solid transparent; border-radius: 9px; }\n.gh-layer-row:hover { background: var(--gh-fill-hover); }\n.gh-layer-row.is-data-selected { border-color: color-mix(in srgb, var(--gh-accent) 55%, var(--gh-line)); background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); }\n.gh-layer-row.is-step-highlighted { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 8%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-layer-toggle { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-toggle span { width: 10px; height: 10px; border-radius: 2px; opacity: .25; }\n.gh-layer-toggle.is-visible span { opacity: 1; }\n.gh-layer-toggle span.is-raster-overlay,\n.gh-map-legend i.is-raster-overlay { background: linear-gradient(135deg, #38bdf8 0 25%, #22c55e 25% 50%, #a78bfa 50% 75%, #fb923c 75%); }\n.gh-raster-layer-row { border-color: color-mix(in srgb, #8b5cf6 20%, transparent); background: color-mix(in srgb, #8b5cf6 4%, transparent); }\n.gh-raster-layer-meta { cursor: default; }\n.gh-raster-opacity-control { margin-top: 3px; display: grid; grid-template-columns: 20px minmax(56px, 1fr) 31px 20px; align-items: center; gap: 4px; }\n.gh-raster-opacity-control button { width: 20px; height: 20px; padding: 0; border: 1px solid var(--gh-line); border-radius: 5px; background: var(--gh-bg); color: var(--gh-muted); cursor: pointer; line-height: 1; }\n.gh-raster-opacity-control button:hover:not(:disabled) { border-color: color-mix(in srgb, #8b5cf6 46%, var(--gh-line)); color: #8b5cf6; }\n.gh-raster-opacity-control button:disabled { cursor: default; opacity: .35; }\n.gh-raster-opacity-control input { width: 100%; min-width: 0; }\n.gh-raster-opacity-control output { color: var(--gh-muted); font: 8px/1 var(--dsw-font-mono), monospace; text-align: right; }\n.gh-layer-meta { min-width: 0; display: grid; gap: 2px; }\n.gh-layer-open { min-width: 0; padding: 0; display: grid; gap: 2px; border: 0; outline: none; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-layer-open:focus-visible { border-radius: 5px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-accent) 30%, transparent); }\n.gh-layer-meta strong { overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; white-space: nowrap; }\n.gh-output-check { margin-left: 5px; color: var(--gh-success); font-size: 10px; font-style: normal; }\n.gh-layer-meta small { overflow: hidden; color: var(--gh-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-layer-meta input[type=\"range\"] { width: 100%; height: 10px; margin: 4px 0 0; accent-color: var(--gh-accent); cursor: pointer; }\n.gh-layer-style-controls { margin-top: 2px; }\n.gh-layer-style-controls > summary { width: max-content; color: var(--gh-muted); font-size: 9px; cursor: pointer; }\n.gh-layer-style-controls > div { margin-top: 5px; padding: 6px; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: end; gap: 6px; border-radius: 7px; background: var(--gh-fill); }\n.gh-layer-style-controls label { min-width: 0; display: grid; gap: 2px; color: var(--gh-muted); font-size: 8px; }\n.gh-layer-style-controls input[type=\"color\"] { width: 28px; height: 22px; padding: 1px; border: 1px solid var(--gh-line); border-radius: 5px; background: var(--gh-bg); cursor: pointer; }\n.gh-layer-style-controls input[type=\"range\"] { margin: 0; }\n.gh-layer-style-controls button { height: 23px; padding: 0 6px; border: 1px solid var(--gh-line); border-radius: 5px; background: var(--gh-bg); color: var(--gh-muted); font-size: 8px; cursor: pointer; }\n.gh-layer-statistics-summary { margin: 5px 8px 8px; padding: 7px 8px; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 1px 7px; align-items: center; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-layer-statistics-summary > span { grid-row: 1 / 3; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; background: var(--gh-fill); color: var(--gh-accent); }\n.gh-layer-statistics-summary b { font-size: 9px; }\n.gh-layer-statistics-summary small { color: var(--gh-muted); font-size: 8px; }\n.gh-layer-error, .gh-run-error { margin: 7px 10px; padding: 8px; border-radius: 6px; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); font-size: 11px; line-height: 1.4; }\n.gh-layer-footer { padding: 9px 12px; display: flex; justify-content: space-between; border-top: 1px solid var(--gh-line); color: var(--gh-muted); font-size: 10px; }\n.gh-sidebar-layers {\n  --gh-bg: var(--dsw-alias-bg-base); --gh-surface: var(--dsw-specific-sidebar-fill); --gh-fill: var(--dsw-alias-fill-l2);\n  --gh-fill-hover: var(--dsw-alias-interactive-bg-hover); --gh-line: var(--dsw-alias-border-l2);\n  --gh-ink: var(--dsw-alias-label-primary); --gh-muted: var(--dsw-alias-label-tertiary);\n  --gh-accent: var(--dsw-alias-state-business-primary); --gh-success: var(--dsw-alias-state-success-primary);\n  min-height: 0; height: 100%; display: flex; flex-direction: column; color: var(--dsw-alias-label-primary);\n}\n.gh-sidebar-layer-heading { min-height: 48px; padding: 8px 12px 8px 8px; display: flex; align-items: center; justify-content: space-between; }\n.gh-sidebar-layer-heading > span:first-child { display: grid; gap: 1px; }\n.gh-sidebar-layer-heading b { font-size: 14px; font-weight: 600; }\n.gh-sidebar-layer-heading small { color: var(--dsw-alias-label-tertiary); font-size: 11px; }\n.gh-layer-panel-actions { display: flex; align-items: center; gap: 6px; }\n.gh-layer-panel-close { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--gh-muted); font-size: 17px; line-height: 1; cursor: pointer; }\n.gh-layer-panel-close:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-sidebar-brand-mark { display: inline-grid; place-items: center; border: 1px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 22%, var(--dsw-alias-border-l2)); border-radius: 7px; background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, var(--dsw-alias-bg-base)); color: var(--dsw-alias-state-business-primary); font-size: 15px; line-height: 1; }\n.gh-sidebar-brand-name { color: var(--dsw-alias-label-primary); font-size: 17px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }\n.gh-output-row { min-width: 0; padding: 7px; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 7px; align-items: center; color: var(--gh-muted); border-radius: 7px; }\n.gh-output-row > i { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--gh-line); border-radius: 6px; font-size: 10px; font-style: normal; }\n.gh-output-row > span { min-width: 0; display: grid; gap: 2px; }\n.gh-output-row strong, .gh-output-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-output-row strong { color: var(--gh-ink); font-size: 11px; font-weight: 500; }\n.gh-output-row small, .gh-output-empty { color: var(--gh-muted); font-size: 10px; }\n.gh-output-row.is-running > i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-output-row.is-success > i { border-color: var(--gh-success); color: var(--gh-success); }\n.gh-output-row.is-failed > i { border-color: var(--gh-error); color: var(--gh-error); }\n.gh-output-empty { margin: 5px 7px; line-height: 1.5; }\n\n.gh-data-workbench {\n  position: absolute; z-index: 7; right: 14px; bottom: 31px; left: 14px; max-height: min(54%, 520px); min-height: 210px;\n  display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--gh-line-strong); border-radius: 13px;\n  background: color-mix(in srgb, var(--gh-surface) 98%, transparent); box-shadow: var(--dsw-shadow-lv3, 0 16px 46px rgba(0, 0, 0, .22));\n}\n.gh-data-workbench > header { min-height: 48px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--gh-line); background: var(--gh-raised); }\n.gh-data-workbench > header > span { min-width: 0; display: grid; gap: 1px; }\n.gh-data-workbench > header b { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-workbench > header small { overflow: hidden; color: var(--gh-muted); font: 10px/1.35 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-workbench > header button { width: 27px; height: 27px; flex: none; border: 0; border-radius: 7px; background: transparent; color: var(--gh-muted); font-size: 18px; cursor: pointer; }\n.gh-data-workbench > header button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-data-toolbar { min-height: 46px; padding: 7px 10px; display: flex; align-items: end; gap: 7px; border-bottom: 1px solid var(--gh-line); }\n.gh-data-toolbar label { width: min(230px, 32%); display: grid; gap: 3px; color: var(--gh-muted); font-size: 9px; }\n.gh-data-toolbar input { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--gh-line); border-radius: 7px; outline: none; background: var(--gh-bg); color: var(--gh-ink); font-size: 11px; }\n.gh-data-toolbar input:focus { border-color: var(--gh-accent); }\n.gh-data-toolbar button, .gh-data-error button { height: 28px; padding: 0 9px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); color: var(--gh-ink); font-size: 10px; cursor: pointer; }\n.gh-data-toolbar button { white-space: nowrap; }\n.gh-data-toolbar button:hover, .gh-data-error button:hover { background: var(--gh-fill-hover); }\n.gh-data-toolbar button:disabled { cursor: default; opacity: .5; }\n.gh-data-toolbar button.is-armed { border-color: var(--gh-error); background: color-mix(in srgb, var(--gh-error) 9%, var(--gh-bg)); color: var(--gh-error); }\n.gh-data-toolbar > span { margin-left: auto; align-self: center; color: var(--gh-muted); font: 10px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-data-error, .gh-data-loading { margin: 8px 10px 0; padding: 7px 9px; display: flex; align-items: center; gap: 8px; border-radius: 8px; font-size: 10px; }\n.gh-data-error { justify-content: space-between; background: color-mix(in srgb, var(--gh-error) 10%, transparent); color: var(--gh-error); }\n.gh-data-loading { color: var(--gh-muted); background: var(--gh-raised); }\n.gh-data-loading i { width: 11px; height: 11px; flex: none; border: 2px solid var(--gh-line); border-top-color: var(--gh-accent); border-radius: 50%; animation: gh-spin .8s linear infinite; }\n.gh-data-summary { padding: 8px 10px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }\n.gh-data-summary > span { min-width: 0; padding: 6px 8px; display: grid; gap: 2px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-data-summary small { overflow: hidden; color: var(--gh-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-summary b { overflow: hidden; font: 600 11px/1.3 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-warnings { margin: 0 10px 7px; padding: 6px 8px; display: grid; gap: 2px; border-radius: 7px; background: color-mix(in srgb, #d97706 10%, transparent); color: #b45309; }\n.gh-data-warnings small { font-size: 9px; line-height: 1.35; }\n.gh-data-fields { padding: 0 10px 7px; display: flex; gap: 5px; overflow-x: auto; flex: none; }\n.gh-data-fields > span { max-width: 180px; padding: 5px 7px; display: grid; gap: 1px; flex: none; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); }\n.gh-data-fields b, .gh-data-fields small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-data-fields b { font: 600 9px/1.3 var(--dsw-font-mono), monospace; }\n.gh-data-fields small { color: var(--gh-muted); font-size: 8px; }\n.gh-table-controls { padding: 0 10px 7px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }\n.gh-table-controls label { width: min(330px, 55%); height: 29px; padding: 0 7px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); }\n.gh-table-controls label:focus-within { border-color: var(--gh-accent); }\n.gh-table-controls label > span { color: var(--gh-muted); }\n.gh-table-controls input { min-width: 0; height: 100%; flex: 1; border: 0; outline: 0; background: transparent; color: var(--gh-ink); font-size: 10px; }\n.gh-table-controls button { width: 20px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-table-controls button:hover { background: var(--gh-fill-hover); color: var(--gh-ink); }\n.gh-table-controls small { color: var(--gh-muted); font: 9px/1.3 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-attribute-table-wrap { min-height: 72px; margin: 0 10px; overflow: auto; flex: 1 1 auto; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-bg); }\n.gh-attribute-table { min-width: 100%; border-collapse: separate; border-spacing: 0; font: 9px/1.35 var(--dsw-font-mono), monospace; white-space: nowrap; }\n.gh-attribute-table th, .gh-attribute-table td { max-width: 230px; padding: 6px 8px; overflow: hidden; border-right: 1px solid var(--gh-line); border-bottom: 1px solid var(--gh-line); text-align: left; text-overflow: ellipsis; }\n.gh-attribute-table th { position: sticky; z-index: 1; top: 0; background: var(--gh-raised); color: var(--gh-muted); font-weight: 600; }\n.gh-attribute-table th button { width: 100%; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 5px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }\n.gh-attribute-table th button:hover { color: var(--gh-accent); }\n.gh-attribute-table th button i { font-size: 8px; font-style: normal; }\n.gh-attribute-table tr:last-child td { border-bottom: 0; }\n.gh-attribute-table th:last-child, .gh-attribute-table td:last-child { border-right: 0; }\n.gh-attribute-table tbody tr { outline: none; cursor: pointer; }\n.gh-attribute-table tbody tr:hover { background: var(--gh-fill-hover); }\n.gh-attribute-table tbody tr.is-selected { background: color-mix(in srgb, var(--gh-accent) 13%, var(--gh-bg)); color: var(--gh-accent); }\n.gh-attribute-table tbody tr:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--gh-accent) 45%, transparent); }\n.gh-data-workbench > footer { min-height: 30px; padding: 6px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--gh-muted); font-size: 9px; }\n\n.gh-map {\n  position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 16px; background-color: var(--gh-fill); box-shadow: var(--dsw-shadow-lv1);\n}\n.gh-map.is-grid {\n  background-image: linear-gradient(color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--gh-line) 38%, transparent) 1px, transparent 1px);\n  background-size: 44px 44px;\n}\n.gh-map.is-plain { background-image: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--gh-accent) 5%, transparent), transparent 58%); }\n.gh-map.is-satellite { background: #14202b; }\n.gh-map-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; cursor: grab; touch-action: none; overscroll-behavior: contain; }\n.gh-map-canvas:active { cursor: grabbing; }\n.gh-map-raster { pointer-events: none; }\n.gh-map-raster image { image-rendering: auto; }\n.gh-map-raster .gh-raster-tile { opacity: 0; transition: opacity .32s ease-out; }\n.gh-map-raster .gh-raster-tile.is-ready { opacity: 1; }\n@media (prefers-reduced-motion: reduce) {\n  .gh-map-raster .gh-raster-tile { transition: none; }\n}\n.gh-map-raster-shade { fill: #07131f; opacity: .22; pointer-events: none; }\n.gh-imagery-inspection-overlay { pointer-events: none; mix-blend-mode: screen; filter: saturate(1.2) drop-shadow(0 0 3px rgba(255, 255, 255, .18)); transition: opacity .18s ease; }\n.gh-admin-boundary { pointer-events: none; }\n.gh-admin-boundary-outside { fill: rgba(2, 8, 23, .52); }\n.gh-admin-boundary-outline path { stroke: rgba(255, 255, 255, .96); stroke-width: 2.5; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(15, 23, 42, .9)); animation: gh-boundary-lock 1.15s ease-out both; }\n.gh-map-flight { position: absolute; z-index: 4; top: 50%; left: 50%; width: min(310px, calc(100% - 120px)); padding: 12px 14px; display: grid; gap: 5px; transform: translate(-50%, -50%); border: 1px solid rgba(255, 255, 255, .48); border-radius: 12px; background: rgba(7, 18, 31, .78); color: #f8fafc; box-shadow: 0 18px 46px rgba(2, 8, 23, .28); backdrop-filter: blur(10px); pointer-events: none; }\n.gh-map-flight span { color: rgba(226, 232, 240, .74); font: 600 9px/1.4 var(--dsw-font-mono), monospace; letter-spacing: 1.2px; }\n.gh-map-flight strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }\n.gh-map-flight > i { height: 3px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .18); }\n.gh-map-flight > i > b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #38bdf8, #a78bfa, #34d399); transition: width .08s linear; }\n.gh-map-flight.is-arrived { border-color: rgba(52, 211, 153, .72); background: rgba(4, 42, 35, .82); animation: gh-flight-arrived 1.2s ease both; }\n.gh-map-boundary-progress { position: absolute; z-index: 4; top: 50%; left: 50%; width: min(350px, calc(100% - 110px)); padding: 14px 16px; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px 12px; transform: translate(-50%, -50%); border: 1px solid rgba(167, 139, 250, .64); border-radius: 13px; background: rgba(14, 15, 39, .86); color: #f8fafc; box-shadow: 0 20px 54px rgba(2, 8, 23, .32); backdrop-filter: blur(12px); pointer-events: none; }\n.gh-map-boundary-progress > span { min-width: 0; display: grid; gap: 3px; }\n.gh-map-boundary-progress > span small { color: #c4b5fd; font: 650 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .8px; }\n.gh-map-boundary-progress > span strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-boundary-progress > span em { overflow: hidden; color: rgba(226, 232, 240, .7); font-size: 10px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-boundary-progress > b { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .14); }\n.gh-map-boundary-progress > b > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #a78bfa, #38bdf8); box-shadow: 0 0 12px rgba(167, 139, 250, .42); transition: width .3s ease; }\n.gh-map-boundary-progress.is-ready { border-color: rgba(52, 211, 153, .7); background: rgba(4, 42, 35, .86); }\n.gh-map-boundary-progress.is-ready > span small { color: #6ee7b7; }\n.gh-map-boundary-progress.is-ready .gh-inspection-spinner { border-color: rgba(52, 211, 153, .3); border-top-color: #34d399; animation: none; }\n.gh-map-inspection-progress { position: absolute; z-index: 4; top: 50%; left: 50%; width: min(350px, calc(100% - 110px)); padding: 14px 16px; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px 12px; transform: translate(-50%, -50%); border: 1px solid rgba(125, 211, 252, .58); border-radius: 13px; background: rgba(6, 19, 31, .84); color: #f8fafc; box-shadow: 0 20px 54px rgba(2, 8, 23, .32); backdrop-filter: blur(12px); pointer-events: none; }\n.gh-map-inspection-progress > span { min-width: 0; display: grid; gap: 3px; }\n.gh-map-inspection-progress > span small { color: #7dd3fc; font: 650 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .8px; }\n.gh-map-inspection-progress > span strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-inspection-progress > span em { overflow: hidden; color: rgba(226, 232, 240, .68); font-size: 10px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-inspection-progress > b { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .14); }\n.gh-map-inspection-progress > b > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #38bdf8, #34d399); box-shadow: 0 0 12px rgba(56, 189, 248, .46); transition: width .28s ease; }\n.gh-map-inspection-progress.is-failed { grid-template-columns: 1fr; border-color: rgba(248, 113, 113, .62); background: rgba(54, 14, 21, .88); }\n.gh-map-inspection-progress.is-failed > span small { color: #fca5a5; }\n.gh-inspection-spinner { position: relative; width: 36px; height: 36px; border: 2px solid rgba(125, 211, 252, .2); border-top-color: #7dd3fc; border-radius: 50%; animation: gh-spin 1.05s linear infinite; }\n.gh-inspection-spinner i { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #34d399; box-shadow: 0 -10px 0 rgba(52, 211, 153, .32), 0 10px 0 rgba(125, 211, 252, .3); }\n.gh-map-feature { cursor: pointer; transition: filter .12s ease, opacity .12s ease; }\n.gh-map-feature:hover { filter: brightness(.88) saturate(1.15); }\n.gh-map-feature.is-selected, .gh-map-feature.is-step-highlighted { filter: brightness(1.05) saturate(1.18) drop-shadow(0 0 4px var(--gh-accent)); }\n.gh-map-result-focus { pointer-events: none; color: var(--gh-accent); }\n.gh-map-result-focus rect { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-dasharray: 12 7; opacity: .88; animation: gh-map-dash 1.1s linear infinite; }\n.gh-map-result-focus path { fill: none; stroke: currentColor; stroke-width: 4.2; stroke-linecap: round; opacity: .95; }\n.gh-map-result-focus.is-success { color: #e11d48; }\n.gh-map-result-focus.is-success rect { stroke-width: 3; animation: gh-map-dash 1.15s linear infinite, gh-result-stroke 1.8s ease-out 2; }\n.gh-map-stage.has-focus .gh-map { border-color: color-mix(in srgb, var(--gh-accent) 50%, var(--gh-line)); }\n.gh-map-stage.is-success.has-focus .gh-map { border-color: color-mix(in srgb, #e11d48 58%, var(--gh-line)); box-shadow: var(--dsw-shadow-lv1), 0 0 0 3px color-mix(in srgb, #e11d48 10%, transparent); }\n.gh-map-toolbar { position: absolute; z-index: 2; top: 14px; left: 14px; display: grid; overflow: hidden; border: 1px solid var(--gh-line); border-radius: 9px; box-shadow: var(--dsw-shadow-lv2); }\n.gh-map-toolbar button { width: 30px; height: 29px; border: 0; border-bottom: 1px solid var(--gh-line); background: var(--gh-bg); color: var(--gh-ink); cursor: pointer; }\n.gh-map-toolbar button:last-child { border-bottom: 0; }\n.gh-map-toolbar button:hover { background: var(--gh-fill-hover); color: var(--gh-accent); }\n.gh-map-toolbar button small { font: 650 7px/1 var(--dsw-font-mono), monospace; letter-spacing: -.15px; }\n.gh-map-toolbar .gh-map-locate { color: var(--gh-accent); font-size: 15px; font-weight: 650; }\n.gh-map-toolbar .gh-map-locate.is-ready { background: color-mix(in srgb, var(--gh-accent) 10%, var(--gh-bg)); }\n.gh-map-toolbar .gh-map-locate:disabled { cursor: progress; opacity: .62; }\n.gh-map-toolbar .gh-map-imagery { color: #8b5cf6; }\n.gh-map-toolbar .gh-map-imagery.is-ready { background: color-mix(in srgb, #8b5cf6 11%, var(--gh-bg)); color: #7c3aed; }\n.gh-map-toolbar .gh-map-imagery.is-error { color: var(--gh-error); }\n.gh-map-label { position: absolute; z-index: 2; top: 60px; right: 12px; max-width: min(68%, 330px); padding: 4px 7px; display: grid; justify-items: end; border: 1px solid color-mix(in srgb, var(--gh-line) 66%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--gh-surface) 74%, transparent); color: var(--gh-muted); backdrop-filter: blur(7px); }\n.gh-map-label span { font: 600 10px/1.4 var(--dsw-font-mono), monospace; letter-spacing: 1px; }\n.gh-map-label small { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-label small, .gh-map-scale, .gh-map-attribution { color: var(--gh-muted); font-size: 10px; }\n.gh-map-legend { position: absolute; z-index: 2; top: 99px; right: 12px; width: 168px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--gh-line) 78%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--gh-surface) 88%, transparent); box-shadow: var(--dsw-shadow-lv1); backdrop-filter: blur(10px); }\n.gh-map-legend > button { width: 100%; height: 31px; padding: 0 9px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-map-legend > button:hover { background: var(--gh-fill-hover); }\n.gh-map-legend > button span { font-size: 10px; font-weight: 600; }\n.gh-map-legend > button small { min-width: 18px; height: 17px; display: grid; place-items: center; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; }\n.gh-map-legend > button i { color: var(--gh-muted); font-style: normal; }\n.gh-map-legend > div { padding: 3px 8px 8px; display: grid; gap: 5px; border-top: 1px solid var(--gh-line); }\n.gh-map-legend > div > span { min-width: 0; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; }\n.gh-map-legend > div > span > i { width: 10px; height: 4px; border-radius: 2px; }\n.gh-map-legend > div b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-map-legend > div small, .gh-map-legend > div em { color: var(--gh-muted); font-size: 8px; font-style: normal; }\n.gh-map-empty-card { position: absolute; z-index: 2; left: 50%; top: 50%; width: min(330px, calc(100% - 56px)); padding: 23px; border: 1px solid var(--gh-line); border-radius: 14px; background: var(--gh-raised); box-shadow: var(--dsw-shadow-lv2); transform: translate(-50%, -50%); }\n.gh-map-empty-card strong { display: block; margin-top: 4px; font-size: 16px; }\n.gh-map-empty-card p { margin: 6px 0 0; color: var(--gh-muted); font-size: 12px; line-height: 1.5; }\n.gh-map-empty-card button { margin-top: 12px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); border-radius: 8px; background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-bg)); color: var(--gh-accent); font-weight: 600; cursor: pointer; }\n.gh-map-empty-card button:hover { background: color-mix(in srgb, var(--gh-accent) 14%, var(--gh-bg)); }\n.gh-map-empty-card.is-location-ready { top: auto; right: 12px; bottom: 37px; left: auto; width: min(295px, calc(100% - 82px)); padding: 13px 14px; transform: none; background: color-mix(in srgb, var(--gh-surface) 87%, transparent); backdrop-filter: blur(10px); }\n.gh-map-empty-card.is-location-ready strong { font-size: 13px; }\n.gh-map-empty-card.is-location-ready p { font-size: 10px; }\n.gh-user-location { pointer-events: none; }\n.gh-user-location-accuracy { fill: color-mix(in srgb, var(--gh-accent) 14%, transparent); stroke: color-mix(in srgb, var(--gh-accent) 52%, white); stroke-width: 1.3; vector-effect: non-scaling-stroke; }\n.gh-user-location-pulse { fill: none; stroke: white; stroke-width: 2; opacity: .75; vector-effect: non-scaling-stroke; animation: gh-location-pulse 1.8s ease-out infinite; }\n.gh-user-location-dot { fill: var(--gh-accent); stroke: white; stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .38)); }\n.gh-imagery-inspection-card { position: absolute; z-index: 2; right: 12px; bottom: 38px; width: min(235px, calc(100% - 82px)); overflow: hidden; border: 1px solid color-mix(in srgb, var(--gh-accent) 32%, var(--gh-line)); border-radius: 12px; background: color-mix(in srgb, var(--gh-surface) 90%, transparent); box-shadow: var(--dsw-shadow-lv2); backdrop-filter: blur(12px); }\n.gh-imagery-inspection-card > header { padding: 9px 10px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--gh-line); background: linear-gradient(120deg, color-mix(in srgb, var(--gh-accent) 9%, var(--gh-raised)), var(--gh-raised)); }\n.gh-imagery-inspection-card > header span { min-width: 0; display: grid; gap: 2px; }\n.gh-imagery-inspection-card > header small { color: var(--gh-accent); font: 650 7px/1 var(--dsw-font-mono), monospace; letter-spacing: .7px; }\n.gh-imagery-inspection-card > header b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }\n.gh-imagery-inspection-card > header em { flex: none; padding: 3px 5px; border-radius: 999px; background: color-mix(in srgb, #f59e0b 12%, var(--gh-bg)); color: #b45309; font-size: 7px; font-style: normal; }\n.gh-imagery-inspection-card > div { padding: 7px 9px; display: grid; gap: 5px; }\n.gh-imagery-inspection-card > div > span { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto auto; align-items: center; gap: 5px; }\n.gh-imagery-inspection-card > div i { width: 7px; height: 7px; border-radius: 2px; background: var(--gh-accent); }\n.gh-imagery-inspection-card .is-water i { background: #38bdf8; }\n.gh-imagery-inspection-card .is-vegetation i { background: #22c55e; }\n.gh-imagery-inspection-card .is-built_up i { background: #a78bfa; }\n.gh-imagery-inspection-card .is-bare_ground i { background: #fb923c; }\n.gh-imagery-inspection-card > div small { overflow: hidden; color: var(--gh-muted); font-size: 8px; text-overflow: ellipsis; text-transform: capitalize; white-space: nowrap; }\n.gh-imagery-inspection-card > div b { font: 650 8px/1 var(--dsw-font-mono), monospace; }\n.gh-imagery-inspection-card > div em { color: var(--gh-muted); font: 7px/1 var(--dsw-font-mono), monospace; font-style: normal; }\n.gh-imagery-inspection-card > footer { padding: 6px 9px; border-top: 1px solid var(--gh-line); color: var(--gh-muted); font-size: 7px; line-height: 1.4; }\n.gh-eyebrow { color: var(--gh-accent); font-size: 10px; font-weight: 600; letter-spacing: .5px; }\n.gh-map-scale { position: absolute; z-index: 2; left: 14px; bottom: 12px; display: flex; align-items: end; gap: 6px; font-family: var(--dsw-font-mono), monospace; }\n.gh-map-scale span { width: 52px; height: 6px; border: solid var(--gh-muted); border-width: 0 1px 1px; }\n.gh-map-scale b { color: var(--gh-ink); font-size: 9px; font-weight: 600; }\n.gh-map-scale small { color: var(--gh-muted); font-size: 8px; }\n.gh-map-attribution { position: absolute; z-index: 2; right: 12px; bottom: 9px; max-width: min(62%, 520px); padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, var(--gh-surface) 70%, transparent); text-align: right; backdrop-filter: blur(4px); }\n.gh-feature-inspector { position: absolute; z-index: 3; right: 12px; bottom: 25px; width: min(240px, calc(100% - 70px)); max-height: 250px; overflow: auto; padding: 12px; border: 1px solid var(--gh-line); border-radius: 9px; background: var(--gh-panel); box-shadow: var(--dsw-shadow-lv2); }\n.gh-feature-inspector > button { position: absolute; top: 5px; right: 6px; width: 24px; height: 24px; border: 0; background: transparent; color: var(--gh-muted); cursor: pointer; }\n.gh-feature-inspector > strong { display: block; margin-top: 4px; padding-right: 18px; font-size: 14px; }\n.gh-feature-inspector > small { display: block; margin-top: 2px; color: var(--gh-muted); font-size: 10px; }\n.gh-feature-inspector dl { margin: 9px 0 0; display: grid; grid-template-columns: minmax(65px, .8fr) minmax(0, 1.2fr); gap: 5px 7px; font-size: 10px; }\n.gh-feature-inspector dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; }\n.gh-feature-inspector dd { margin: 0; overflow-wrap: anywhere; font-family: var(--dsw-font-mono), monospace; }\n\n.gh-agent { min-width: 0; position: relative; isolation: isolate; border-color: color-mix(in srgb, var(--gh-accent) 13%, var(--gh-line)); background: linear-gradient(180deg, color-mix(in srgb, var(--gh-accent) 2.5%, var(--gh-surface)), var(--gh-surface) 22%); }\n.gh-agent .gh-panel-heading { position: relative; min-height: 56px; padding: 10px 13px 10px 15px; border-bottom-color: color-mix(in srgb, var(--gh-accent) 12%, var(--gh-line)); background: linear-gradient(120deg, color-mix(in srgb, var(--gh-accent) 7%, var(--gh-raised)), var(--gh-raised) 62%); }\n.gh-agent .gh-panel-heading::before { content: ''; position: absolute; top: 14px; bottom: 14px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--gh-accent); }\n.gh-agent .gh-panel-heading b { font-size: 15px; font-weight: 650; letter-spacing: -.15px; }\n.gh-agent .gh-panel-heading small { margin-top: 1px; font-size: 10px; letter-spacing: .1px; }\n.gh-agent-state { padding: 4px 8px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid color-mix(in srgb, var(--gh-line) 80%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--gh-surface) 72%, transparent); color: var(--gh-muted); font-size: 9px; font-weight: 650; text-transform: uppercase; }\n.gh-agent-state::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }\n.gh-agent-state.is-running { color: var(--gh-accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-accent) 35%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-agent-state.is-success { color: var(--gh-success); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gh-success) 30%, transparent); }\n.gh-agent-state.is-failed { color: var(--gh-error); }\n.gh-agent-scroll { min-height: 0; overflow: auto; padding: 10px 10px 210px; display: grid; align-content: start; gap: 9px; background: linear-gradient(180deg, color-mix(in srgb, var(--gh-fill) 45%, var(--gh-surface)), color-mix(in srgb, var(--gh-fill) 20%, var(--gh-surface))); scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--gh-muted) 32%, transparent) transparent; }\n.gh-agent-block { padding: 12px; border: 1px solid color-mix(in srgb, var(--gh-line) 82%, transparent); border-radius: 11px; background: color-mix(in srgb, var(--gh-surface) 97%, var(--gh-raised)); box-shadow: 0 3px 12px color-mix(in srgb, #0f172a 4%, transparent); transition: border-color .15s ease, box-shadow .15s ease; }\n.gh-agent-block:hover { border-color: color-mix(in srgb, var(--gh-accent) 17%, var(--gh-line)); box-shadow: 0 5px 16px color-mix(in srgb, #0f172a 6%, transparent); }\n.gh-agent-block:first-child { padding: 12px 12px 12px 14px; border-left: 3px solid color-mix(in srgb, var(--gh-accent) 78%, var(--gh-line)); background: linear-gradient(115deg, color-mix(in srgb, var(--gh-accent) 7%, var(--gh-surface)), var(--gh-surface) 76%); }\n.gh-agent-block p { margin: 7px 0 0; font-size: 14px; line-height: 1.5; }\n.gh-plan-list { margin: 9px 0 0; padding: 0; display: grid; gap: 5px; list-style: none; }\n.gh-plan-list li { position: relative; color: var(--gh-muted); border-radius: 6px; }\n.gh-plan-list li:not(:last-child)::after { content: ''; position: absolute; z-index: 0; top: 28px; bottom: -8px; left: 13px; width: 1px; background: color-mix(in srgb, var(--gh-line-strong) 72%, transparent); }\n.gh-step-button { position: relative; z-index: 1; width: 100%; padding: 6px 5px; display: flex; gap: 8px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; cursor: pointer; }\n.gh-step-button:hover, .gh-plan-list li.is-selected .gh-step-button { background: var(--gh-fill-hover); }\n.gh-plan-list i { width: 21px; height: 21px; display: grid; place-items: center; flex: none; border: 1px solid var(--gh-line); border-radius: 50%; background: var(--gh-bg); font-size: 10px; font-style: normal; }\n.gh-plan-list span { display: grid; gap: 1px; }\n.gh-plan-list b { color: var(--gh-ink); font-size: 12px; font-weight: 500; }\n.gh-plan-list small { font-size: 10px; }\n.gh-plan-list .is-running i { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-plan-list .is-running .gh-step-button { outline: 1px solid color-mix(in srgb, var(--gh-accent) 50%, transparent); background: color-mix(in srgb, var(--gh-accent) 7%, transparent); animation: gh-focus-soft 1.35s ease-in-out infinite; }\n.gh-plan-list .is-success i { border-color: var(--gh-success); color: var(--gh-success); font-weight: 600; }\n.gh-plan-list .is-failed i { border-color: var(--gh-error); color: var(--gh-error); font-weight: 600; }\n.gh-current-step { display: grid; gap: 7px; background: color-mix(in srgb, var(--gh-fill) 46%, var(--gh-surface)); }\n.gh-current-step > div { display: flex; justify-content: space-between; font-size: 11px; }\n.gh-current-step > div span { color: var(--gh-muted); }\n.gh-current-step .is-teal { color: var(--gh-success); }\n.gh-diagnostics-button { width: 100%; padding: 7px 9px; border: 1px solid var(--gh-border); border-radius: 7px; background: var(--gh-fill); color: var(--gh-text); font: 600 10px/1.2 var(--dsw-font-sans), sans-serif; cursor: pointer; }\n.gh-diagnostics-button:hover { border-color: var(--gh-accent); color: var(--gh-accent); }\n.gh-diagnostics-button:disabled { cursor: wait; opacity: .58; }\n.gh-agent-result { position: relative; display: grid; gap: 8px; transition: border-color .2s ease, box-shadow .2s ease; }\n.gh-agent-result.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-agent-result.is-success { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); animation: gh-result-panel 1.8s ease-out 2; }\n.gh-stream-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }\n.gh-stream-heading small { color: var(--gh-muted); font: 600 9px/1.2 var(--dsw-font-mono), monospace; letter-spacing: .25px; }\n.gh-stream-list { display: grid; gap: 8px; }\n.gh-stream-text { padding: 10px 11px; border: 1px solid color-mix(in srgb, var(--gh-line) 82%, transparent); border-radius: 9px; background: linear-gradient(135deg, var(--gh-raised), color-mix(in srgb, var(--gh-accent) 2%, var(--gh-raised))); }\n.gh-stream-text > small { color: var(--gh-muted); font: 500 9px/1.3 var(--dsw-font-mono), monospace; }\n.gh-markdown { margin-top: 6px; color: var(--gh-ink); font-size: 12px; line-height: 1.58; overflow-wrap: anywhere; }\n.gh-markdown > :first-child { margin-top: 0; }\n.gh-markdown > :last-child { margin-bottom: 0; }\n.gh-markdown p { margin: 6px 0; }\n.gh-markdown h1, .gh-markdown h2, .gh-markdown h3, .gh-markdown h4 { margin: 10px 0 5px; color: var(--gh-ink); line-height: 1.28; }\n.gh-markdown h1 { font-size: 16px; }\n.gh-markdown h2 { padding-bottom: 4px; border-bottom: 1px solid var(--gh-line); font-size: 14px; }\n.gh-markdown h3 { font-size: 13px; }\n.gh-markdown h4 { font-size: 12px; }\n.gh-markdown ul, .gh-markdown ol { margin: 6px 0; padding-left: 20px; }\n.gh-markdown li { margin: 3px 0; padding-left: 1px; }\n.gh-markdown strong { font-weight: 700; }\n.gh-markdown em { color: color-mix(in srgb, var(--gh-ink) 72%, var(--gh-muted)); }\n.gh-markdown code { padding: 1px 4px; border: 1px solid color-mix(in srgb, var(--gh-accent) 18%, var(--gh-line)); border-radius: 4px; background: color-mix(in srgb, var(--gh-accent) 6%, var(--gh-fill)); font: .92em/1.45 var(--dsw-font-mono), monospace; }\n.gh-markdown pre { max-width: 100%; margin: 7px 0; padding: 9px 10px; overflow: auto; border: 1px solid var(--gh-line); border-radius: 7px; background: color-mix(in srgb, var(--gh-bg) 84%, black); }\n.gh-markdown pre code { padding: 0; border: 0; background: transparent; color: var(--gh-ink); white-space: pre; }\n.gh-markdown blockquote { margin: 7px 0; padding: 5px 9px; border-left: 3px solid var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 5%, transparent); color: var(--gh-muted); }\n.gh-markdown a { color: var(--gh-accent); text-decoration: underline; text-underline-offset: 2px; }\n.gh-markdown-table { max-width: 100%; margin: 7px 0; overflow-x: auto; border: 1px solid var(--gh-line); border-radius: 7px; }\n.gh-markdown table { width: 100%; border-collapse: collapse; font-size: 11px; }\n.gh-markdown th, .gh-markdown td { padding: 6px 7px; border-right: 1px solid var(--gh-line); border-bottom: 1px solid var(--gh-line); text-align: left; vertical-align: top; }\n.gh-markdown th { background: color-mix(in srgb, var(--gh-accent) 8%, var(--gh-raised)); color: var(--gh-ink); font-weight: 700; }\n.gh-markdown tr:last-child td { border-bottom: 0; }\n.gh-markdown th:last-child, .gh-markdown td:last-child { border-right: 0; }\n.gh-stream-text[data-stream-status=\"interrupted\"] { border-color: color-mix(in srgb, var(--gh-error) 35%, var(--gh-line)); }\n.gh-stream-reasoning { padding: 8px 10px; border-radius: 8px; background: var(--gh-fill); color: var(--gh-muted); }\n.gh-stream-reasoning > summary { cursor: pointer; font-size: 10px; font-weight: 600; }\n.gh-stream-reasoning .gh-markdown { color: var(--gh-muted); font-size: 11px; }\n.gh-stream-retry { padding: 7px 9px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 8%, var(--gh-fill)); color: var(--gh-error); font: 500 10px/1.4 var(--dsw-font-mono), monospace; }\n.gh-stream-cursor { display: inline-block; width: 5px; height: 13px; margin-left: 2px; vertical-align: -2px; border-radius: 1px; background: var(--gh-accent); animation: gh-stream-blink .8s steps(1, end) infinite; }\n@keyframes gh-stream-blink { 50% { opacity: 0; } }\n@keyframes gh-location-pulse { 0% { r: 8; opacity: .9; } 100% { r: 24; opacity: 0; } }\n@keyframes gh-spin { to { transform: rotate(360deg); } }\n@keyframes gh-focus-soft { 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-accent) 12%, transparent); } }\n@keyframes gh-map-dash { to { stroke-dashoffset: -19; } }\n@keyframes gh-boundary-lock { 0% { opacity: 0; stroke-dasharray: 2 18; stroke-width: 5; } 100% { opacity: 1; stroke-dasharray: 0; stroke-width: 2.5; } }\n@keyframes gh-flight-arrived { 0%, 35% { opacity: 1; } 100% { opacity: 0; } }\n@keyframes gh-result-panel {\n  0%, 100% { border-color: color-mix(in srgb, var(--gh-success) 58%, var(--gh-line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gh-success) 9%, transparent); }\n  38% { border-color: var(--gh-success); box-shadow: 0 0 0 5px color-mix(in srgb, var(--gh-success) 14%, transparent); }\n}\n@keyframes gh-result-stroke { 0%, 100% { stroke-opacity: .88; } 38% { stroke-opacity: 1; } }\n.gh-result-headline { font-size: 12px; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }\n.gh-agent-result dl { margin: 0; padding: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; border-radius: 6px; background: var(--gh-fill); font-size: 10px; }\n.gh-agent-result dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-agent-result dd { margin: 0; color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-result-trace { display: grid; gap: 5px; }\n.gh-result-trace small { display: flex; gap: 5px; color: var(--gh-muted); font-size: 10px; line-height: 1.35; }\n.gh-result-trace i { color: var(--gh-success); font-style: normal; }\n.gh-result-empty { margin: 0 !important; color: var(--gh-muted); font-size: 11px !important; }\n.gh-run-history { gap: 7px; }\n.gh-run-history > article { padding: 8px 9px; display: grid; gap: 5px; border: 1px solid var(--gh-line); border-radius: 8px; background: var(--gh-raised); }\n.gh-run-history > article.is-running { border-color: color-mix(in srgb, var(--gh-accent) 45%, var(--gh-line)); }\n.gh-run-history > article.is-failed { border-color: color-mix(in srgb, var(--gh-error) 45%, var(--gh-line)); }\n.gh-run-history article header { display: flex; align-items: center; justify-content: space-between; gap: 7px; }\n.gh-run-history article header b { font-size: 10px; }\n.gh-run-history article header small, .gh-run-history article > small { overflow: hidden; color: var(--gh-muted); font: 8px/1.4 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-run-history article p { margin: 0; overflow: hidden; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }\n.gh-run-history article > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\n.gh-run-history article > div span { padding: 4px 5px; border-radius: 5px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; text-align: center; }\n.gh-run-history article > div b { color: var(--gh-ink); font-family: var(--dsw-font-mono), monospace; }\n.gh-run-history article > small.is-error { color: var(--gh-error); }\n.gh-result-center { display: grid; gap: 9px; }\n.gh-result-center.is-success { border-color: color-mix(in srgb, var(--gh-success) 42%, var(--gh-line)); }\n.gh-result-center.is-failed { border-color: color-mix(in srgb, var(--gh-error) 42%, var(--gh-line)); }\n.gh-result-center > header { display: flex; align-items: start; justify-content: space-between; gap: 8px; }\n.gh-result-center > header > span { min-width: 0; display: grid; gap: 2px; }\n.gh-result-center > header small { overflow: hidden; color: var(--gh-muted); font: 8px/1.3 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-center > header > b { padding: 3px 6px; border-radius: 6px; background: var(--gh-fill); color: var(--gh-muted); font-size: 8px; text-transform: uppercase; }\n.gh-result-center.is-success > header > b { color: var(--gh-success); }\n.gh-result-center.is-failed > header > b { color: var(--gh-error); }\n.gh-result-answer { margin: 0 !important; padding: 8px 9px; border-left: 3px solid var(--gh-accent); border-radius: 0 7px 7px 0; background: var(--gh-raised); font-size: 11px !important; white-space: pre-wrap; }\n.gh-result-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }\n.gh-result-metrics > span { padding: 5px 6px; display: grid; gap: 1px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-raised); }\n.gh-result-metrics small, .gh-result-provenance small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-metrics b { font: 600 11px/1.3 var(--dsw-font-mono), monospace; }\n.gh-result-flow { display: grid; gap: 5px; }\n.gh-result-flow > small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-flow > div { display: grid; gap: 4px; }\n.gh-result-flow button { min-width: 0; padding: 4px 5px; display: grid; gap: 3px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-result-flow button:hover, .gh-result-flow button.is-focused { border-color: color-mix(in srgb, var(--gh-accent) 40%, var(--gh-line)); background: var(--gh-fill); }\n.gh-result-flow button > span { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 6px; }\n.gh-result-flow button > span b { overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-flow button > span small { color: var(--gh-muted); font-size: 7px; text-transform: uppercase; }\n.gh-result-flow button > span em { color: var(--gh-ink); font: 8px/1 var(--dsw-font-mono), monospace; font-style: normal; }\n.gh-result-flow button > i { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-result-flow button > i span { height: 100%; display: block; border-radius: inherit; background: var(--gh-accent); transition: width .25s ease; }\n.gh-result-flow button:last-child > i span { background: var(--gh-success); }\n.gh-result-layers, .gh-result-assets { display: grid; gap: 5px; }\n.gh-result-layers > button, .gh-result-assets > button { min-width: 0; padding: 6px 7px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--gh-line); border-radius: 7px; background: var(--gh-bg); color: var(--gh-ink); text-align: left; cursor: pointer; }\n.gh-result-layers > button:hover, .gh-result-assets > button:hover:not(:disabled) { background: var(--gh-fill-hover); border-color: color-mix(in srgb, var(--gh-accent) 35%, var(--gh-line)); }\n.gh-result-layers > button.is-focused { border-color: var(--gh-accent); background: color-mix(in srgb, var(--gh-accent) 7%, var(--gh-bg)); }\n.gh-result-layers button > i { width: 20px; height: 20px; display: grid; place-items: center; flex: none; border-radius: 6px; background: var(--gh-fill); color: var(--gh-accent); font-style: normal; }\n.gh-result-layers button > span, .gh-result-assets button > span { min-width: 0; display: grid; gap: 1px; flex: 1; }\n.gh-result-layers b, .gh-result-layers small, .gh-result-assets b, .gh-result-assets small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-layers b, .gh-result-assets b { font-size: 9px; font-weight: 600; }\n.gh-result-layers small, .gh-result-assets small { color: var(--gh-muted); font-size: 8px; }\n.gh-result-section-label { color: var(--gh-muted); font-size: 8px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; }\n.gh-result-statistics { display: grid; gap: 5px; }\n.gh-result-statistics details { padding: 6px 7px; border-radius: 7px; background: var(--gh-fill); }\n.gh-result-statistics summary { overflow: hidden; font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }\n.gh-stat-chart { margin-top: 7px; padding: 6px; display: grid; gap: 5px; border: 1px solid var(--gh-line); border-radius: 6px; background: var(--gh-bg); }\n.gh-stat-chart > span { min-width: 0; display: grid; grid-template-columns: minmax(72px, 1fr) minmax(50px, 1.2fr) auto; align-items: center; gap: 6px; }\n.gh-stat-chart small { overflow: hidden; color: var(--gh-muted); font: 7px/1.2 var(--dsw-font-mono), monospace; text-overflow: ellipsis; white-space: nowrap; }\n.gh-stat-chart > span > i { height: 4px; overflow: hidden; border-radius: 999px; background: var(--gh-fill); }\n.gh-stat-chart > span > i span { height: 100%; display: block; border-radius: inherit; background: color-mix(in srgb, var(--gh-accent) 78%, var(--gh-success)); }\n.gh-stat-chart b { min-width: 34px; font: 7px/1 var(--dsw-font-mono), monospace; text-align: right; }\n.gh-result-statistics dl { margin: 6px 0 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(70px, auto); gap: 3px 7px; font: 8px/1.35 var(--dsw-font-mono), monospace; }\n.gh-result-statistics dt { overflow: hidden; color: var(--gh-muted); text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-statistics dd { margin: 0; max-width: 160px; overflow: hidden; text-align: right; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-provenance { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }\n.gh-result-provenance > span { min-width: 0; padding: 5px 6px; display: grid; gap: 1px; border-radius: 6px; background: var(--gh-fill); }\n.gh-result-provenance > span:nth-child(n + 3) { grid-column: 1 / -1; }\n.gh-result-provenance b { overflow: hidden; font-size: 8px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }\n.gh-result-warnings { padding: 6px 7px; display: grid; gap: 2px; border-radius: 7px; background: color-mix(in srgb, #d97706 9%, transparent); color: #b45309; }\n.gh-result-warnings small { font-size: 8px; line-height: 1.35; }\n.gh-result-assets > button > i { color: var(--gh-accent); font-size: 9px; font-style: normal; }\n.gh-result-assets > button:disabled { cursor: not-allowed; opacity: .55; }\n.gh-result-download-error { margin: 0 !important; padding: 6px 7px; border-radius: 7px; background: color-mix(in srgb, var(--gh-error) 9%, transparent); color: var(--gh-error); font-size: 9px !important; }\n\n@media (prefers-reduced-motion: reduce) {\n  .gh-layer-row.is-step-highlighted,\n  .gh-agent-state.is-running,\n  .gh-data-loading i,\n  .gh-plan-list .is-running .gh-step-button,\n  .gh-agent-result.is-success,\n  .gh-user-location-pulse,\n  .gh-map-result-focus rect,\n  .gh-admin-boundary-outline path,\n  .gh-map-flight,\n  .gh-map-boundary-progress,\n  .gh-inspection-spinner { animation: none; }\n}\n\n[data-conversation-scroll]:has(.gh-shell.is-presentation) { --gh-agent-column-width: 430px; }\n[data-conversation-scroll]:has(.gh-data-workbench) { --gh-agent-column-width: 300px; }\n.gh-workspace:has(.gh-data-workbench) { --gh-agent-column-width: 300px; }\n[data-conversation-scroll]:fullscreen { width: 100vw; height: 100vh; background: var(--dsw-alias-bg-base); }\n[data-conversation-scroll]:fullscreen > [data-slot=\"conversation.session\"] { height: 100%; }\n[data-conversation-scroll]:fullscreen .gh-shell { border-radius: 0; }\n.gh-shell.is-presentation { grid-template-rows: 50px minmax(0, 1fr); }\n.gh-shell.is-presentation .gh-topbar { padding-inline: 22px; }\n.gh-shell.is-presentation .gh-workspace { --gh-agent-column-width: 390px; padding: 10px 12px 12px; }\n\n\n/* The native Harness ConversationRoot still owns the composer and its model\n   selector. GeoHarness only positions that existing seat inside Agent workspace. */\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) {\n  --gh-agent-column-width: 344px;\n  position: relative;\n  overflow: hidden;\n  scrollbar-gutter: auto;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-slot=\"conversation.session\"] {\n  min-height: 0;\n  height: 100%;\n  flex: 1 1 0;\n  overflow: hidden;\n}\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] {\n  position: absolute;\n  right: 24px;\n  bottom: 23px;\n  left: auto;\n  z-index: 8;\n  width: calc(var(--gh-agent-column-width) - 20px);\n  --dsh-composer-card-max-width: 100%;\n  --dsh-composer-side-clearance: 0px;\n  background: transparent;\n}\n\n/* Harness renders its empty-session marketing headline above the native\n   composer. In GeoHarness that same area already belongs to Agent workspace,\n   so suppress only this redundant hero row while keeping the native workspace\n   picker, mode selector, composer and model controls intact. */\n[data-phase=\"hero\"]:has([data-geoharness-plugin=\"loaded\"])\n  [data-composer-seat]\n  [data-chain-overlay-fallback=\"conversation.composer\"] > div > div:first-of-type {\n  display: none;\n}\n\n@media (max-width: 1000px) {\n  .gh-workspace { --gh-agent-column-width: 320px; grid-template-columns: minmax(340px, 1fr) var(--gh-agent-column-width); }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 320px; }\n  .gh-launcher .gh-status { display: none; }\n  .gh-import-summary { max-width: 180px; }\n  .gh-execution-strip { top: 56px; right: 14px; left: 105px; min-width: 0; }\n  .gh-map-label { top: 103px; }\n  .gh-map-legend { top: 142px; }\n  .gh-presentation-button { width: 32px; padding: 0; justify-content: center; font-size: 0; }\n  .gh-presentation-button span { font-size: 12px; }\n}\n\n@media (max-width: 1180px) {\n  .gh-data-toolbar { flex-wrap: wrap; }\n  .gh-data-toolbar label { width: min(260px, 55%); flex: 1 1 190px; }\n  .gh-data-toolbar > span { width: 100%; margin-left: 0; }\n}\n@media (max-width: 720px) {\n  .gh-shell { grid-template-rows: auto minmax(0, 1fr); }\n  .gh-topbar { padding: 9px 10px; align-items: stretch; flex-direction: column; gap: 7px; }\n  .gh-launcher select { min-width: 0; flex: 1; }\n  .gh-import-summary { display: none; }\n  .gh-workspace { --gh-agent-column-width: 300px; grid-template-columns: minmax(300px, 1fr) var(--gh-agent-column-width); padding-inline: 8px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) { --gh-agent-column-width: 300px; }\n  [data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] { right: 18px; width: calc(var(--gh-agent-column-width) - 18px); }\n  .gh-execution-strip { left: 56px; grid-template-columns: 7px minmax(0, 1fr) 55px; }\n  .gh-execution-strip > em { grid-template-columns: minmax(0, 1fr); }\n  .gh-execution-strip > em b { display: none; }\n}\n\n/* One measured column width is shared by the workspace and native composer. */\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) {\n  container: geoharness / inline-size;\n  --gh-agent-column-width: 420px;\n}\n.gh-shell { grid-template-rows: 64px minmax(0, 1fr); }\n.gh-shell .gh-workspace, .gh-shell.is-presentation .gh-workspace {\n  --gh-agent-column-width: inherit;\n  grid-template-columns: minmax(0, 1fr) var(--gh-agent-column-width);\n  padding: 12px; gap: 14px;\n}\n.gh-workspace > * { min-width: 0; }\n.gh-topbar { gap: 12px; }\n.gh-brand { min-width: 0; }\n.gh-brand strong { font-size: 19px; }\n.gh-brand small { font-size: 12px; }\n.gh-launcher { min-width: 0; }\n.gh-status { max-width: 320px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.gh-map-stage { border: 1px solid var(--gh-line); box-shadow: 0 4px 20px #0f172a0a; }\n.gh-map-stage > .gh-map { border: 0; border-radius: 0; }\n.gh-map-canvas { inset: 64px 0 174px; height: calc(100% - 238px); min-height: 0; }\n.gh-map-toolbar { top: 78px; left: 12px; }\n.gh-map-layers-toggle { top: 14px; left: 14px; height: 34px; font-size: 13px; }\n.gh-execution-strip { top: 10px; left: 124px; right: 14px; height: 44px; box-shadow: none; }\n.gh-execution-strip > span { line-height: 1.3; gap: 2px; }\n.gh-execution-strip > span b { font-size: 12px; }\n.gh-execution-strip > span small { font-size: 10px; }\n.gh-execution-strip > em b { font-size: 11px; }\n.gh-map-label { top: 75px; right: 14px; }\n.gh-map-label span { font-size: 10px; letter-spacing: .4px; }\n.gh-map-legend { top: 123px; }\n.gh-map-flight, .gh-map-boundary-progress, .gh-map-inspection-progress {\n  top: auto; bottom: 36px; left: 16px; transform: none;\n  width: min(430px, calc(100% - 32px)); box-shadow: 0 4px 20px #02081718;\n}\n.gh-map-flight strong, .gh-map-boundary-progress > span strong, .gh-map-inspection-progress > span strong { font-size: 15px; }\n.gh-map-flight span, .gh-map-boundary-progress > span small, .gh-map-inspection-progress > span small { font-size: 11px; }\n.gh-map-empty-card { top: auto; left: 16px; bottom: 36px; transform: none; width: min(380px, calc(100% - 32px)); padding: 12px 15px; }\n.gh-map-empty-card p { font-size: 11px; }\n.gh-map-empty-card strong { font-size: 14px; }\n.gh-imagery-inspection-card {\n  left: 14px; right: 14px; bottom: 34px; width: auto;\n  border-color: var(--gh-line); background: var(--gh-surface); box-shadow: 0 2px 12px #02081712;\n}\n.gh-imagery-inspection-card > header { padding: 7px 12px; }\n.gh-imagery-inspection-card > header span { display: flex; align-items: center; gap: 10px; }\n.gh-imagery-inspection-card > header small { font-size: 9px; }\n.gh-imagery-inspection-card > header b { font-size: 13px; }\n.gh-imagery-inspection-card > header em { font-size: 10px; }\n.gh-imagery-inspection-card > div { grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 9px 12px; gap: 10px; }\n.gh-imagery-inspection-card > div > span { grid-template-columns: 8px minmax(0, 1fr); gap: 4px 6px; }\n.gh-imagery-inspection-card > div small { font-size: 11px; }\n.gh-imagery-inspection-card > div b { grid-column: 2; font-size: 18px; }\n.gh-imagery-inspection-card > div em { display: none; }\n.gh-imagery-inspection-card > footer { padding: 5px 12px; font-size: 10px; }\n.gh-map-scale b { font-size: 11px; }\n.gh-map.is-satellite .gh-map-scale, .gh-map.is-satellite .gh-map-scale b, .gh-map.is-satellite .gh-map-scale small { color: #dce7ed; }\n.gh-map.is-satellite .gh-map-scale span { border-color: #dce7ed; }\n.gh-map-attribution { font-size: 10px; max-width: 67%; }\n.gh-map-layer-drawer { top: 62px; bottom: 152px; }\n.gh-agent .gh-panel-heading { flex: none; min-height: 64px; padding: 12px 16px; }\n.gh-agent .gh-panel-heading b { font-size: 18px; }\n.gh-agent .gh-panel-heading small { font-size: 12px; }\n.gh-agent-state { font-size: 11px; }\n.gh-agent-scroll { flex: 1; padding: 12px; margin-bottom: var(--gh-composer-reserve, 220px); gap: 10px; }\n.gh-agent-block { box-shadow: none; padding: 13px; }\n.gh-goal { order: 0; }\n.gh-tool-trace { order: 1; }\n.gh-agent-scroll > .gh-run-error { order: 2; }\n.gh-agent-result { order: 3; }\n.gh-agent-disclosure { order: 4; }\n.gh-current-step { order: 5; }\n.gh-run-history { order: 6; }\n.gh-agent-disclosure > summary, .gh-agent-block > summary { cursor: pointer; padding: 5px 0; font-size: 12px; color: var(--gh-muted); }\n.gh-agent-disclosure { border: 1px solid var(--gh-line); border-radius: 11px; padding: 8px 12px; background: var(--gh-surface); }\n.gh-agent-disclosure > .gh-result-center { margin-top: 10px; }\n.gh-current-step:not([open]), .gh-run-history:not([open]) { display: block; }\n.gh-eyebrow { font-size: 12px; letter-spacing: .3px; }\n.gh-tool-trace .gh-eyebrow { display: flex; justify-content: space-between; }\n.gh-tool-trace .gh-eyebrow small { color: var(--gh-muted); }\n.gh-plan-list span { min-width: 0; overflow-wrap: anywhere; }\n.gh-plan-list b { font-size: 13px; }\n.gh-plan-list small { font-size: 11px; line-height: 1.5; }\n.gh-plan-list i { width: 25px; height: 25px; }\n.gh-stream-text { padding: 12px 0 0; border: 0; border-top: 1px solid var(--gh-line); border-radius: 0; background: transparent; }\n.gh-stream-text > small, .gh-stream-heading small { font-size: 10px; }\n.gh-markdown, .gh-markdown p { font-size: 15px; line-height: 1.75; }\n.gh-markdown h1 { font-size: 20px; }\n.gh-markdown h2 { font-size: 18px; margin-top: 18px; }\n.gh-markdown h3 { font-size: 16px; }\n.gh-markdown table { font-size: 13px; }\n.gh-markdown th, .gh-markdown td { padding: 9px 8px; }\n.gh-agent-result.is-success { box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-success) 9%, transparent); }\n[data-conversation-scroll]:has([data-geoharness-plugin=\"loaded\"]) > [data-composer-seat] {\n  right: 24px; bottom: 24px; width: calc(var(--gh-agent-column-width) - 24px);\n}\n@container geoharness (max-width: 1050px) {\n  .gh-launcher .gh-status { display: none; }\n  .gh-imagery-inspection-card > header small { display: none; }\n  .gh-map-attribution { max-width: 64%; font-size: 8px; }\n}\n@container geoharness (max-width: 760px) {\n  .gh-topbar { flex-direction: row; align-items: center; padding: 8px 12px; }\n  .gh-brand small { display: none; }\n  .gh-shell .gh-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(200px, 38%) minmax(0, 1fr); }\n  .gh-map-canvas { inset: 52px 0 33px; height: calc(100% - 85px); }\n  .gh-imagery-inspection-card, .gh-map-empty-card { display: none; }\n  .gh-map-flight, .gh-map-boundary-progress, .gh-map-inspection-progress { bottom: 28px; }\n  .gh-map-label { top: 58px; }\n  .gh-map-toolbar { top: 58px; }\n}\n\n/* CSS presentation keeps Harness's native input and portals interactive. */\n[data-conversation-scroll]:has(.gh-shell.is-presentation) {\n  position: fixed; inset: 0; z-index: 50; width: 100vw; height: 100vh;\n  max-width: none; background: var(--dsw-alias-bg-base);\n  /* Harness may set overflow-y inline while focusing its composer. */\n  overflow: clip !important;\n}\n[data-conversation-scroll]:has(.gh-shell.is-presentation) > [data-slot=\"conversation.session\"] { height: 100%; }\n.gh-shell.is-presentation { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 0; }\n";
     "use strict";
     var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
         if (k2 === undefined) k2 = k;
@@ -797,6 +1307,8 @@ window.__ModuleLoader__.load({
     const layer_registry_1 = require("./layer-registry");
     const agent_session_1 = require("./agent-session");
     const ui_model_1 = require("./ui-model");
+    const raster_basemap_1 = require("./raster-basemap");
+    const browser_location_1 = require("./browser-location");
     const PACKAGE_NAME = '@geoharness/harness-plugin';
     function installStyles() {
         if (typeof document === 'undefined')
@@ -810,6 +1322,49 @@ window.__ModuleLoader__.load({
     }
     function BrandMark() {
         return (0, jsx_runtime_1.jsx)("span", { className: "gh-brand-mark", "aria-hidden": "true", children: "\u2316" });
+    }
+    function renderMarkdownInline(tokens, keyPrefix) {
+        return tokens.map((token, index) => {
+            const key = `${keyPrefix}-${index}`;
+            if (token.type === 'strong')
+                return (0, jsx_runtime_1.jsx)("strong", { children: token.text }, key);
+            if (token.type === 'emphasis')
+                return (0, jsx_runtime_1.jsx)("em", { children: token.text }, key);
+            if (token.type === 'code')
+                return (0, jsx_runtime_1.jsx)("code", { children: token.text }, key);
+            if (token.type === 'link')
+                return (0, jsx_runtime_1.jsx)("a", { href: token.href, target: "_blank", rel: "noreferrer", children: token.text }, key);
+            if (token.type === 'break')
+                return (0, jsx_runtime_1.jsx)("br", {}, key);
+            return (0, jsx_runtime_1.jsx)(React.Fragment, { children: token.text }, key);
+        });
+    }
+    function MarkdownContent({ text, streaming = false }) {
+        const blocks = React.useMemo(() => (0, ui_model_1.parseAgentMarkdown)(text), [text]);
+        return (0, jsx_runtime_1.jsxs)("div", { className: "gh-markdown", children: [blocks.map((block, index) => {
+                    const key = `markdown-${index}`;
+                    const content = renderMarkdownInline(block.content ?? [], key);
+                    if (block.type === 'heading') {
+                        if (block.level === 1)
+                            return (0, jsx_runtime_1.jsx)("h1", { children: content }, key);
+                        if (block.level === 2)
+                            return (0, jsx_runtime_1.jsx)("h2", { children: content }, key);
+                        if (block.level === 3)
+                            return (0, jsx_runtime_1.jsx)("h3", { children: content }, key);
+                        return (0, jsx_runtime_1.jsx)("h4", { children: content }, key);
+                    }
+                    if (block.type === 'unordered-list' || block.type === 'ordered-list') {
+                        const items = (block.items ?? []).map((item, itemIndex) => (0, jsx_runtime_1.jsx)("li", { children: renderMarkdownInline(item, `${key}-${itemIndex}`) }, `${key}-${itemIndex}`));
+                        return block.type === 'unordered-list' ? (0, jsx_runtime_1.jsx)("ul", { children: items }, key) : (0, jsx_runtime_1.jsx)("ol", { children: items }, key);
+                    }
+                    if (block.type === 'blockquote')
+                        return (0, jsx_runtime_1.jsx)("blockquote", { children: content }, key);
+                    if (block.type === 'code')
+                        return (0, jsx_runtime_1.jsx)("pre", { "data-language": block.language ?? '', children: (0, jsx_runtime_1.jsx)("code", { children: block.code }) }, key);
+                    if (block.type === 'table')
+                        return (0, jsx_runtime_1.jsx)("div", { className: "gh-markdown-table", children: (0, jsx_runtime_1.jsxs)("table", { children: [(0, jsx_runtime_1.jsx)("thead", { children: (0, jsx_runtime_1.jsx)("tr", { children: (block.headers ?? []).map((cell, cellIndex) => (0, jsx_runtime_1.jsx)("th", { children: renderMarkdownInline(cell, `${key}-head-${cellIndex}`) }, `${key}-head-${cellIndex}`)) }) }), (0, jsx_runtime_1.jsx)("tbody", { children: (block.rows ?? []).map((row, rowIndex) => (0, jsx_runtime_1.jsx)("tr", { children: row.map((cell, cellIndex) => (0, jsx_runtime_1.jsx)("td", { children: renderMarkdownInline(cell, `${key}-cell-${rowIndex}-${cellIndex}`) }, `${key}-cell-${rowIndex}-${cellIndex}`)) }, `${key}-row-${rowIndex}`)) })] }) }, key);
+                    return (0, jsx_runtime_1.jsx)("p", { children: content }, key);
+                }), streaming && (0, jsx_runtime_1.jsx)("i", { className: "gh-stream-cursor" })] });
     }
     function coordinateArrays(value, target) {
         if (!Array.isArray(value))
@@ -887,34 +1442,336 @@ window.__ModuleLoader__.load({
             ?? properties.river_id ?? properties.district_id ?? feature.id;
         return label === undefined ? `Feature ${index + 1}` : String(label);
     }
-    function GeoMap({ layers, selected, highlightedLayerIds, runStatus, onSelect, }) {
+    function SatelliteTile({ tile, onHealth }) {
+        const [ready, setReady] = React.useState(false);
+        return (0, jsx_runtime_1.jsx)("image", { className: `gh-raster-tile${ready ? ' is-ready' : ''}`, href: tile.url, x: tile.x, y: tile.y, width: tile.width, height: tile.height, preserveAspectRatio: "none", onLoad: () => { setReady(true); onHealth(true); }, onError: () => onHealth(false) });
+    }
+    function SatelliteDetail({ tiles, projection, onHealth }) {
+        const [retained, setRetained] = React.useState(tiles);
+        const sourceKey = tiles.map(tile => tile.key).join('|');
+        React.useEffect(() => {
+            setRetained(previous => (0, raster_basemap_1.retainRasterTiles)(previous, tiles));
+        }, [sourceKey]);
+        const sources = (0, raster_basemap_1.retainRasterTiles)(retained, tiles).sort((a, b) => a.zoom - b.zoom);
+        return (0, jsx_runtime_1.jsx)("g", { className: "gh-raster-detail", children: sources.map(tile => (0, jsx_runtime_1.jsx)(SatelliteTile, { tile: (0, raster_basemap_1.reprojectRasterTile)(tile, projection), onHealth: onHealth }, tile.key)) });
+    }
+    function GeoMap({ sessionId, presentationMode, layers, workspaceReady, selected, highlightedLayerIds, runStatus, inspection, imageryTarget, onViewChange, onSelect, }) {
         const [zoom, setZoom] = React.useState(1);
         const [pan, setPan] = React.useState({ x: 0, y: 0 });
-        const [canvasMode, setCanvasMode] = React.useState('grid');
-        const [legendOpen, setLegendOpen] = React.useState(true);
+        const [canvasMode, setCanvasMode] = React.useState('satellite');
+        const [rasterHealth, setRasterHealth] = React.useState('loading');
+        const [legendOpen, setLegendOpen] = React.useState(false);
+        const [userLocation, setUserLocation] = React.useState(null);
+        const [locationStatus, setLocationStatus] = React.useState('waiting');
+        const [imageryViewStatus, setImageryViewStatus] = React.useState('idle');
+        const [flightPhase, setFlightPhase] = React.useState('idle');
+        const [flightProgress, setFlightProgress] = React.useState(0);
+        const [inspectionStage, setInspectionStage] = React.useState('idle');
+        const [inspectionDisplayProgress, setInspectionDisplayProgress] = React.useState(0);
+        const locationRequest = React.useRef(0);
         const drag = React.useRef(null);
-        const bounds = React.useMemo(() => layerBounds(layers), [layers]);
-        const project = React.useMemo(() => {
-            const [minX, minY, maxX, maxY] = bounds;
-            const width = Math.max(maxX - minX, 0.000001);
-            const height = Math.max(maxY - minY, 0.000001);
-            const scale = Math.min(900 / width, 600 / height);
-            const offsetX = (1000 - width * scale) / 2;
-            const offsetY = (700 - height * scale) / 2;
-            return ([x, y]) => [
-                offsetX + (x - minX) * scale,
-                700 - (offsetY + (y - minY) * scale),
-            ];
-        }, [bounds]);
+        const activeInspection = imageryTarget !== null && imageryTarget.target_id !== inspection?.target_id
+            ? null
+            : inspection;
+        const analysisPlace = imageryTarget?.resolved_place ?? activeInspection?.resolved_place ?? null;
+        const analysisBounds = imageryTarget?.bbox ?? activeInspection?.bbox ?? null;
+        const analysisTargetId = imageryTarget?.target_id
+            ?? (activeInspection?.resolved_place === null ? null : activeInspection?.inspection_id ?? null);
+        const targetBounds = React.useMemo(() => analysisBounds !== null
+            ? analysisBounds
+            : layers.length > 0
+                ? layerBounds(layers)
+                : userLocation === null || presentationMode
+                    ? layerBounds([])
+                    : (0, browser_location_1.locationViewportBounds)(userLocation), [layers, analysisBounds, userLocation, presentationMode]);
+        const [bounds, setBounds] = React.useState(targetBounds);
+        const boundsRef = React.useRef(targetBounds);
+        const cameraView = React.useRef({ zoom, pan });
+        cameraView.current = { zoom, pan };
+        const flightRequest = React.useRef(0);
+        const flightArrivalTimer = React.useRef(null);
+        const boundaryRevealTimer = React.useRef(null);
+        const inspectionRevealTimer = React.useRef(null);
+        const inspectionResultTimer = React.useRef(null);
+        const inspectionMinimumElapsed = React.useRef(false);
+        const lastFlightTargetId = React.useRef(null);
+        const activeInspectionRef = React.useRef(activeInspection);
+        activeInspectionRef.current = activeInspection;
+        const latestTarget = React.useRef({ targetBounds, imageryTarget });
+        latestTarget.current = { targetBounds, imageryTarget };
+        const namedTargetReady = analysisPlace !== null && analysisBounds !== null;
+        const viewKey = namedTargetReady ? 'named-target' : targetBounds.join(',');
+        const projection = React.useMemo(() => (0, raster_basemap_1.createMercatorProjection)(bounds), [bounds]);
+        const project = projection.project;
+        const rasterTiles = React.useMemo(() => (0, raster_basemap_1.visibleEsriWorldImageryTiles)(projection, zoom, pan), [projection, zoom, pan]);
+        const rasterTileZoom = rasterTiles[0]?.zoom ?? 0;
+        const overviewTiles = React.useMemo(() => (0, raster_basemap_1.overviewEsriWorldImageryTiles)(projection), [projection]);
+        const geographicView = React.useMemo(() => (0, raster_basemap_1.visibleGeographicBounds)(projection, zoom, pan), [projection, zoom, pan]);
+        React.useEffect(() => setImageryViewStatus('idle'), [sessionId]);
+        React.useEffect(() => {
+            lastFlightTargetId.current = null;
+            setFlightPhase('idle');
+            setFlightProgress(0);
+            setInspectionStage('idle');
+            setInspectionDisplayProgress(0);
+            inspectionMinimumElapsed.current = false;
+        }, [sessionId]);
+        React.useEffect(() => {
+            if (canvasMode === 'satellite')
+                setRasterHealth('loading');
+        }, [canvasMode]);
+        React.useEffect(() => {
+            const request = ++flightRequest.current;
+            let animationFrame = 0;
+            const cleanup = () => {
+                if (flightRequest.current === request)
+                    ++flightRequest.current;
+                window.cancelAnimationFrame(animationFrame);
+                if (flightArrivalTimer.current !== null)
+                    window.clearTimeout(flightArrivalTimer.current);
+                if (boundaryRevealTimer.current !== null)
+                    window.clearTimeout(boundaryRevealTimer.current);
+                if (inspectionRevealTimer.current !== null)
+                    window.clearTimeout(inspectionRevealTimer.current);
+                if (inspectionResultTimer.current !== null)
+                    window.clearTimeout(inspectionResultTimer.current);
+            };
+            if (flightArrivalTimer.current !== null)
+                window.clearTimeout(flightArrivalTimer.current);
+            if (boundaryRevealTimer.current !== null)
+                window.clearTimeout(boundaryRevealTimer.current);
+            if (inspectionRevealTimer.current !== null)
+                window.clearTimeout(inspectionRevealTimer.current);
+            if (inspectionResultTimer.current !== null)
+                window.clearTimeout(inspectionResultTimer.current);
+            const current = (0, raster_basemap_1.geoBoundsForView)(boundsRef.current, cameraView.current.zoom, cameraView.current.pan);
+            const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const targetChanged = analysisTargetId !== null
+                && analysisPlace !== null
+                && analysisBounds !== null
+                && lastFlightTargetId.current !== analysisTargetId;
+            if (targetChanged) {
+                lastFlightTargetId.current = analysisTargetId;
+                inspectionMinimumElapsed.current = false;
+            }
+            const applyBounds = (next) => {
+                boundsRef.current = next;
+                setBounds(next);
+            };
+            setZoom(1);
+            setPan({ x: 0, y: 0 });
+            if (targetChanged)
+                applyBounds(current);
+            if (!targetChanged) {
+                applyBounds(targetBounds);
+                setFlightPhase('idle');
+                setFlightProgress(0);
+                if (analysisTargetId === null)
+                    setInspectionStage('idle');
+                return cleanup;
+            }
+            const revealBoundaryThenInspection = () => {
+                setFlightPhase('idle');
+                setInspectionStage('boundary-resolving');
+                const waitForBoundary = () => {
+                    if (flightRequest.current !== request)
+                        return;
+                    if (latestTarget.current.imageryTarget?.status === 'resolving') {
+                        boundaryRevealTimer.current = window.setTimeout(waitForBoundary, 250);
+                        return;
+                    }
+                    const boundaryBounds = latestTarget.current.targetBounds;
+                    const arrivedBounds = boundsRef.current;
+                    const showBoundary = () => {
+                        applyBounds(boundaryBounds);
+                        setInspectionStage('boundary-ready');
+                        inspectionRevealTimer.current = window.setTimeout(() => {
+                            if (flightRequest.current !== request)
+                                return;
+                            setInspectionStage('inspection');
+                            inspectionResultTimer.current = window.setTimeout(() => {
+                                if (flightRequest.current !== request)
+                                    return;
+                                inspectionMinimumElapsed.current = true;
+                                if (activeInspectionRef.current !== null)
+                                    setInspectionStage('result');
+                            }, 1800);
+                        }, 1100);
+                    };
+                    if (reducedMotion || boundaryBounds.every((value, index) => Math.abs(value - arrivedBounds[index]) < 1e-7)) {
+                        showBoundary();
+                    }
+                    else {
+                        // Real boundary extents can differ from the geocoder's candidate.
+                        // Ease into that refinement instead of snapping after the flight.
+                        const startedAt = performance.now();
+                        const settle = (now) => {
+                            if (flightRequest.current !== request)
+                                return;
+                            const progress = Math.min(1, (now - startedAt) / 850);
+                            applyBounds((0, raster_basemap_1.interpolateMercatorView)(arrivedBounds, boundaryBounds, progress));
+                            if (progress < 1)
+                                animationFrame = window.requestAnimationFrame(settle);
+                            else
+                                showBoundary();
+                        };
+                        animationFrame = window.requestAnimationFrame(settle);
+                    }
+                };
+                boundaryRevealTimer.current = window.setTimeout(waitForBoundary, 900);
+            };
+            setInspectionStage('flight');
+            if (reducedMotion) {
+                applyBounds(targetBounds);
+                setFlightPhase('arrived');
+                setFlightProgress(1);
+                flightArrivalTimer.current = window.setTimeout(revealBoundaryThenInspection, 650);
+                return cleanup;
+            }
+            const flight = (0, raster_basemap_1.createGeoViewFlight)(current, targetBounds);
+            const startedAt = performance.now();
+            const animate = (now) => {
+                if (flightRequest.current !== request)
+                    return;
+                const progress = Math.min(1, (now - startedAt) / flight.duration);
+                setFlightProgress(progress);
+                setFlightPhase(progress < .3 ? 'zooming-out' : progress < .7 ? 'travelling' : 'zooming-in');
+                applyBounds(flight.sample(progress));
+                if (progress < 1) {
+                    animationFrame = window.requestAnimationFrame(animate);
+                    return;
+                }
+                applyBounds(targetBounds);
+                setFlightPhase('arrived');
+                setFlightProgress(1);
+                flightArrivalTimer.current = window.setTimeout(revealBoundaryThenInspection, 900);
+            };
+            animationFrame = window.requestAnimationFrame(animate);
+            return cleanup;
+        }, [
+            sessionId,
+            analysisTargetId,
+            viewKey,
+        ]);
+        React.useEffect(() => {
+            if (inspectionStage === 'inspection' && inspectionMinimumElapsed.current && activeInspection !== null) {
+                setInspectionStage('result');
+            }
+        }, [inspectionStage, activeInspection]);
+        React.useEffect(() => {
+            if (inspectionStage !== 'inspection') {
+                setInspectionDisplayProgress(inspectionStage === 'result' ? 1 : 0);
+                return;
+            }
+            const startedAt = performance.now();
+            const duration = 1800;
+            let animationFrame = 0;
+            const animate = (now) => {
+                const elapsed = Math.min(duration, now - startedAt);
+                const progress = elapsed / duration;
+                const observed = activeInspectionRef.current !== null ? 1 : Math.min(.95, latestTarget.current.imageryTarget?.progress ?? .3);
+                setInspectionDisplayProgress(Math.min(observed, 1 - ((1 - progress) ** 3)));
+                if (elapsed < duration || observed < 1)
+                    animationFrame = window.requestAnimationFrame(animate);
+            };
+            animationFrame = window.requestAnimationFrame(animate);
+            return () => window.cancelAnimationFrame(animationFrame);
+        }, [inspectionStage, analysisTargetId]);
+        React.useEffect(() => {
+            const request = ++locationRequest.current;
+            setUserLocation(null);
+            if (!workspaceReady || layers.length > 0) {
+                setLocationStatus('waiting');
+                return;
+            }
+            setLocationStatus('checking');
+            void (0, browser_location_1.browserLocationPermission)().then(async (permission) => {
+                if (locationRequest.current !== request)
+                    return;
+                if (!(0, browser_location_1.shouldAutoRequestBrowserLocation)(permission)) {
+                    setLocationStatus(permission);
+                    return;
+                }
+                setLocationStatus('requesting');
+                const result = await (0, browser_location_1.requestBrowserLocation)();
+                if (locationRequest.current !== request)
+                    return;
+                if (result.ok) {
+                    setUserLocation(result.location);
+                    setLocationStatus('ready');
+                }
+                else {
+                    setLocationStatus(result.reason);
+                }
+            });
+        }, [sessionId, workspaceReady, layers.length]);
+        const locateCurrentPosition = async () => {
+            const request = ++locationRequest.current;
+            setLocationStatus('requesting');
+            const result = await (0, browser_location_1.requestBrowserLocation)();
+            if (locationRequest.current !== request)
+                return;
+            if (result.ok) {
+                setUserLocation(result.location);
+                setLocationStatus('ready');
+            }
+            else {
+                setUserLocation(null);
+                setLocationStatus(result.reason);
+            }
+        };
         const visibleLayers = layers.filter(layer => layer.visible);
         const centerLongitude = ((bounds[0] + bounds[2]) / 2).toFixed(4);
         const centerLatitude = ((bounds[1] + bounds[3]) / 2).toFixed(4);
         const visibleCrs = [...new Set(visibleLayers.map(layer => layer.crs))];
+        const locationPoint = userLocation === null ? null : project([userLocation.longitude, userLocation.latitude]);
+        const locationAccuracyRadius = userLocation === null || locationPoint === null
+            ? 0
+            : Math.max(7, Math.min(85, Math.abs(project([
+                userLocation.longitude + userLocation.accuracy / (111_320 * Math.max(0.05, Math.cos(userLocation.latitude * Math.PI / 180))),
+                userLocation.latitude,
+            ])[0] - locationPoint[0])));
         const orderedLayers = [...visibleLayers].sort((left, right) => {
             const order = { districts: 0, rivers: 1, roads: 2, buildings: 3 };
             return (order[left.name] ?? 4) - (order[right.name] ?? 4);
         });
+        const layerGroups = React.useMemo(() => (0, ui_model_1.groupWorkspaceLayers)(layers), [layers]);
+        const inputLayerIds = React.useMemo(() => new Set(layerGroups.input.map(layer => layer.id)), [layerGroups]);
+        const intermediateLayerIds = React.useMemo(() => new Set(layerGroups.intermediate.map(layer => layer.id)), [layerGroups]);
+        const finalLayerIds = React.useMemo(() => new Set(layerGroups.final.map(layer => layer.id)), [layerGroups]);
+        const displayOpacity = (layer) => {
+            const role = inputLayerIds.has(layer.id)
+                ? 'input'
+                : intermediateLayerIds.has(layer.id)
+                    ? 'intermediate'
+                    : finalLayerIds.has(layer.id)
+                        ? 'final'
+                        : 'other';
+            const focused = highlightedLayerIds.has(layer.id) || selected?.layer.id === layer.id;
+            return (0, ui_model_1.mapLayerOpacity)(layer.opacity, role, focused);
+        };
         const highlightedLayers = visibleLayers.filter(layer => highlightedLayerIds.has(layer.id));
+        const inspectionFrame = activeInspection === null ? null : (() => {
+            const [left, bottom] = project([activeInspection.bbox[0], activeInspection.bbox[1]]);
+            const [right, top] = project([activeInspection.bbox[2], activeInspection.bbox[3]]);
+            return { x: Math.min(left, right), y: Math.min(top, bottom), width: Math.abs(right - left), height: Math.abs(bottom - top) };
+        })();
+        const administrativeBoundary = analysisPlace?.administrative_boundary ?? null;
+        const boundaryRevealed = inspectionStage === 'boundary-ready' || inspectionStage === 'inspection' || inspectionStage === 'result';
+        const administrativeBoundaryPaths = administrativeBoundary === null || !boundaryRevealed
+            ? []
+            : geometryPaths(administrativeBoundary.geometry, project).filter(Boolean);
+        const administrativeBoundaryPath = administrativeBoundaryPaths.join(' ');
+        const inspectionRevealed = inspectionStage === 'result';
+        const flightLabel = flightPhase === 'zooming-out'
+            ? '正在缩小当前区域'
+            : flightPhase === 'travelling'
+                ? `正在移动到 ${analysisPlace?.label ?? '目标区域'}`
+                : flightPhase === 'zooming-in'
+                    ? '正在放大行政区范围'
+                    : flightPhase === 'arrived'
+                        ? '已锁定行政区边界'
+                        : '';
         const focusFrame = highlightedLayers.length === 0 ? null : (() => {
             const [minX, minY, maxX, maxY] = layerBounds(highlightedLayers);
             const [left, bottom] = project([minX, minY]);
@@ -929,7 +1786,26 @@ window.__ModuleLoader__.load({
                 height: Math.min(692 - y, Math.abs(bottom - top) + padding * 2),
             };
         })();
-        return ((0, jsx_runtime_1.jsxs)("section", { className: `gh-map is-${canvasMode}`, "aria-label": "Map workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-map-toolbar", "aria-label": "Map controls", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.min(5, value * 1.35)), "aria-label": "Zoom in", children: "+" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.max(0.7, value / 1.35)), "aria-label": "Zoom out", children: "\u2212" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); }, "aria-label": "Fit bounds", children: "\u2316" }), (0, jsx_runtime_1.jsx)("button", { type: "button", "aria-label": "Toggle map canvas", "aria-pressed": canvasMode === 'grid', title: "\u5207\u6362\u7F51\u683C\u5E95\u56FE", onClick: () => setCanvasMode(value => value === 'grid' ? 'plain' : 'grid'), children: "#" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-label", children: [(0, jsx_runtime_1.jsx)("span", { children: layers.length > 0 ? 'CANONICAL WORKSPACE' : 'AGENT WORKSPACE' }), (0, jsx_runtime_1.jsxs)("small", { children: [centerLatitude, "\u00B0 N \u00B7 ", Math.abs(Number(centerLongitude)).toFixed(4), "\u00B0 W \u00B7 ", visibleCrs.join(' / ') || 'CRS84'] })] }), (0, jsx_runtime_1.jsx)("svg", { className: "gh-map-canvas", viewBox: "0 0 1000 700", role: "img", "aria-label": "Interactive Agent workspace map", onPointerDown: event => {
+        return ((0, jsx_runtime_1.jsxs)("section", { className: `gh-map is-${canvasMode}`, "aria-label": "Map workspace", "data-map-flight": flightPhase, "data-inspection-stage": inspectionStage, "data-boundary-clipped": boundaryRevealed && administrativeBoundary !== null ? 'true' : 'false', children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-map-toolbar", "aria-label": "Map controls", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.min(5, value * 1.35)), "aria-label": "Zoom in", children: "+" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => setZoom(value => Math.max(0.7, value / 1.35)), "aria-label": "Zoom out", children: "\u2212" }), (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => { setZoom(1); setPan({ x: 0, y: 0 }); }, "aria-label": "Fit bounds", children: "\u2316" }), (0, jsx_runtime_1.jsx)("button", { type: "button", "aria-label": "Toggle map canvas", "aria-pressed": canvasMode === 'satellite', title: "\u5207\u6362\u536B\u661F / \u7F51\u683C / \u7EAF\u8272\u5E95\u56FE", onClick: () => setCanvasMode(value => value === 'satellite' ? 'grid' : value === 'grid' ? 'plain' : 'satellite'), children: (0, jsx_runtime_1.jsx)("small", { children: canvasMode === 'satellite' ? 'SAT' : canvasMode === 'grid' ? 'GRID' : 'PLAIN' }) }), canvasMode === 'satellite' && (0, jsx_runtime_1.jsx)("button", { type: "button", className: `gh-map-imagery is-${imageryViewStatus}`, "aria-label": "Prepare satellite visual inspection", title: "\u5C06\u5F53\u524D\u5730\u56FE\u89C6\u91CE\u4FDD\u5B58\u5230\u672C\u5730 Session\uFF0C\u4F9B Agent \u89C6\u89C9\u5DE1\u68C0", disabled: imageryViewStatus === 'syncing', onClick: () => {
+                                setImageryViewStatus('syncing');
+                                void onViewChange({ bbox: [...geographicView], zoom: rasterTileZoom })
+                                    .then(() => setImageryViewStatus('ready'))
+                                    .catch(() => setImageryViewStatus('error'));
+                            }, children: (0, jsx_runtime_1.jsx)("small", { children: imageryViewStatus === 'syncing' ? '…' : imageryViewStatus === 'ready' ? '✓' : imageryViewStatus === 'error' ? '!' : 'AI' }) }), layers.length === 0 && (0, jsx_runtime_1.jsx)("button", { type: "button", className: `gh-map-locate is-${locationStatus}`, "aria-label": "Locate current position", title: "\u5B9A\u4F4D\u5230\u5F53\u524D\u4F4D\u7F6E", disabled: !workspaceReady || locationStatus === 'checking' || locationStatus === 'requesting', onClick: () => { void locateCurrentPosition(); }, children: locationStatus === 'requesting' || locationStatus === 'checking' ? '…' : '◎' })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-label", children: [(0, jsx_runtime_1.jsx)("span", { children: flightPhase !== 'idle' && flightPhase !== 'arrived'
+                                ? 'FLYING TO ANALYSIS AREA'
+                                : inspectionStage === 'boundary-resolving'
+                                    ? 'RESOLVING ADMIN BOUNDARY'
+                                    : inspectionStage === 'boundary-ready'
+                                        ? 'ADMIN BOUNDARY READY'
+                                        : boundaryRevealed && administrativeBoundary !== null
+                                            ? 'ADMIN BOUNDARY ANALYSIS'
+                                            : layers.length > 0
+                                                ? 'CANONICAL WORKSPACE'
+                                                : activeInspection !== null
+                                                    ? 'RASTER ANALYSIS VIEW'
+                                                    : userLocation !== null && !presentationMode
+                                                        ? 'YOUR LOCATION · LOCAL ONLY'
+                                                        : 'AGENT WORKSPACE' }), (0, jsx_runtime_1.jsxs)("small", { children: [Math.abs(Number(centerLatitude)).toFixed(4), "\u00B0 ", Number(centerLatitude) >= 0 ? 'N' : 'S', " \u00B7 ", Math.abs(Number(centerLongitude)).toFixed(4), "\u00B0 ", Number(centerLongitude) >= 0 ? 'E' : 'W', " \u00B7 ", visibleCrs.join(' / ') || 'CRS84'] })] }), (0, jsx_runtime_1.jsx)("svg", { className: "gh-map-canvas", viewBox: "0 0 1000 700", role: "img", "aria-label": "Interactive Agent workspace map", onPointerDown: event => {
                         drag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
                         event.currentTarget.setPointerCapture(event.pointerId);
                     }, onPointerMove: event => {
@@ -946,7 +1822,9 @@ window.__ModuleLoader__.load({
                         event.preventDefault();
                         const factor = Math.exp(-event.deltaY * 0.0015);
                         setZoom(value => Math.max(0.7, Math.min(5, value * factor)));
-                    }, onClick: () => onSelect(null), children: (0, jsx_runtime_1.jsxs)("g", { transform: `translate(${500 + pan.x} ${350 + pan.y}) scale(${zoom}) translate(-500 -350)`, children: [orderedLayers.map(layer => layer.data.features.map((feature, featureIndex) => {
+                    }, onClick: () => onSelect(null), children: (0, jsx_runtime_1.jsxs)("g", { transform: `translate(${500 + pan.x} ${350 + pan.y}) scale(${zoom}) translate(-500 -350)`, children: [canvasMode === 'satellite' && (0, jsx_runtime_1.jsxs)("g", { className: "gh-map-raster", "aria-label": "Esri World Imagery satellite basemap", children: [overviewTiles.map(tile => (0, jsx_runtime_1.jsx)("image", { href: tile.url, x: tile.x, y: tile.y, width: tile.width, height: tile.height, preserveAspectRatio: "none" }, tile.key)), (0, jsx_runtime_1.jsx)(SatelliteDetail, { tiles: rasterTiles, projection: projection, onHealth: ready => {
+                                            setRasterHealth(value => ready ? 'ready' : value === 'ready' ? value : 'unavailable');
+                                        } }), (0, jsx_runtime_1.jsx)("rect", { className: "gh-map-raster-shade", x: "-2000", y: "-2000", width: "5000", height: "5000" })] }), boundaryRevealed && administrativeBoundaryPath !== '' && (0, jsx_runtime_1.jsxs)("g", { className: "gh-admin-boundary", "aria-label": "Administrative boundary clip", children: [(0, jsx_runtime_1.jsx)("path", { className: "gh-admin-boundary-outside", d: `M-3000,-3000 H4000 V3700 H-3000 Z ${administrativeBoundaryPath}`, fillRule: "evenodd" }), (0, jsx_runtime_1.jsx)("g", { className: "gh-admin-boundary-outline", children: administrativeBoundaryPaths.map((path, index) => (0, jsx_runtime_1.jsx)("path", { d: path, fill: "none", fillRule: "evenodd", vectorEffect: "non-scaling-stroke" }, `administrative-boundary-${index}`)) })] }), inspectionRevealed && activeInspection !== null && activeInspection.overlay_layer.visible && inspectionFrame !== null && (0, jsx_runtime_1.jsx)("image", { className: "gh-imagery-inspection-overlay", href: `data:${activeInspection.overlay_mime_type};base64,${activeInspection.overlay_base64}`, x: inspectionFrame.x, y: inspectionFrame.y, width: inspectionFrame.width, height: inspectionFrame.height, preserveAspectRatio: "none", opacity: activeInspection.overlay_layer.opacity, "aria-label": "Satellite visual inspection overlay" }), !presentationMode && layers.length === 0 && analysisPlace === null && locationPoint !== null && (0, jsx_runtime_1.jsxs)("g", { className: "gh-user-location", transform: `translate(${locationPoint[0]} ${locationPoint[1]})`, "aria-label": "Current computer location", children: [(0, jsx_runtime_1.jsx)("circle", { className: "gh-user-location-accuracy", r: locationAccuracyRadius }), (0, jsx_runtime_1.jsx)("circle", { className: "gh-user-location-pulse", r: "15" }), (0, jsx_runtime_1.jsx)("circle", { className: "gh-user-location-dot", r: "6", vectorEffect: "non-scaling-stroke" })] }), orderedLayers.map(layer => layer.data.features.map((feature, featureIndex) => {
                                 const isSelected = selected?.layer.id === layer.id && selected.featureIndex === featureIndex;
                                 const select = (event) => {
                                     event.stopPropagation();
@@ -959,7 +1837,7 @@ window.__ModuleLoader__.load({
                                         isSelected ? 'is-selected' : '',
                                         highlightedLayerIds.has(layer.id) ? 'is-step-highlighted' : '',
                                     ].filter(Boolean).join(' '),
-                                    opacity: layer.opacity,
+                                    opacity: displayOpacity(layer),
                                     stroke: layer.style.color,
                                     strokeWidth: isSelected ? layer.style.lineWidth + 2.4 : layer.style.lineWidth,
                                     vectorEffect: 'non-scaling-stroke',
@@ -975,7 +1853,21 @@ window.__ModuleLoader__.load({
                                             const [x, y] = project(point);
                                             return (0, react_1.createElement)("circle", { ...common, key: `${common.key}-${pointIndex}`, cx: x, cy: y, r: isSelected ? 7 : 5, fill: layer.style.color });
                                         })] }, common.key);
-                            })), focusFrame !== null && (0, jsx_runtime_1.jsxs)("g", { className: `gh-map-result-focus is-${runStatus}`, "aria-hidden": "true", children: [(0, jsx_runtime_1.jsx)("rect", { x: focusFrame.x, y: focusFrame.y, width: focusFrame.width, height: focusFrame.height, rx: "9", vectorEffect: "non-scaling-stroke" }), (0, jsx_runtime_1.jsx)("path", { d: `M${focusFrame.x},${focusFrame.y + 32}V${focusFrame.y}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y}H${focusFrame.x + focusFrame.width} M${focusFrame.x},${focusFrame.y + focusFrame.height - 32}V${focusFrame.y + focusFrame.height}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y + focusFrame.height}H${focusFrame.x + focusFrame.width}V${focusFrame.y + focusFrame.height - 32}`, vectorEffect: "non-scaling-stroke" })] })] }) }), layers.length === 0 && (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-empty-card", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "MAP WORKSPACE" }), (0, jsx_runtime_1.jsx)("strong", { children: "No registered layers" }), (0, jsx_runtime_1.jsx)("p", { children: "\u70B9\u51FB\u9876\u90E8\u201C\u5BFC\u5165\u6570\u636E\u201D\u4E0A\u4F20\u81EA\u5DF1\u7684\u77E2\u91CF\u6587\u4EF6\uFF0C\u6216\u5728\u53F3\u4FA7\u539F\u751F Harness \u5BF9\u8BDD\u6846\u8BA9 Agent \u53D1\u73B0\u53EF\u7528\u6570\u636E\u3002" })] }), visibleLayers.length > 0 && (0, jsx_runtime_1.jsxs)("aside", { className: `gh-map-legend${legendOpen ? ' is-open' : ''}`, "aria-label": "Map legend", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", "aria-expanded": legendOpen, onClick: () => setLegendOpen(open => !open), children: [(0, jsx_runtime_1.jsx)("span", { children: "Legend" }), (0, jsx_runtime_1.jsx)("small", { children: visibleLayers.length }), (0, jsx_runtime_1.jsx)("i", { children: legendOpen ? '−' : '+' })] }), legendOpen && (0, jsx_runtime_1.jsxs)("div", { children: [visibleLayers.slice(-7).reverse().map(layer => (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("i", { style: { background: layer.style.color } }), (0, jsx_runtime_1.jsx)("b", { title: layer.name, children: layer.name }), (0, jsx_runtime_1.jsxs)("small", { children: [Math.round(layer.opacity * 100), "%"] })] }, layer.id)), visibleLayers.length > 7 && (0, jsx_runtime_1.jsxs)("em", { children: ["+ ", visibleLayers.length - 7, " more visible layers"] })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-scale", children: [(0, jsx_runtime_1.jsx)("span", {}), " ", (0, jsx_runtime_1.jsx)("b", { children: (0, ui_model_1.mapScaleLabel)(bounds, zoom) }), (0, jsx_runtime_1.jsxs)("small", { children: [zoom.toFixed(1), "\u00D7"] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-attribution", children: [layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data', " \u00B7 local vector canvas"] }), selected !== null && (0, jsx_runtime_1.jsxs)("aside", { className: "gh-feature-inspector", "aria-label": "Feature inspection", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => onSelect(null), "aria-label": "Close feature inspection", children: "\u00D7" }), (0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "FEATURE INSPECTION" }), (0, jsx_runtime_1.jsx)("strong", { children: featureLabel(selected.feature, selected.featureIndex) }), (0, jsx_runtime_1.jsxs)("small", { children: [selected.layer.name, " \u00B7 ", selected.feature.geometry.type] }), (0, jsx_runtime_1.jsx)("dl", { children: Object.entries(selected.feature.properties ?? {}).slice(0, 8).map(([key, value]) => (0, jsx_runtime_1.jsxs)(React.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { children: key }), (0, jsx_runtime_1.jsx)("dd", { children: value === null ? 'null' : String(value) })] }, key)) })] })] }));
+                            })), focusFrame !== null && (0, jsx_runtime_1.jsxs)("g", { className: `gh-map-result-focus is-${runStatus}`, "aria-hidden": "true", children: [(0, jsx_runtime_1.jsx)("rect", { x: focusFrame.x, y: focusFrame.y, width: focusFrame.width, height: focusFrame.height, rx: "9", vectorEffect: "non-scaling-stroke" }), (0, jsx_runtime_1.jsx)("path", { d: `M${focusFrame.x},${focusFrame.y + 32}V${focusFrame.y}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y}H${focusFrame.x + focusFrame.width} M${focusFrame.x},${focusFrame.y + focusFrame.height - 32}V${focusFrame.y + focusFrame.height}H${focusFrame.x + 32} M${focusFrame.x + focusFrame.width - 32},${focusFrame.y + focusFrame.height}H${focusFrame.x + focusFrame.width}V${focusFrame.y + focusFrame.height - 32}`, vectorEffect: "non-scaling-stroke" })] })] }) }), flightPhase !== 'idle' && (0, jsx_runtime_1.jsxs)("div", { className: `gh-map-flight is-${flightPhase}`, role: "status", "aria-live": "polite", children: [(0, jsx_runtime_1.jsxs)("span", { children: ["MAP FLIGHT \u00B7 ", Math.round(flightProgress * 100), "%"] }), (0, jsx_runtime_1.jsx)("strong", { children: flightLabel }), (0, jsx_runtime_1.jsx)("i", { children: (0, jsx_runtime_1.jsx)("b", { style: { width: `${Math.round(flightProgress * 100)}%` } }) })] }), (inspectionStage === 'boundary-resolving' || inspectionStage === 'boundary-ready') && imageryTarget !== null && (0, jsx_runtime_1.jsxs)("div", { className: `gh-map-boundary-progress is-${inspectionStage === 'boundary-ready' ? 'ready' : 'resolving'}`, role: "status", "aria-live": "polite", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-inspection-spinner", "aria-hidden": "true", children: [(0, jsx_runtime_1.jsx)("i", {}), (0, jsx_runtime_1.jsx)("i", {}), (0, jsx_runtime_1.jsx)("i", {})] }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsxs)("small", { children: ["ADMINISTRATIVE BOUNDARY \u00B7 ", inspectionStage === 'boundary-ready' ? 'READY' : 'RESOLVING'] }), (0, jsx_runtime_1.jsx)("strong", { children: inspectionStage === 'boundary-ready' ? '行政区边界解析完成' : '正在解析行政区边界' }), (0, jsx_runtime_1.jsxs)("em", { children: [analysisPlace?.label ?? imageryTarget.query ?? '目标区域', analysisPlace?.cache_provenance ? ' · 真实边界缓存' : ''] })] }), (0, jsx_runtime_1.jsx)("b", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: inspectionStage === 'boundary-ready' ? '100%' : '58%' } }) })] }), inspectionStage === 'inspection' && imageryTarget !== null && imageryTarget.status !== 'failed' && (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-inspection-progress", role: "status", "aria-live": "polite", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-inspection-spinner", "aria-hidden": "true", children: [(0, jsx_runtime_1.jsx)("i", {}), (0, jsx_runtime_1.jsx)("i", {}), (0, jsx_runtime_1.jsx)("i", {})] }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsxs)("small", { children: ["IMAGERY INSPECTION \u00B7 ", Math.round(inspectionDisplayProgress * 100), "%"] }), (0, jsx_runtime_1.jsx)("strong", { children: "\u6B63\u5728\u6267\u884C\u533A\u5185\u50CF\u7D20\u5DE1\u68C0\u4E0E\u8499\u7248\u751F\u6210" }), (0, jsx_runtime_1.jsx)("em", { children: analysisPlace?.label ?? imageryTarget.query ?? '当前地图视野' })] }), (0, jsx_runtime_1.jsx)("b", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: `${Math.round(inspectionDisplayProgress * 100)}%` } }) })] }), (inspectionStage === 'inspection' || inspectionStage === 'result') && imageryTarget?.status === 'failed' && (0, jsx_runtime_1.jsx)("div", { className: "gh-map-inspection-progress is-failed", role: "alert", children: (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("small", { children: "IMAGERY INSPECTION \u00B7 FAILED" }), (0, jsx_runtime_1.jsx)("strong", { children: "\u5F71\u50CF\u5DE1\u68C0\u672A\u5B8C\u6210" }), (0, jsx_runtime_1.jsx)("em", { children: imageryTarget.error ?? imageryTarget.message })] }) }), presentationMode && runStatus === 'ready' && layers.length === 0 && activeInspection === null && imageryTarget === null && (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-empty-card", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "PRESENTATION VIEW" }), (0, jsx_runtime_1.jsx)("strong", { children: "\u8F93\u5165\u4E00\u4E2A\u5730\u70B9\uFF0C\u5F00\u59CB\u5F71\u50CF\u5DE1\u68C0" }), (0, jsx_runtime_1.jsx)("p", { children: "\u6F14\u793A\u6A21\u5F0F\u4F7F\u7528\u516C\u5F00\u8D77\u59CB\u89C6\u91CE\uFF0C\u9690\u85CF\u7535\u8111\u5B9A\u4F4D\u3002\u5206\u6790\u4ECD\u7531\u771F\u5B9E Agent \u548C\u5DE5\u5177\u6267\u884C\u3002" })] }), !presentationMode && runStatus === 'ready' && layers.length === 0 && activeInspection === null && imageryTarget === null && (0, jsx_runtime_1.jsxs)("div", { className: `gh-map-empty-card is-location-${locationStatus}`, children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: locationStatus === 'ready' ? 'CURRENT LOCATION' : 'MAP WORKSPACE' }), (0, jsx_runtime_1.jsx)("strong", { children: locationStatus === 'ready' ? '已定位到当前位置' : locationStatus === 'requesting' || locationStatus === 'checking' ? '正在准备定位…' : '新会话尚无地图数据' }), (0, jsx_runtime_1.jsx)("p", { children: locationStatus === 'ready' && userLocation !== null
+                                ? `${(0, browser_location_1.locationAccuracyLabel)(userLocation.accuracy)} · 坐标只用于当前浏览器地图，不会自动发送给 Agent。`
+                                : locationStatus === 'denied'
+                                    ? '定位权限已关闭。请在浏览器中允许位置权限，并确认 Windows「隐私和安全性 → 位置」已开启。'
+                                    : locationStatus === 'unavailable'
+                                        ? '系统暂时无法确定位置。请开启 Windows「隐私和安全性 → 位置」后重试。'
+                                        : locationStatus === 'timeout'
+                                            ? '定位请求超时。请开启 Windows「隐私和安全性 → 位置」后重试。'
+                                            : locationStatus === 'unsupported'
+                                                ? '当前浏览器不支持定位，可继续导入数据或让 Agent 发现数据。'
+                                                : '允许定位后，空会话会显示当前位置；分析数据加载后地图会自动切换到数据范围。' }), (locationStatus === 'prompt' || locationStatus === 'denied' || locationStatus === 'unavailable' || locationStatus === 'timeout') && (0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => { void locateCurrentPosition(); }, children: "\u5B9A\u4F4D\u5230\u5F53\u524D\u4F4D\u7F6E" })] }), (visibleLayers.length > 0 || activeInspection?.overlay_layer.visible) && (0, jsx_runtime_1.jsxs)("aside", { className: `gh-map-legend${legendOpen ? ' is-open' : ''}`, "aria-label": "Map legend", children: [(0, jsx_runtime_1.jsxs)("button", { type: "button", "aria-expanded": legendOpen, onClick: () => setLegendOpen(open => !open), children: [(0, jsx_runtime_1.jsx)("span", { children: "Legend" }), (0, jsx_runtime_1.jsx)("small", { children: visibleLayers.length + (activeInspection?.overlay_layer.visible ? 1 : 0) }), (0, jsx_runtime_1.jsx)("i", { children: legendOpen ? '−' : '+' })] }), legendOpen && (0, jsx_runtime_1.jsxs)("div", { children: [activeInspection?.overlay_layer.visible && (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("i", { className: "is-raster-overlay" }), (0, jsx_runtime_1.jsx)("b", { title: activeInspection.overlay_layer.name, children: activeInspection.overlay_layer.name }), (0, jsx_runtime_1.jsxs)("small", { children: [Math.round(activeInspection.overlay_layer.opacity * 100), "%"] })] }, activeInspection.overlay_layer.layer_id), visibleLayers.slice(-6).reverse().map(layer => (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("i", { style: { background: layer.style.color } }), (0, jsx_runtime_1.jsx)("b", { title: layer.name, children: layer.name }), (0, jsx_runtime_1.jsxs)("small", { children: [Math.round(displayOpacity(layer) * 100), "%"] })] }, layer.id)), visibleLayers.length > 6 && (0, jsx_runtime_1.jsxs)("em", { children: ["+ ", visibleLayers.length - 6, " more visible layers"] })] })] }), inspectionRevealed && activeInspection !== null && (0, jsx_runtime_1.jsxs)("aside", { className: "gh-imagery-inspection-card", "aria-label": "Satellite visual inspection result", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("small", { children: "VISUAL SCREENING" }), (0, jsx_runtime_1.jsxs)("b", { children: [analysisPlace?.label ?? '卫星影像', " \u00B7 \u89C6\u89C9\u521D\u7B5B"] })] }), (0, jsx_runtime_1.jsx)("em", { children: "RGB \u542F\u53D1\u5F0F" })] }), (0, jsx_runtime_1.jsx)("div", { children: activeInspection.categories.map(item => (0, jsx_runtime_1.jsxs)("span", { className: `is-${item.category}`, children: [(0, jsx_runtime_1.jsx)("i", {}), (0, jsx_runtime_1.jsx)("small", { children: { water: '水体外观', vegetation: '植被外观', built_up: '建成区外观', bare_ground: '裸地外观' }[item.category] ?? item.category }), (0, jsx_runtime_1.jsxs)("b", { children: [(item.pixel_ratio * 100).toFixed(1), "%"] }), (0, jsx_runtime_1.jsxs)("em", { children: [Math.round(item.heuristic_confidence * 100), "% conf."] })] }, item.category)) }), (0, jsx_runtime_1.jsxs)("footer", { children: [activeInspection.analysis_scope?.boundary_clipped
+                                    ? `${activeInspection.analysis_scope.analysis_pixel_count.toLocaleString()} 区内像素 · ${analysisPlace?.cache_provenance ? '真实边界缓存裁剪' : '行政边界裁剪'} · z${activeInspection.tile_zoom}`
+                                    : `${activeInspection.pixel_width}×${activeInspection.pixel_height} px · z${activeInspection.tile_zoom}`, " \u00B7 \u4EC5\u89C6\u89C9\u521D\u7B5B\uFF0C\u4E0D\u4EE3\u8868\u5B9E\u6D4B\u9762\u79EF"] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-map-scale", children: [(0, jsx_runtime_1.jsx)("span", {}), " ", (0, jsx_runtime_1.jsx)("b", { children: (0, ui_model_1.mapScaleLabel)(bounds, zoom) }), (0, jsx_runtime_1.jsxs)("small", { children: [zoom.toFixed(1), "\u00D7"] })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-map-attribution", children: canvasMode === 'satellite'
+                        ? `卫星影像 © Esri · ${administrativeBoundary === null ? '' : '边界 © OpenStreetMap contributors · ODbL · '}${rasterHealth === 'ready' ? '在线' : rasterHealth === 'unavailable' ? '不可用，已回退' : '加载中'}`
+                        : `${layers.length > 0 ? 'Canonical Agent workspace' : 'Agent workspace awaiting data'} · local vector canvas` }), selected !== null && (0, jsx_runtime_1.jsxs)("aside", { className: "gh-feature-inspector", "aria-label": "Feature inspection", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", onClick: () => onSelect(null), "aria-label": "Close feature inspection", children: "\u00D7" }), (0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "FEATURE INSPECTION" }), (0, jsx_runtime_1.jsx)("strong", { children: featureLabel(selected.feature, selected.featureIndex) }), (0, jsx_runtime_1.jsxs)("small", { children: [selected.layer.name, " \u00B7 ", selected.feature.geometry.type] }), (0, jsx_runtime_1.jsx)("dl", { children: Object.entries(selected.feature.properties ?? {}).slice(0, 8).map(([key, value]) => (0, jsx_runtime_1.jsxs)(React.Fragment, { children: [(0, jsx_runtime_1.jsx)("dt", { children: key }), (0, jsx_runtime_1.jsx)("dd", { children: value === null ? 'null' : String(value) })] }, key)) })] })] }));
     }
     function readFileAsBase64(file, onProgress) {
         return new Promise((resolvePromise, rejectPromise) => {
@@ -1115,11 +2007,18 @@ window.__ModuleLoader__.load({
                                                 layerWorkspace.update(sessionId, current => (0, layer_registry_1.resetLayerStyle)(current, layer.id));
                                             }, children: "\u91CD\u7F6E" })] })] })] })] }, layer.id));
     }
-    function GeoHarnessLayerPanel({ onClose, selectedLayerId, onInspect, onPreference, layerStatuses, statisticsCount, }) {
+    function renderRasterOverlayRow(inspection, onPreference) {
+        const layer = inspection.overlay_layer;
+        return ((0, jsx_runtime_1.jsxs)("article", { className: "gh-layer-row gh-raster-layer-row", "data-layer-id": layer.layer_id, "data-layer-name": layer.name, children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: layer.visible ? 'gh-layer-toggle is-visible' : 'gh-layer-toggle', "aria-label": `${layer.visible ? 'Hide' : 'Show'} ${layer.name}`, "aria-pressed": layer.visible, onClick: () => onPreference({ visible: !layer.visible }), children: (0, jsx_runtime_1.jsx)("span", { className: "is-raster-overlay" }) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-meta", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-open gh-raster-layer-meta", children: [(0, jsx_runtime_1.jsxs)("strong", { children: [layer.name, (0, jsx_runtime_1.jsx)("em", { className: "gh-output-check", children: "\u2713" })] }), (0, jsx_runtime_1.jsxs)("small", { children: ["Raster Overlay \u00B7 ", inspection.pixel_width, "\u00D7", inspection.pixel_height, " px"] }), (0, jsx_runtime_1.jsxs)("small", { children: [inspection.resolved_place?.label ?? 'current viewport', " \u00B7 inspect_satellite_view"] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-raster-opacity-control", children: [(0, jsx_runtime_1.jsx)("button", { type: "button", "aria-label": `Decrease ${layer.name} opacity`, disabled: layer.opacity <= 0, onClick: () => onPreference({ opacity: Math.max(0, Math.round((layer.opacity - 0.1) * 100) / 100) }), children: "\u2212" }), (0, jsx_runtime_1.jsx)("input", { type: "range", min: "0", max: "1", step: "0.01", value: layer.opacity, "aria-label": `${layer.name} opacity`, onChange: event => onPreference({ opacity: Number(event.currentTarget.value) }) }), (0, jsx_runtime_1.jsxs)("output", { children: [Math.round(layer.opacity * 100), "%"] }), (0, jsx_runtime_1.jsx)("button", { type: "button", "aria-label": `Increase ${layer.name} opacity`, disabled: layer.opacity >= 1, onClick: () => onPreference({ opacity: Math.min(1, Math.round((layer.opacity + 0.1) * 100) / 100) }), children: "+" })] })] })] }, layer.layer_id));
+    }
+    function GeoHarnessLayerPanel({ onClose, selectedLayerId, onInspect, onPreference, inspection, onImageryPreference, layerStatuses, statisticsCount, }) {
         const workspace = useLayerWorkspace();
         const groups = (0, ui_model_1.groupWorkspaceLayers)(workspace.layers);
-        const visibleCount = workspace.layers.filter(layer => layer.visible).length;
-        return ((0, jsx_runtime_1.jsxs)("section", { className: "gh-sidebar-layers gh-map-layer-panel", "aria-label": "Layer panel", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-sidebar-layer-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Layers" }), (0, jsx_runtime_1.jsx)("small", { children: "Verified Agent workspace" })] }), (0, jsx_runtime_1.jsxs)("span", { className: "gh-layer-panel-actions", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-panel-count", children: workspace.layers.length }), (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-layer-panel-close", "aria-label": "\u5173\u95ED\u56FE\u5C42\u9762\u677F", onClick: onClose, children: "\u00D7" })] })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Workspace input data" }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-list", children: groups.input.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference)) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-section-label", children: [(0, jsx_runtime_1.jsx)("span", { children: "Intermediate layers" }), (0, jsx_runtime_1.jsx)("small", { children: groups.intermediate.length })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list", "aria-label": "Task output layers", children: [groups.intermediate.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "\u5F53\u524D\u6CA1\u6709\u88AB\u4E0B\u6E38\u7EE7\u7EED\u4F7F\u7528\u7684\u4E2D\u95F4\u56FE\u5C42\u3002" }), groups.intermediate.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-section-label", children: [(0, jsx_runtime_1.jsx)("span", { children: "Final result layers" }), (0, jsx_runtime_1.jsx)("small", { children: groups.final.length })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list gh-final-output-list", "aria-label": "Final result layers", children: [groups.final.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "Agent \u5B8C\u6210\u7A7A\u95F4 Tool \u540E\uFF0Clineage \u53F6\u5B50\u56FE\u5C42\u4F1A\u663E\u793A\u5728\u8FD9\u91CC\u3002" }), groups.final.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-statistics-summary", children: [(0, jsx_runtime_1.jsx)("span", { children: "\u2211" }), (0, jsx_runtime_1.jsxs)("b", { children: [statisticsCount, " structured statistics"] }), (0, jsx_runtime_1.jsx)("small", { children: "\u89C1\u53F3\u4FA7 Result Center" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-footer", children: [(0, jsx_runtime_1.jsxs)("span", { children: [visibleCount, " visible"] }), (0, jsx_runtime_1.jsx)("span", { children: workspace.layers[0]?.crs ?? 'CRS —' })] })] }));
+        const totalLayerCount = workspace.layers.length + (inspection === null ? 0 : 1);
+        const visibleCount = workspace.layers.filter(layer => layer.visible).length + (inspection?.overlay_layer.visible ? 1 : 0);
+        return ((0, jsx_runtime_1.jsxs)("section", { className: "gh-sidebar-layers gh-map-layer-panel", "aria-label": "Layer panel", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-sidebar-layer-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Layers" }), (0, jsx_runtime_1.jsx)("small", { children: "Verified Agent workspace" })] }), (0, jsx_runtime_1.jsxs)("span", { className: "gh-layer-panel-actions", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-panel-count", children: totalLayerCount }), (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-layer-panel-close", "aria-label": "\u5173\u95ED\u56FE\u5C42\u9762\u677F", onClick: onClose, children: "\u00D7" })] })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-section-label", children: "Workspace input data" }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-list", children: groups.input.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference)) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-section-label", children: [(0, jsx_runtime_1.jsx)("span", { children: "Raster analysis layers" }), (0, jsx_runtime_1.jsx)("small", { children: inspection === null ? 0 : 1 })] }), (0, jsx_runtime_1.jsx)("div", { className: "gh-layer-list gh-raster-layer-list", "aria-label": "Raster analysis layers", children: inspection === null
+                        ? (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "\u5F71\u50CF\u5DE1\u68C0\u5B8C\u6210\u540E\uFF0C\u8499\u7248\u4F1A\u4F5C\u4E3A Raster Layer \u663E\u793A\u5728\u8FD9\u91CC\u3002" })
+                        : renderRasterOverlayRow(inspection, onImageryPreference) }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-section-label", children: [(0, jsx_runtime_1.jsx)("span", { children: "Intermediate layers" }), (0, jsx_runtime_1.jsx)("small", { children: groups.intermediate.length })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list", "aria-label": "Task output layers", children: [groups.intermediate.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "\u5F53\u524D\u6CA1\u6709\u88AB\u4E0B\u6E38\u7EE7\u7EED\u4F7F\u7528\u7684\u4E2D\u95F4\u56FE\u5C42\u3002" }), groups.intermediate.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-section-label", children: [(0, jsx_runtime_1.jsx)("span", { children: "Final result layers" }), (0, jsx_runtime_1.jsx)("small", { children: groups.final.length })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-list gh-output-list gh-final-output-list", "aria-label": "Final result layers", children: [groups.final.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-output-empty", children: "Agent \u5B8C\u6210\u7A7A\u95F4 Tool \u540E\uFF0Clineage \u53F6\u5B50\u56FE\u5C42\u4F1A\u663E\u793A\u5728\u8FD9\u91CC\u3002" }), groups.final.map(layer => renderLayerRow(workspace.sessionId ?? '', layer, workspace.highlightedLayerIds, selectedLayerId, onInspect, onPreference, layerStatuses[layer.id] ?? 'success'))] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-statistics-summary", children: [(0, jsx_runtime_1.jsx)("span", { children: "\u2211" }), (0, jsx_runtime_1.jsxs)("b", { children: [statisticsCount, " structured statistics"] }), (0, jsx_runtime_1.jsx)("small", { children: "\u89C1\u53F3\u4FA7 Result Center" })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-layer-footer", children: [(0, jsx_runtime_1.jsxs)("span", { children: [visibleCount, " visible"] }), (0, jsx_runtime_1.jsx)("span", { children: workspace.layers[0]?.crs ?? 'CRS —' })] })] }));
     }
     function attributeValue(value) {
         if (value === null || value === undefined)
@@ -1239,6 +2138,7 @@ window.__ModuleLoader__.load({
         const [agentStream, setAgentStream] = React.useState([]);
         const [agentAnswer, setAgentAnswer] = React.useState('');
         const [workspaceStatus, setWorkspaceStatus] = React.useState('awaiting Agent');
+        const [workspaceReady, setWorkspaceReady] = React.useState(false);
         const [layerPanelOpen, setLayerPanelOpen] = React.useState(false);
         const [importCapabilities, setImportCapabilities] = React.useState({
             schema_version: '1.0',
@@ -1258,6 +2158,8 @@ window.__ModuleLoader__.load({
         const [layerDetailsError, setLayerDetailsError] = React.useState(null);
         const [runManifests, setRunManifests] = React.useState([]);
         const [resultCenter, setResultCenter] = React.useState(null);
+        const [imageryInspection, setImageryInspection] = React.useState(null);
+        const [imageryTarget, setImageryTarget] = React.useState(null);
         const [downloadingAsset, setDownloadingAsset] = React.useState(null);
         const [downloadError, setDownloadError] = React.useState(null);
         const fileInput = React.useRef(null);
@@ -1271,11 +2173,10 @@ window.__ModuleLoader__.load({
         const bootstrapSession = React.useRef(null);
         const lastRunManifestKey = React.useRef(null);
         const agentScroll = React.useRef(null);
-        const previousLayerCount = React.useRef(0);
+        const followAgentStream = React.useRef(true);
         const layerState = useLayerWorkspace();
         const layers = layerState.sessionId === sessionId ? layerState.layers : [];
         React.useEffect(() => {
-            previousLayerCount.current = 0;
             activeGoalSeq.current = null;
             lastAutoStepId.current = null;
             lastRunStatus.current = 'ready';
@@ -1283,6 +2184,7 @@ window.__ModuleLoader__.load({
             lastWorkspaceSession.current = null;
             bootstrapSession.current = null;
             setLayerPanelOpen(false);
+            setWorkspaceReady(false);
             setImportDraft(null);
             setImportPhase('idle');
             setImportProgress(0);
@@ -1294,14 +2196,19 @@ window.__ModuleLoader__.load({
             setFocusedLayerId(null);
             setRunManifests([]);
             setResultCenter(null);
+            setImageryInspection(null);
+            setImageryTarget(null);
             setDownloadingAsset(null);
             setDownloadError(null);
             lastRunManifestKey.current = null;
         }, [sessionId]);
         React.useEffect(() => {
-            const update = () => setPresentationMode(document.fullscreenElement !== null);
-            document.addEventListener('fullscreenchange', update);
-            return () => document.removeEventListener('fullscreenchange', update);
+            const exit = (event) => {
+                if (event.key === 'Escape')
+                    setPresentationMode(false);
+            };
+            document.addEventListener('keydown', exit);
+            return () => document.removeEventListener('keydown', exit);
         }, []);
         // Hydrate canonical state independently from Session history. Workspace is
         // restored first so a completed conversation does not wait behind Result or
@@ -1326,15 +2233,21 @@ window.__ModuleLoader__.load({
                     if (!disposed)
                         setWorkspaceStatus(error instanceof Error ? error.message : String(error));
                 }
-                const [capabilities, runs] = await Promise.all([
+                finally {
+                    if (!disposed)
+                        setWorkspaceReady(true);
+                }
+                const [capabilities, runs, inspection] = await Promise.all([
                     agent.importCapabilities().catch(() => null),
                     agent.runs().catch(() => []),
+                    agent.imageryInspection().catch(() => null),
                 ]);
                 if (disposed)
                     return;
                 if (capabilities !== null)
                     setImportCapabilities(capabilities);
                 setRunManifests(runs);
+                setImageryInspection(inspection);
                 const latest = runs.at(-1);
                 if (latest !== undefined) {
                     try {
@@ -1356,21 +2269,55 @@ window.__ModuleLoader__.load({
                     bootstrapSession.current = null;
             };
         }, [agent, sessionId]);
-        React.useEffect(() => {
-            if (previousLayerCount.current === 0 && layers.length > 0)
-                setLayerPanelOpen(true);
-            previousLayerCount.current = layers.length;
-        }, [layers.length]);
         const streamRevision = agentStream.map(item => `${item.id}:${item.status}:${item.text.length}`).join('|');
         React.useEffect(() => {
             const panel = agentScroll.current;
             if (panel === null)
                 return;
-            panel.scrollTop = runStatus === 'ready' ? 0 : panel.scrollHeight;
+            if (runStatus === 'ready') {
+                panel.scrollTop = 0;
+                followAgentStream.current = true;
+            }
+            else if (followAgentStream.current) {
+                const stream = panel.querySelector('.gh-agent-result');
+                if (stream)
+                    panel.scrollTop = Math.max(0, stream.offsetTop + stream.offsetHeight - panel.clientHeight - panel.offsetTop + 12);
+            }
         }, [runStatus, streamRevision, taskSteps.length]);
+        React.useEffect(() => {
+            const root = shell.current?.closest('[data-conversation-scroll]');
+            if (!root)
+                return;
+            let frame = 0;
+            const update = () => {
+                cancelAnimationFrame(frame);
+                frame = requestAnimationFrame(() => {
+                    const seat = root.querySelector('[data-composer-seat]');
+                    const height = Math.ceil(seat?.getBoundingClientRect().height ?? 190);
+                    root.style.setProperty('--gh-composer-reserve', `${height + 30}px`);
+                    const width = root.clientWidth;
+                    root.style.setProperty('--gh-agent-column-width', `${width <= 760 ? width - 24 : Math.min(480, Math.max(320, Math.round(width * .32)))}px`);
+                });
+            };
+            const resize = new ResizeObserver(update);
+            resize.observe(root);
+            const seat = root.querySelector('[data-composer-seat]');
+            if (seat)
+                resize.observe(seat);
+            const mutations = new MutationObserver(() => {
+                const currentSeat = root.querySelector('[data-composer-seat]');
+                if (currentSeat)
+                    resize.observe(currentSeat);
+                update();
+            });
+            mutations.observe(root, { childList: true, subtree: true });
+            update();
+            return () => { resize.disconnect(); mutations.disconnect(); cancelAnimationFrame(frame); root.style.removeProperty('--gh-composer-reserve'); root.style.removeProperty('--gh-agent-column-width'); };
+        }, [sessionId]);
         React.useEffect(() => {
             layerWorkspace.activate(sessionId);
             let disposed = false;
+            let resourcesBusy = false;
             let timer;
             const refresh = async () => {
                 try {
@@ -1380,6 +2327,7 @@ window.__ModuleLoader__.load({
                     const humanGoal = (0, agent_session_1.latestHumanGoal)(history.events);
                     let workspaceSeq = -1;
                     let runManifestKey = 'empty';
+                    let hasRunningTools = false;
                     setRunHistoryCount((0, agent_session_1.humanGoalCount)(history.events));
                     if (humanGoal === null) {
                         setRunStatus('ready');
@@ -1397,9 +2345,11 @@ window.__ModuleLoader__.load({
                             lastAutoStepId.current = null;
                             setSelectedStepId(null);
                             setResultCenter(null);
+                            setImageryTarget(null);
                         }
                         setGoal(humanGoal.text);
                         const projection = (0, agent_session_1.projectAgentHistory)(history.events, humanGoal.seq);
+                        hasRunningTools = projection.steps.some(step => step.status === 'running');
                         workspaceSeq = projection.maxSeq;
                         runManifestKey = `${humanGoal.seq}:${projection.steps.map(step => `${step.id}:${step.status}`).join('|')}:${projection.finished}`;
                         const status = projection.finished ? (projection.succeeded ? 'success' : 'failed') : 'running';
@@ -1408,6 +2358,31 @@ window.__ModuleLoader__.load({
                         setAgentAnswer(projection.answer);
                         setRunStatus(status);
                         setRunError(projection.error);
+                        const imageryStep = [...projection.steps].reverse().find(step => step.name === 'inspect_satellite_view');
+                        if (imageryStep?.status === 'running') {
+                            const target = await agent.imageryTarget().catch(() => null);
+                            const expectedStepId = typeof imageryStep.arguments.step_id === 'string'
+                                ? imageryStep.arguments.step_id
+                                : imageryStep.id;
+                            if (!disposed && target !== null && target.step_id === expectedStepId) {
+                                setImageryTarget(target);
+                                setWorkspaceStatus(target.message);
+                            }
+                        }
+                        else if (imageryStep?.status === 'failed') {
+                            const target = await agent.imageryTarget().catch(() => null);
+                            const expectedStepId = typeof imageryStep.arguments.step_id === 'string'
+                                ? imageryStep.arguments.step_id
+                                : imageryStep.id;
+                            if (!disposed && target !== null && target.step_id === expectedStepId)
+                                setImageryTarget({
+                                    ...target,
+                                    status: 'failed',
+                                    phase: 'failed',
+                                    message: imageryStep.summary ?? '影像巡检未完成',
+                                    error: imageryStep.summary ?? target.error,
+                                });
+                        }
                         const activeStep = projection.steps.find(step => step.status === 'running');
                         if (activeStep !== undefined && lastAutoStepId.current !== activeStep.id) {
                             lastAutoStepId.current = activeStep.id;
@@ -1420,57 +2395,72 @@ window.__ModuleLoader__.load({
                         }
                         lastRunStatus.current = status;
                     }
-                    if (bootstrapSession.current !== sessionId && lastRunManifestKey.current !== runManifestKey) {
-                        try {
-                            const runs = await agent.runs();
-                            if (disposed)
-                                return;
-                            setRunManifests(runs);
-                            const current = runs.find(run => run.user_event_seq === humanGoal?.seq);
-                            let resultReady = humanGoal === null;
-                            if (current !== undefined) {
-                                try {
-                                    const result = await agent.result(current.run_id);
-                                    if (!disposed)
-                                        setResultCenter(result);
-                                    resultReady = true;
+                    // Canonical result/workspace reads can queue behind a long-running Tool.
+                    // Never await those reads in the native history + progress polling loop.
+                    const refreshResources = async () => {
+                        if (bootstrapSession.current !== sessionId && lastRunManifestKey.current !== runManifestKey) {
+                            try {
+                                const runs = await agent.runs();
+                                if (disposed)
+                                    return;
+                                setRunManifests(runs);
+                                const current = runs.find(run => run.user_event_seq === humanGoal?.seq);
+                                let resultReady = humanGoal === null;
+                                if (current !== undefined) {
+                                    try {
+                                        const result = await agent.result(current.run_id);
+                                        if (!disposed)
+                                            setResultCenter(result);
+                                        resultReady = true;
+                                    }
+                                    catch {
+                                        // The next polling cycle retries while the canonical result projection catches up.
+                                    }
                                 }
-                                catch {
-                                    // The next polling cycle retries while the canonical result projection catches up.
+                                const inspection = await agent.imageryInspection().catch(() => null);
+                                if (!disposed && inspection !== null) {
+                                    setImageryInspection(inspection);
+                                    const target = await agent.imageryTarget().catch(() => null);
+                                    if (!disposed && target !== null)
+                                        setImageryTarget(target);
+                                }
+                                if (resultReady && (humanGoal === null || (current !== undefined
+                                    && (current.max_event_seq === workspaceSeq || current.status !== 'running')))) {
+                                    lastRunManifestKey.current = runManifestKey;
                                 }
                             }
-                            if (resultReady && (humanGoal === null || (current !== undefined
-                                && (current.max_event_seq === workspaceSeq || current.status !== 'running')))) {
-                                lastRunManifestKey.current = runManifestKey;
+                            catch {
+                                // Native stream remains usable while a just-appended Run projection catches up.
                             }
                         }
-                        catch {
-                            // Native stream remains usable while a just-appended Run projection catches up.
-                        }
-                    }
-                    if (bootstrapSession.current === sessionId) {
-                        lastWorkspaceSeq.current = workspaceSeq;
-                    }
-                    else if (lastWorkspaceSession.current !== sessionId
-                        || (lastWorkspaceSeq.current !== null && lastWorkspaceSeq.current !== workspaceSeq)) {
-                        try {
-                            const workspace = await agent.workspace();
-                            if (disposed)
-                                return;
-                            if (workspace.status !== 'ready')
-                                throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed');
-                            layerWorkspace.project(sessionId, workspace.layers, workspace.preferences ?? {});
+                        if (bootstrapSession.current === sessionId) {
                             lastWorkspaceSeq.current = workspaceSeq;
-                            lastWorkspaceSession.current = sessionId;
-                            setWorkspaceStatus(`${workspace.layers.length} verified layers`);
                         }
-                        catch (error) {
-                            if (!disposed)
-                                setWorkspaceStatus(error instanceof Error ? error.message : String(error));
+                        else if (lastWorkspaceSession.current !== sessionId
+                            || (lastWorkspaceSeq.current !== null && lastWorkspaceSeq.current !== workspaceSeq)) {
+                            try {
+                                const workspace = await agent.workspace();
+                                if (disposed)
+                                    return;
+                                if (workspace.status !== 'ready')
+                                    throw new Error(workspace.issues.join('; ') || 'Agent workspace verification failed');
+                                layerWorkspace.project(sessionId, workspace.layers, workspace.preferences ?? {});
+                                lastWorkspaceSeq.current = workspaceSeq;
+                                lastWorkspaceSession.current = sessionId;
+                                setWorkspaceStatus(`${workspace.layers.length} verified layers`);
+                            }
+                            catch (error) {
+                                if (!disposed)
+                                    setWorkspaceStatus(error instanceof Error ? error.message : String(error));
+                            }
                         }
-                    }
-                    else if (lastWorkspaceSeq.current === null) {
-                        lastWorkspaceSeq.current = workspaceSeq;
+                        else if (lastWorkspaceSeq.current === null) {
+                            lastWorkspaceSeq.current = workspaceSeq;
+                        }
+                    };
+                    if (!hasRunningTools && !resourcesBusy) {
+                        resourcesBusy = true;
+                        void refreshResources().catch(() => { }).finally(() => { resourcesBusy = false; });
                     }
                 }
                 catch (error) {
@@ -1530,6 +2520,29 @@ window.__ModuleLoader__.load({
         const importBusy = importPhase === 'reading' || importPhase === 'uploading';
         const inspectedLayer = inspectedLayerId === null ? null : layers.find(layer => layer.id === inspectedLayerId) ?? null;
         const recentRunManifests = runManifests.slice(-3).reverse();
+        const syncImageryView = React.useCallback(async (view) => {
+            try {
+                await agent.saveImageryView(view);
+                setWorkspaceStatus('satellite view ready for local Agent inspection');
+            }
+            catch (error) {
+                setWorkspaceStatus(error instanceof Error ? error.message : String(error));
+                throw error;
+            }
+        }, [agent]);
+        const persistImageryPreference = React.useCallback((preference) => {
+            const current = imageryInspection;
+            if (current === null)
+                return;
+            setImageryInspection({
+                ...current,
+                overlay_layer: { ...current.overlay_layer, ...preference },
+            });
+            void agent.setImageryPreference(current.inspection_id, preference).catch(error => {
+                setImageryInspection(value => value?.inspection_id === current.inspection_id ? current : value);
+                setWorkspaceStatus(error instanceof Error ? error.message : String(error));
+            });
+        }, [agent, imageryInspection]);
         React.useEffect(() => {
             if (inspectedLayerId !== null && inspectedLayer === null) {
                 setInspectedLayerId(null);
@@ -1572,12 +2585,9 @@ window.__ModuleLoader__.load({
             }
         };
         const togglePresentationMode = async () => {
-            if (document.fullscreenElement !== null) {
-                await document.exitFullscreen();
-                return;
-            }
-            const target = shell.current?.closest('[data-conversation-scroll]') ?? shell.current;
-            await target?.requestFullscreen();
+            // Keep the native composer and its model popovers in the same document.
+            // Browser fullscreen can silently exit on input focus in embedded browsers.
+            setPresentationMode(current => !current);
         };
         const refreshCanonicalWorkspace = async () => {
             const workspace = await agent.workspace();
@@ -1733,7 +2743,7 @@ window.__ModuleLoader__.load({
                 return '…';
             return String(index + 1);
         };
-        return ((0, jsx_runtime_1.jsxs)("main", { ref: shell, className: `gh-shell${presentationMode ? ' is-presentation' : ''}`, "data-geoharness-plugin": "loaded", "data-geoharness-phase": "10", "data-geoharness-agent": "native", "data-conversation-composer-overlay": "", children: [(0, jsx_runtime_1.jsxs)("header", { className: "gh-topbar", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-brand", children: [(0, jsx_runtime_1.jsx)(BrandMark, {}), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("strong", { children: "GeoHarness" }), (0, jsx_runtime_1.jsx)("small", { children: "Agentic GIS \u00B7 local workspace" })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-launcher", children: [importPhase !== 'idle' && (0, jsx_runtime_1.jsxs)("span", { className: `gh-import-summary is-${importPhase}`, children: [importPhase === 'success' ? '✓' : importBusy ? '…' : '!', " ", importMessage] }), (0, jsx_runtime_1.jsxs)("span", { className: `gh-status is-${runStatus}`, children: [(0, jsx_runtime_1.jsx)("i", {}), " ", runStatus === 'running' ? `Agent 正在执行 · ${progress}%` : runStatus === 'failed' ? 'Agent 执行失败' : runStatus === 'success' ? 'Agent 运行完成' : 'Native Harness Agent', " \u00B7 ", layers.length, " layers \u00B7 ", featureCount, " features"] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-presentation-button", onClick: () => {
+        return ((0, jsx_runtime_1.jsxs)("main", { ref: shell, className: `gh-shell${presentationMode ? ' is-presentation' : ''}`, "data-geoharness-plugin": "loaded", "data-geoharness-session": sessionId, "data-geoharness-phase": "10", "data-geoharness-agent": "native", "data-conversation-composer-overlay": "", children: [(0, jsx_runtime_1.jsxs)("header", { className: "gh-topbar", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-brand", children: [(0, jsx_runtime_1.jsx)(BrandMark, {}), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("strong", { children: "GeoHarness" }), (0, jsx_runtime_1.jsx)("small", { children: "\u7A7A\u95F4\u5206\u6790\uFF0C\u7531\u5BF9\u8BDD\u5F00\u59CB" })] })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-launcher", children: [importPhase !== 'idle' && (0, jsx_runtime_1.jsxs)("span", { className: `gh-import-summary is-${importPhase}`, children: [importPhase === 'success' ? '✓' : importBusy ? '…' : '!', " ", importMessage] }), (0, jsx_runtime_1.jsxs)("span", { className: `gh-status is-${runStatus}`, children: [(0, jsx_runtime_1.jsx)("i", {}), " ", runStatus === 'running' ? `Agent 正在执行 · ${progress}%` : runStatus === 'failed' ? 'Agent 执行失败' : runStatus === 'success' ? 'Agent 运行完成' : 'Native Harness Agent', " \u00B7 ", layers.length + (imageryInspection === null ? 0 : 1), " layers \u00B7 ", featureCount, " features"] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-presentation-button", onClick: () => {
                                         void togglePresentationMode().catch(reason => setWorkspaceStatus(reason instanceof Error ? reason.message : String(reason)));
                                     }, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: presentationMode ? '↙' : '↗' }), " ", presentationMode ? '退出演示' : '演示模式'] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-import-button", onClick: () => fileInput.current?.click(), disabled: importBusy, children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u21E7" }), " \u5BFC\u5165\u6570\u636E"] }), (0, jsx_runtime_1.jsx)("input", { ref: fileInput, className: "gh-file-input", type: "file", accept: ".geojson,.json,.zip,.gpkg,.csv", onChange: event => {
                                         const file = event.currentTarget.files?.[0];
@@ -1744,25 +2754,32 @@ window.__ModuleLoader__.load({
                                                 ? (0, jsx_runtime_1.jsx)("input", { disabled: importBusy || importPhase === 'success', value: importDraft.longitudeField, maxLength: 120, onChange: event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value }) })
                                                 : (0, jsx_runtime_1.jsxs)("select", { disabled: importBusy || importPhase === 'success', value: importDraft.longitudeField, onChange: event => setImportDraft({ ...importDraft, longitudeField: event.currentTarget.value }), children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "\u8BF7\u9009\u62E9\u5B57\u6BB5" }), importDraft.preview.fields.map(field => (0, jsx_runtime_1.jsx)("option", { value: field, children: field }, field))] })] }), (0, jsx_runtime_1.jsxs)("label", { children: ["\u7EAC\u5EA6\u5B57\u6BB5", importDraft.preview === null
                                                 ? (0, jsx_runtime_1.jsx)("input", { disabled: importBusy || importPhase === 'success', value: importDraft.latitudeField, maxLength: 120, onChange: event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value }) })
-                                                : (0, jsx_runtime_1.jsxs)("select", { disabled: importBusy || importPhase === 'success', value: importDraft.latitudeField, onChange: event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value }), children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "\u8BF7\u9009\u62E9\u5B57\u6BB5" }), importDraft.preview.fields.map(field => (0, jsx_runtime_1.jsx)("option", { value: field, children: field }, field))] })] }), (0, jsx_runtime_1.jsxs)("label", { children: ["\u6E90 CRS", (0, jsx_runtime_1.jsx)("input", { disabled: importBusy || importPhase === 'success', value: importDraft.crs, maxLength: 80, onChange: event => setImportDraft({ ...importDraft, crs: event.currentTarget.value }) })] })] }), importDraft.preview !== null && (0, jsx_runtime_1.jsxs)("div", { className: "gh-import-preview", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsx)("span", { children: "\u5B57\u6BB5\u9884\u89C8" }), (0, jsx_runtime_1.jsxs)("small", { children: [importDraft.preview.fields.length, " fields \u00B7 ", importDraft.preview.delimiter === '\t' ? 'TAB' : importDraft.preview.delimiter, " delimiter"] })] }), (0, jsx_runtime_1.jsx)("div", { children: (0, jsx_runtime_1.jsxs)("table", { children: [(0, jsx_runtime_1.jsx)("thead", { children: (0, jsx_runtime_1.jsx)("tr", { children: importDraft.preview.fields.map(field => (0, jsx_runtime_1.jsx)("th", { children: field }, field)) }) }), (0, jsx_runtime_1.jsx)("tbody", { children: importDraft.preview.rows.slice(0, 5).map((row, rowIndex) => (0, jsx_runtime_1.jsx)("tr", { children: importDraft.preview?.fields.map((field, index) => (0, jsx_runtime_1.jsx)("td", { children: row[index] ?? '' }, field)) }, rowIndex)) })] }) })] }), importPhase !== 'idle' && (0, jsx_runtime_1.jsxs)("div", { className: `gh-import-progress is-${importPhase}`, children: [(0, jsx_runtime_1.jsx)("span", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: `${importProgress}%` } }) }), (0, jsx_runtime_1.jsx)("p", { children: importMessage }), importWarnings.map(warning => (0, jsx_runtime_1.jsxs)("small", { children: ["\u26A0 ", warning] }, warning))] }), (0, jsx_runtime_1.jsxs)("footer", { children: [(0, jsx_runtime_1.jsxs)("small", { children: ["\u652F\u6301 GeoJSON\u3001Shapefile ZIP\u3001GeoPackage\u3001CSV lon/lat \u00B7 \u4E0A\u9650 ", fileSizeLabel(importCapabilities.max_file_bytes)] }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-import-cancel", disabled: importBusy, onClick: () => setImportDraft(null), children: importPhase === 'success' ? '完成' : '取消' }), importPhase !== 'success' && (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-import-submit", disabled: importBusy, onClick: () => { void submitImport(); }, children: importPhase === 'error' ? '重试' : '导入' })] })] })] }) }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-workspace", children: [(0, jsx_runtime_1.jsxs)("section", { className: `gh-map-stage is-${runStatus}${highlightedLayerIds.size > 0 ? ' has-focus' : ''}`, children: [(0, jsx_runtime_1.jsx)(GeoMap, { layers: layers, selected: selectedFeature, highlightedLayerIds: highlightedLayerIds, runStatus: runStatus, onSelect: value => {
+                                                : (0, jsx_runtime_1.jsxs)("select", { disabled: importBusy || importPhase === 'success', value: importDraft.latitudeField, onChange: event => setImportDraft({ ...importDraft, latitudeField: event.currentTarget.value }), children: [(0, jsx_runtime_1.jsx)("option", { value: "", children: "\u8BF7\u9009\u62E9\u5B57\u6BB5" }), importDraft.preview.fields.map(field => (0, jsx_runtime_1.jsx)("option", { value: field, children: field }, field))] })] }), (0, jsx_runtime_1.jsxs)("label", { children: ["\u6E90 CRS", (0, jsx_runtime_1.jsx)("input", { disabled: importBusy || importPhase === 'success', value: importDraft.crs, maxLength: 80, onChange: event => setImportDraft({ ...importDraft, crs: event.currentTarget.value }) })] })] }), importDraft.preview !== null && (0, jsx_runtime_1.jsxs)("div", { className: "gh-import-preview", children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsx)("span", { children: "\u5B57\u6BB5\u9884\u89C8" }), (0, jsx_runtime_1.jsxs)("small", { children: [importDraft.preview.fields.length, " fields \u00B7 ", importDraft.preview.delimiter === '\t' ? 'TAB' : importDraft.preview.delimiter, " delimiter"] })] }), (0, jsx_runtime_1.jsx)("div", { children: (0, jsx_runtime_1.jsxs)("table", { children: [(0, jsx_runtime_1.jsx)("thead", { children: (0, jsx_runtime_1.jsx)("tr", { children: importDraft.preview.fields.map(field => (0, jsx_runtime_1.jsx)("th", { children: field }, field)) }) }), (0, jsx_runtime_1.jsx)("tbody", { children: importDraft.preview.rows.slice(0, 5).map((row, rowIndex) => (0, jsx_runtime_1.jsx)("tr", { children: importDraft.preview?.fields.map((field, index) => (0, jsx_runtime_1.jsx)("td", { children: row[index] ?? '' }, field)) }, rowIndex)) })] }) })] }), importPhase !== 'idle' && (0, jsx_runtime_1.jsxs)("div", { className: `gh-import-progress is-${importPhase}`, children: [(0, jsx_runtime_1.jsx)("span", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: `${importProgress}%` } }) }), (0, jsx_runtime_1.jsx)("p", { children: importMessage }), importWarnings.map(warning => (0, jsx_runtime_1.jsxs)("small", { children: ["\u26A0 ", warning] }, warning))] }), (0, jsx_runtime_1.jsxs)("footer", { children: [(0, jsx_runtime_1.jsxs)("small", { children: ["\u652F\u6301 GeoJSON\u3001Shapefile ZIP\u3001GeoPackage\u3001CSV lon/lat \u00B7 \u4E0A\u9650 ", fileSizeLabel(importCapabilities.max_file_bytes)] }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-import-cancel", disabled: importBusy, onClick: () => setImportDraft(null), children: importPhase === 'success' ? '完成' : '取消' }), importPhase !== 'success' && (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-import-submit", disabled: importBusy, onClick: () => { void submitImport(); }, children: importPhase === 'error' ? '重试' : '导入' })] })] })] }) }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-workspace", children: [(0, jsx_runtime_1.jsxs)("section", { className: `gh-map-stage is-${runStatus}${highlightedLayerIds.size > 0 ? ' has-focus' : ''}`, children: [(0, jsx_runtime_1.jsx)(GeoMap, { sessionId: sessionId, presentationMode: presentationMode, layers: layers, workspaceReady: workspaceReady, selected: selectedFeature, highlightedLayerIds: highlightedLayerIds, runStatus: runStatus, inspection: imageryInspection, imageryTarget: imageryTarget, onViewChange: syncImageryView, onSelect: value => {
                                         setSelectedFeature(value);
                                         if (value !== null)
                                             focusLayer(value.layer.id, true);
                                         else
                                             setFocusedLayerId(null);
-                                    } }), (0, jsx_runtime_1.jsxs)("div", { className: `gh-execution-strip is-${runStatus}`, "aria-live": "polite", children: [(0, jsx_runtime_1.jsx)("i", { "aria-hidden": "true" }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: runStatus === 'ready' ? '等待空间分析目标' : runStatus === 'running' ? 'Agent 正在执行真实 GIS Tool' : runStatus === 'success' ? '分析完成，结果已核查' : '运行中断，请查看错误' }), (0, jsx_runtime_1.jsx)("small", { children: liveStep?.title ?? 'Native Harness Session 与 Workspace 已连接' })] }), (0, jsx_runtime_1.jsxs)("em", { children: [(0, jsx_runtime_1.jsx)("span", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: `${progress}%` } }) }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length || 0] })] })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-map-layers-toggle", "aria-expanded": layerPanelOpen, "aria-controls": "geoharness-layer-panel", onClick: () => setLayerPanelOpen(open => !open), children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u25B1" }), " Layers ", (0, jsx_runtime_1.jsx)("small", { children: layers.length })] }), layerPanelOpen && (0, jsx_runtime_1.jsx)("div", { className: "gh-map-layer-drawer", id: "geoharness-layer-panel", children: (0, jsx_runtime_1.jsx)(GeoHarnessLayerPanel, { onClose: () => setLayerPanelOpen(false), selectedLayerId: inspectedLayerId, onInspect: layerId => focusLayer(layerId, true), onPreference: persistLayerPreference, layerStatuses: layerStatuses, statisticsCount: resultCenter?.statistics.length ?? 0 }) }), inspectedLayer !== null && (0, jsx_runtime_1.jsx)(GeoHarnessDataWorkbench, { layer: inspectedLayer, details: layerDetails, loading: layerDetailsLoading, error: layerDetailsError, selectedFeatureIndex: selectedFeature?.layer.id === inspectedLayer.id ? selectedFeature.featureIndex : null, onClose: () => { setInspectedLayerId(null); setLayerDetails(null); setLayerDetailsError(null); setFocusedLayerId(null); }, onSelectRow: index => {
+                                    } }), (0, jsx_runtime_1.jsxs)("div", { className: `gh-execution-strip is-${runStatus}`, "aria-live": "polite", children: [(0, jsx_runtime_1.jsx)("i", { "aria-hidden": "true" }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: runStatus === 'ready' ? '等待空间分析目标' : runStatus === 'running' ? 'Agent 正在执行真实 GIS Tool' : runStatus === 'success' ? '分析完成，结果已核查' : '运行中断，请查看错误' }), (0, jsx_runtime_1.jsx)("small", { children: liveStep?.title ?? 'Native Harness Session 与 Workspace 已连接' })] }), (0, jsx_runtime_1.jsxs)("em", { children: [(0, jsx_runtime_1.jsx)("span", { children: (0, jsx_runtime_1.jsx)("i", { style: { width: `${progress}%` } }) }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length || 0] })] })] }), (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-map-layers-toggle", "aria-expanded": layerPanelOpen, "aria-controls": "geoharness-layer-panel", onClick: () => setLayerPanelOpen(open => !open), children: [(0, jsx_runtime_1.jsx)("span", { "aria-hidden": "true", children: "\u25B1" }), " Layers ", (0, jsx_runtime_1.jsx)("small", { children: layers.length + (imageryInspection === null ? 0 : 1) })] }), layerPanelOpen && (0, jsx_runtime_1.jsx)("div", { className: "gh-map-layer-drawer", id: "geoharness-layer-panel", children: (0, jsx_runtime_1.jsx)(GeoHarnessLayerPanel, { onClose: () => setLayerPanelOpen(false), selectedLayerId: inspectedLayerId, onInspect: layerId => focusLayer(layerId, true), onPreference: persistLayerPreference, inspection: imageryInspection, onImageryPreference: persistImageryPreference, layerStatuses: layerStatuses, statisticsCount: resultCenter?.statistics.length ?? 0 }) }), inspectedLayer !== null && (0, jsx_runtime_1.jsx)(GeoHarnessDataWorkbench, { layer: inspectedLayer, details: layerDetails, loading: layerDetailsLoading, error: layerDetailsError, selectedFeatureIndex: selectedFeature?.layer.id === inspectedLayer.id ? selectedFeature.featureIndex : null, onClose: () => { setInspectedLayerId(null); setLayerDetails(null); setLayerDetailsError(null); setFocusedLayerId(null); }, onSelectRow: index => {
                                         const feature = inspectedLayer.data.features[index];
                                         if (feature !== undefined)
                                             setSelectedFeature({ layer: inspectedLayer, feature, featureIndex: index });
-                                    }, onReload: () => { void loadLayerDetails(inspectedLayer.id); }, onRename: renameInspectedLayer, onRemove: removeInspectedLayer })] }), (0, jsx_runtime_1.jsxs)("aside", { className: "gh-panel gh-agent", "aria-label": "Agent workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-panel-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Agent workspace" }), (0, jsx_runtime_1.jsx)("small", { children: "Goal \u2192 Plan \u2192 Tools \u2192 Layers" })] }), (0, jsx_runtime_1.jsx)("span", { className: `gh-agent-state is-${runStatus}`, children: runStatus })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-agent-scroll", ref: agentScroll, children: [(0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "GOAL" }), (0, jsx_runtime_1.jsx)("p", { children: goal })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "LIVE AGENT TOOL TRACE" }), taskSteps.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "\u8FD9\u91CC\u4E0D\u52A0\u8F7D\u9884\u8BBE Plan\uFF1BHarness Agent \u5B9E\u9645\u53D1\u8D77 Tool Call \u540E\uFF0C\u6B65\u9AA4\u624D\u4F1A\u9010\u9879\u51FA\u73B0\u3002" }), (0, jsx_runtime_1.jsx)("ol", { className: "gh-plan-list", "data-task-graph": "agent-generated", children: taskSteps.map((step, index) => (0, jsx_runtime_1.jsx)("li", { className: `is-${step.status}${selectedStepId === step.id ? ' is-selected' : ''}`, "data-step-id": step.id, "data-step-status": step.status, children: (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-step-button", onClick: () => { setFocusedLayerId(null); setSelectedStepId(step.id); }, children: [(0, jsx_runtime_1.jsx)("i", { children: stepIcon(step.status, index) }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: step.title }), (0, jsx_runtime_1.jsx)("small", { children: argumentSummary(step.arguments) }), step.summary !== null && (0, jsx_runtime_1.jsx)("small", { children: step.summary }), step.outputs.length > 0 && (0, jsx_runtime_1.jsxs)("small", { children: ["\u2192 ", step.outputs.join(', ')] })] })] }) }, step.id)) })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-current-step", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "CURRENT STEP" }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Driver" }), (0, jsx_runtime_1.jsx)("b", { children: "Native Harness Agent" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Model" }), (0, jsx_runtime_1.jsx)("b", { children: "\u539F\u751F\u8F93\u5165\u680F\u53EF\u5207\u6362" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Tools" }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length, " success"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Outputs" }), (0, jsx_runtime_1.jsxs)("b", { children: [derivedLayers.length, " layers"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Turns" }), (0, jsx_runtime_1.jsx)("b", { children: runHistoryCount })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Session" }), (0, jsx_runtime_1.jsx)("b", { title: sessionId, children: sessionId.slice(0, 12) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Map" }), (0, jsx_runtime_1.jsx)("b", { className: "is-teal", children: workspaceStatus })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-diagnostics-button", disabled: downloadingAsset !== null, onClick: () => { void downloadDiagnostics(); }, children: downloadingAsset === 'diagnostic' ? '正在生成诊断…' : '导出结构化诊断' }), runError !== null && (0, jsx_runtime_1.jsx)("p", { className: "gh-run-error", role: "alert", children: runError })] }), (0, jsx_runtime_1.jsx)(ResultCenterPanel, { result: resultCenter, downloading: downloadingAsset, error: downloadError, onDownload: asset => { void downloadResult(asset); }, onLayer: layerId => focusLayer(layerId, true), onLayerFocus: layerId => setFocusedLayerId(layerId), focusedLayerId: focusedLayerId }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-run-history", "aria-label": "Agent Run history", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "RUN MANIFEST \u00B7 REVISIONS" }), recentRunManifests.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "Native Session \u4EA7\u751F Tool Call \u540E\uFF0C\u8FD9\u91CC\u4F1A\u6062\u590D\u53EF\u6838\u67E5\u7684\u8FD0\u884C\u8BB0\u5F55\u3002" }), recentRunManifests.map(run => (0, jsx_runtime_1.jsxs)("article", { className: `is-${run.status}`, children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsxs)("b", { children: ["Turn ", run.turn] }), (0, jsx_runtime_1.jsxs)("small", { children: [run.status, " \u00B7 ", run.provider ?? 'provider', " / ", run.model ?? 'model'] })] }), (0, jsx_runtime_1.jsx)("p", { children: run.user_goal }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Executed ", (0, jsx_runtime_1.jsx)("b", { children: run.tool_calls.length })] }), (0, jsx_runtime_1.jsxs)("span", { children: ["Reused ", (0, jsx_runtime_1.jsx)("b", { children: run.reused_layers.length })] }), (0, jsx_runtime_1.jsxs)("span", { children: ["New outputs ", (0, jsx_runtime_1.jsx)("b", { children: run.output_layers.length })] })] }), run.tool_calls.length > 0 && (0, jsx_runtime_1.jsx)("small", { children: run.tool_calls.map(call => `${call.name} ${call.status === 'success' ? '✓' : call.status === 'failed' ? '!' : '…'}`).join(' · ') }), run.errors.length > 0 && (0, jsx_runtime_1.jsx)("small", { className: "is-error", children: run.errors.map(error => `${error.classification}: ${error.message}`).join(' · ') })] }, run.run_id))] }), (0, jsx_runtime_1.jsxs)("section", { className: `gh-agent-block gh-agent-result is-${runStatus}`, "aria-label": "Agent result", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-stream-heading", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "AGENT STREAM" }), (0, jsx_runtime_1.jsxs)("small", { children: [runStatus === 'running' ? 'LIVE' : runStatus.toUpperCase(), " \u00B7 ", successfulSteps.length, "/", taskSteps.length, " tools"] })] }), agentStream.length === 0
-                                                    ? (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: runStatus === 'running'
-                                                            ? '已提交给模型，等待首个流式 token…'
-                                                            : agentAnswer === '' ? 'Agent 的完整流式输出会显示在这里。' : agentAnswer })
+                                    }, onReload: () => { void loadLayerDetails(inspectedLayer.id); }, onRename: renameInspectedLayer, onRemove: removeInspectedLayer })] }), (0, jsx_runtime_1.jsxs)("aside", { className: "gh-panel gh-agent", "aria-label": "Agent workspace", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-panel-heading", children: [(0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: "Agent Workspace" }), (0, jsx_runtime_1.jsx)("small", { children: "\u5B9E\u65F6\u6267\u884C \u00B7 \u5206\u6790\u4E0E\u7ED3\u679C" })] }), (0, jsx_runtime_1.jsx)("span", { className: `gh-agent-state is-${runStatus}`, children: runStatus })] }), (0, jsx_runtime_1.jsxs)("div", { className: "gh-agent-scroll", ref: agentScroll, onScroll: event => {
+                                        const panel = event.currentTarget;
+                                        const stream = panel.querySelector('.gh-agent-result');
+                                        const end = stream ? stream.offsetTop + stream.offsetHeight - panel.offsetTop : panel.scrollHeight;
+                                        followAgentStream.current = end - panel.scrollTop - panel.clientHeight < 80;
+                                    }, children: [(0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-goal", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "\u5F53\u524D\u4EFB\u52A1" }), (0, jsx_runtime_1.jsx)("p", { children: goal })] }), (0, jsx_runtime_1.jsxs)("section", { className: "gh-agent-block gh-tool-trace", children: [(0, jsx_runtime_1.jsxs)("span", { className: "gh-eyebrow", children: ["\u6267\u884C\u6B65\u9AA4 ", (0, jsx_runtime_1.jsxs)("small", { children: [successfulSteps.length, " / ", taskSteps.length] })] }), taskSteps.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: runStatus === 'running' ? 'Agent 正在理解需求，准备分析工具…' : '输入地点或分析需求，Agent 将逐步展示执行过程。' }), (0, jsx_runtime_1.jsx)("ol", { className: "gh-plan-list", "data-task-graph": "agent-generated", children: taskSteps.map((step, index) => (0, jsx_runtime_1.jsx)("li", { className: `is-${step.status}${selectedStepId === step.id ? ' is-selected' : ''}`, "data-step-id": step.id, "data-step-status": step.status, children: (0, jsx_runtime_1.jsxs)("button", { type: "button", className: "gh-step-button", onClick: () => { setFocusedLayerId(null); setSelectedStepId(step.id); }, children: [(0, jsx_runtime_1.jsx)("i", { children: stepIcon(step.status, index) }), (0, jsx_runtime_1.jsxs)("span", { children: [(0, jsx_runtime_1.jsx)("b", { children: step.title }), (0, jsx_runtime_1.jsx)("small", { children: argumentSummary(step.arguments) }), step.summary !== null && (0, jsx_runtime_1.jsx)("small", { children: step.summary }), step.outputs.length > 0 && (0, jsx_runtime_1.jsxs)("small", { children: ["\u2192 ", step.outputs.join(', ')] })] })] }) }, step.id)) })] }), runError !== null && (0, jsx_runtime_1.jsx)("p", { className: "gh-run-error", role: "alert", children: runError }), (0, jsx_runtime_1.jsxs)("details", { className: "gh-agent-block gh-current-step", children: [(0, jsx_runtime_1.jsx)("summary", { className: "gh-eyebrow", children: "\u8FD0\u884C\u4FE1\u606F\u4E0E\u8BCA\u65AD" }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Driver" }), (0, jsx_runtime_1.jsx)("b", { children: "Native Harness Agent" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Model" }), (0, jsx_runtime_1.jsx)("b", { children: "\u539F\u751F\u8F93\u5165\u680F\u53EF\u5207\u6362" })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Tools" }), (0, jsx_runtime_1.jsxs)("b", { children: [successfulSteps.length, "/", taskSteps.length, " success"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Outputs" }), (0, jsx_runtime_1.jsxs)("b", { children: [derivedLayers.length + (imageryInspection === null ? 0 : 1), " layers"] })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Turns" }), (0, jsx_runtime_1.jsx)("b", { children: runHistoryCount })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Session" }), (0, jsx_runtime_1.jsx)("b", { title: sessionId, children: sessionId.slice(0, 12) })] }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsx)("span", { children: "Map" }), (0, jsx_runtime_1.jsx)("b", { className: "is-teal", children: workspaceStatus })] }), (0, jsx_runtime_1.jsx)("button", { type: "button", className: "gh-diagnostics-button", disabled: downloadingAsset !== null, onClick: () => { void downloadDiagnostics(); }, children: downloadingAsset === 'diagnostic' ? '正在生成诊断…' : '导出结构化诊断' })] }), (0, jsx_runtime_1.jsxs)("details", { className: "gh-agent-disclosure", children: [(0, jsx_runtime_1.jsx)("summary", { children: "\u7ED3\u679C\u6570\u636E\u4E0E\u4E0B\u8F7D" }), (0, jsx_runtime_1.jsx)(ResultCenterPanel, { result: resultCenter, downloading: downloadingAsset, error: downloadError, onDownload: asset => { void downloadResult(asset); }, onLayer: layerId => focusLayer(layerId, true), onLayerFocus: layerId => setFocusedLayerId(layerId), focusedLayerId: focusedLayerId })] }), (0, jsx_runtime_1.jsxs)("details", { className: "gh-agent-block gh-run-history", "aria-label": "Agent Run history", children: [(0, jsx_runtime_1.jsxs)("summary", { className: "gh-eyebrow", children: ["\u8FD0\u884C\u5386\u53F2 \u00B7 ", recentRunManifests.length] }), recentRunManifests.length === 0 && (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "Native Session \u4EA7\u751F Tool Call \u540E\uFF0C\u8FD9\u91CC\u4F1A\u6062\u590D\u53EF\u6838\u67E5\u7684\u8FD0\u884C\u8BB0\u5F55\u3002" }), recentRunManifests.map(run => (0, jsx_runtime_1.jsxs)("article", { className: `is-${run.status}`, children: [(0, jsx_runtime_1.jsxs)("header", { children: [(0, jsx_runtime_1.jsxs)("b", { children: ["Turn ", run.turn] }), (0, jsx_runtime_1.jsxs)("small", { children: [run.status, " \u00B7 ", run.provider ?? 'provider', " / ", run.model ?? 'model'] })] }), (0, jsx_runtime_1.jsx)("p", { children: run.user_goal }), (0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsxs)("span", { children: ["Executed ", (0, jsx_runtime_1.jsx)("b", { children: run.tool_calls.length })] }), (0, jsx_runtime_1.jsxs)("span", { children: ["Reused ", (0, jsx_runtime_1.jsx)("b", { children: run.reused_layers.length })] }), (0, jsx_runtime_1.jsxs)("span", { children: ["New outputs ", (0, jsx_runtime_1.jsx)("b", { children: run.output_layers.length })] })] }), run.tool_calls.length > 0 && (0, jsx_runtime_1.jsx)("small", { children: run.tool_calls.map(call => `${call.name} ${call.status === 'success' ? '✓' : call.status === 'failed' ? '!' : '…'}`).join(' · ') }), run.errors.length > 0 && (0, jsx_runtime_1.jsx)("small", { className: "is-error", children: run.errors.map(error => `${error.classification}: ${error.message}`).join(' · ') })] }, run.run_id))] }), (0, jsx_runtime_1.jsxs)("section", { className: `gh-agent-block gh-agent-result is-${runStatus}`, "aria-label": "Agent result", children: [(0, jsx_runtime_1.jsxs)("div", { className: "gh-stream-heading", children: [(0, jsx_runtime_1.jsx)("span", { className: "gh-eyebrow", children: "Agent \u5B9E\u65F6\u8F93\u51FA" }), (0, jsx_runtime_1.jsxs)("small", { children: [runStatus === 'running' ? 'LIVE' : runStatus.toUpperCase(), " \u00B7 ", successfulSteps.length, "/", taskSteps.length, " tools"] })] }), agentStream.length === 0
+                                                    ? runStatus === 'running'
+                                                        ? (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "\u5DF2\u63D0\u4EA4\u7ED9\u6A21\u578B\uFF0C\u7B49\u5F85\u9996\u4E2A\u6D41\u5F0F token\u2026" })
+                                                        : agentAnswer === ''
+                                                            ? (0, jsx_runtime_1.jsx)("p", { className: "gh-result-empty", children: "Agent \u7684\u5B8C\u6574\u6D41\u5F0F\u8F93\u51FA\u4F1A\u663E\u793A\u5728\u8FD9\u91CC\u3002" })
+                                                            : (0, jsx_runtime_1.jsx)(MarkdownContent, { text: agentAnswer })
                                                     : (0, jsx_runtime_1.jsx)("div", { className: "gh-stream-list", "aria-live": "polite", children: agentStream.map(item => item.kind === 'retry'
                                                             ? (0, jsx_runtime_1.jsxs)("div", { className: "gh-stream-retry", "data-stream-status": item.status, children: ["\u21BB ", item.text] }, item.id)
                                                             : item.kind === 'reasoning'
-                                                                ? (0, jsx_runtime_1.jsxs)("details", { className: "gh-stream-reasoning", open: item.status === 'streaming', children: [(0, jsx_runtime_1.jsxs)("summary", { children: ["Reasoning \u00B7 Turn ", item.turn, " / Step ", item.step] }), (0, jsx_runtime_1.jsxs)("p", { children: [item.text, item.status === 'streaming' && (0, jsx_runtime_1.jsx)("i", { className: "gh-stream-cursor" })] })] }, item.id)
-                                                                : (0, jsx_runtime_1.jsxs)("article", { className: "gh-stream-text", "data-stream-status": item.status, children: [(0, jsx_runtime_1.jsxs)("small", { children: ["Agent \u00B7 Turn ", item.turn, " / Step ", item.step] }), (0, jsx_runtime_1.jsxs)("p", { children: [item.text, item.status === 'streaming' && (0, jsx_runtime_1.jsx)("i", { className: "gh-stream-cursor" })] })] }, item.id)) }), (0, jsx_runtime_1.jsx)("div", { className: "gh-result-trace", children: successfulSteps.slice(-3).map(step => (0, jsx_runtime_1.jsxs)("small", { children: [(0, jsx_runtime_1.jsx)("i", { children: "\u2713" }), step.summary ?? step.title] }, step.id)) })] })] })] })] })] }));
+                                                                ? (0, jsx_runtime_1.jsxs)("details", { className: "gh-stream-reasoning", open: item.status === 'streaming', children: [(0, jsx_runtime_1.jsxs)("summary", { children: ["Reasoning \u00B7 Turn ", item.turn, " / Step ", item.step] }), (0, jsx_runtime_1.jsx)(MarkdownContent, { text: item.text, streaming: item.status === 'streaming' })] }, item.id)
+                                                                : (0, jsx_runtime_1.jsxs)("article", { className: "gh-stream-text", "data-stream-status": item.status, children: [(0, jsx_runtime_1.jsxs)("small", { children: ["Agent \u00B7 Turn ", item.turn, " / Step ", item.step] }), (0, jsx_runtime_1.jsx)(MarkdownContent, { text: item.text, streaming: item.status === 'streaming' })] }, item.id)) }), (0, jsx_runtime_1.jsx)("div", { className: "gh-result-trace", children: successfulSteps.slice(-3).map(step => (0, jsx_runtime_1.jsxs)("small", { children: [(0, jsx_runtime_1.jsx)("i", { children: "\u2713" }), step.summary ?? step.title] }, step.id)) })] })] })] })] })] }));
     }
     exports.inject = ['slots', 'connection'];
     function apply(ctx) {
@@ -1867,6 +2884,48 @@ window.__ModuleLoader__.load({
                         if (typeof response.value !== 'object')
                             throw new Error('Result Center returned an invalid projection');
                         return response.value;
+                    },
+                    saveImageryView: async (view) => {
+                        const response = await connection.rpc.call('/geoharness', 'imagery/view', {
+                            workspace_key: sessionId,
+                            bbox: view.bbox,
+                            zoom: view.zoom,
+                        });
+                        if (!response.ok)
+                            throw new Error(response.error?.message ?? 'Satellite viewport could not be synchronized');
+                    },
+                    imageryInspection: async () => {
+                        const response = await connection.rpc.call('/geoharness', 'imagery/latest', {
+                            workspace_key: sessionId,
+                        });
+                        if (!response.ok)
+                            throw new Error(response.error?.message ?? 'Satellite inspection result is unavailable');
+                        if (response.value === null)
+                            return null;
+                        if (typeof response.value !== 'object')
+                            throw new Error('Satellite inspection returned an invalid projection');
+                        return response.value;
+                    },
+                    imageryTarget: async () => {
+                        const response = await connection.rpc.call('/geoharness', 'imagery/target', {
+                            workspace_key: sessionId,
+                        });
+                        if (!response.ok)
+                            throw new Error(response.error?.message ?? 'Satellite inspection target is unavailable');
+                        if (response.value === null)
+                            return null;
+                        if (typeof response.value !== 'object')
+                            throw new Error('Satellite inspection target returned an invalid projection');
+                        return response.value;
+                    },
+                    setImageryPreference: async (inspectionId, preference) => {
+                        const response = await connection.rpc.call('/geoharness', 'imagery/preference', {
+                            workspace_key: sessionId,
+                            inspection_id: inspectionId,
+                            ...preference,
+                        });
+                        if (!response.ok)
+                            throw new Error(response.error?.message ?? 'Imagery Layer display preference could not be saved');
                     },
                     download: async (assetType, assetId) => {
                         const response = await connection.rpc.call('/geoharness', 'result/download', {

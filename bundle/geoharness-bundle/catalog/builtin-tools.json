@@ -189,6 +189,27 @@
       "map_effect": "none"
     },
     {
+      "name": "inspect_satellite_view",
+      "version": "0.3.0",
+      "capability": "imagery.visual-inspection",
+      "description": "Inspect Esri satellite RGB tiles for the current GeoHarness viewport or a user-named place and create a controllable Raster Overlay Layer for water, vegetation, built-up surfaces and bare ground. When the user names a place, pass place_name so GeoHarness resolves it with Esri, clips administrative places to a real OpenStreetMap boundary when available, and moves the map through a zoom-out/travel/zoom-in transition. This is visual screening only: it is not multispectral remote sensing, change detection or a measured area result.",
+      "parameters": {
+        "place_name": {
+          "type": "string",
+          "description": "Optional place named by the user, for example 武汉市洪山区. GeoHarness resolves the candidate with Esri and clips to an OpenStreetMap administrative boundary when a polygon is available. Omit only when the user explicitly asks to inspect the current viewport."
+        },
+        "focus_categories": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["water", "vegetation", "built_up", "bare_ground"] },
+          "description": "Optional visual classes to inspect. Omit to inspect all four supported classes."
+        },
+        "step_id": { "type": "string", "description": "Optional stable Agent step id. Omit to use the Harness tool-call id." }
+      },
+      "output": { "contract": "ToolResult@1.0", "creates_layer": false },
+      "timeout_ms": 120000,
+      "map_effect": "add-overlay"
+    },
+    {
       "name": "export_layer",
       "version": "1.0.0",
       "capability": "vector.export",

@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "topic_id": "03-satellite-visual-inspection",
+  "session_id": "session-36d74ae3-5cb2-407e-95b8-6a782cecf6ed",
+  "prompt": "请巡检武汉市洪山区卫星影像，只报告结果，不解释原因。",
+  "prompt_sha256": "9ce7cd1b936572b2946f3f5117c169281b52cd2e7fd16fa77b1032ed3d7fc449",
+  "started_at": "2026-09-01T09:05:02.905Z",
+  "finished_at": "2026-09-01T09:10:27.026Z",
+  "source_frames": {
+    "count": 1115,
+    "format": "JPEG",
+    "width": 1920,
+    "height": 1080,
+    "capture_intervals_ms": [100, 200],
+    "edit_timeline_fps": 10
+  },
+  "analysis": {
+    "place_name": "武汉市洪山区",
+    "esri_geocode_score": 100,
+    "bbox": [114.1669704, 30.3805998, 114.6358804, 30.6957241],
+    "boundary_clipped": true,
+    "boundary_source": "OpenStreetMap Nominatim",
+    "boundary_attribution": "OpenStreetMap contributors",
+    "boundary_license": "ODbL 1.0",
+    "osm_type": "relation",
+    "osm_id": 3080399,
+    "boundary_coordinate_count": 702,
+    "imagery_source": "Esri World Imagery",
+    "tile_count": 12,
+    "tile_zoom": 11,
+    "pixel_width": 683,
+    "pixel_height": 533,
+    "analysis_pixel_count": 108502,
+    "classified_pixel_ratio": 0.938619,
+    "raster_layer_id": "raster_inspection-2950eda822bd4213",
+    "final_visible": true,
+    "final_opacity": 0.62
+  },
+  "video": {
+    "file": "hongshan-boundary-agent-flow-1080p60.mp4",
+    "codec": "h264",
+    "profile": "High",
+    "level": 4.2,
+    "width": 1920,
+    "height": 1080,
+    "fps": 60,
+    "duration_seconds": 111.5,
+    "size_bytes": 16067699,
+    "sha256": "93697579aaa3682fe8871af88bbb37f668006d83ba9f39e099ab34370e838865"
+  },
+  "final_status": "success"
+}

@@ -820,3 +820,180 @@ v1.0 完成的外部阻塞；已知的上游 CLI、模型凭据和官方快照�
   Legend、滚轮/按钮缩放、Result Center 与原生输入区均正常。
 - [x] 新增 5 项 UI 模型/接线测试；最终全量门禁通过 TypeScript、Catalog、64 份 Markdown / 126 个
   本地链接、六 Scenario freshness、Node 91/91、Python 37/37 和 `git diff --check`。
+
+## GIS 矢量空间分析 Topic · 下曼哈顿消防覆盖盲区
+
+状态：完成（2026-08-31）
+
+- [x] 新建独立 `examples/topics/02-firehouse-coverage`；真实 Agent 自主发现并选择
+  `nyc-fire-coverage-official`，检查 360 栋建筑、48 个曼哈顿消防站和 3 个 Community District，
+  在 EPSG:32618 中执行 500 米缓冲、空间反选、最近设施、面积、分区聚合、分布统计和导出。
+- [x] 独立 GeoPandas/Shapely oracle 与 Agent 可靠结果一致：26 栋未覆盖建筑，总面积
+  10503.30 m²，最近消防站距离 505.50–674.61 m；MN-101/MN-102/MN-103 分别为 2/0/24 栋。
+- [x] Agent 识别 `intersects` 产生 36 行重复记录且后续重名字段连接失败，没有把错误中间层用于
+  结论；改用 26 行 `within` 分区连接和 `aggregate_by_region`，面积总量与独立 oracle 完全吻合。
+- [x] 成功导出 26 要素 GeoJSON 和 3 行分区 CSV；新增独立 Topic 测试、官方数据目录、下载脚本、
+  Prompt、oracle、来源哈希与生成 Catalog 文档。
+- [x] 完成 1920×1080、60 fps、H.264 High、7:57.5 的真实 Agent 流程 MP4。原始素材 54:49.15；
+  Provider 等待以 4 倍速压缩，非 GeoHarness 桌面区间完整删除，开头/中段/结尾和 30 秒联系表均
+  完成清晰度与内容抽查。MP4 按仓库策略仅保存在本地，`recording.json` 和 `final.png` 进入版本库。
+
+## 全球卫星影像底图预览
+
+状态：实现并通过真实 Harness 浏览器验收（2026-09-01）
+
+- [x] 在不改变 Native Session、canonical Workspace 或 Layer Registry 的前提下，将 Esri World
+  Imagery 在线瓦片置于 GeoHarness 矢量图层下方；卫星底图不进入空间 Tool 或统计结果。
+- [x] 将地图显示投影从经纬度线性插值改为 Web Mercator；视野、按钮/滚轮缩放和拖动变化时，按当前
+  屏幕范围选择瓦片并提高瓦片 zoom，避免放大后继续拉伸低分辨率影像。
+- [x] 地图默认卫星模式，并提供 `SAT → GRID → PLAIN` 循环切换；无网络时保留本地底色，归属信息
+  明确显示加载中、在线或回退状态。
+- [x] 新增纯函数测试覆盖投影方向、已知坐标、瓦片数量边界、HTTPS 来源、缩放分辨率和正式客户端
+  接线；完整 Node 门禁 81/81、client build、TypeScript、66 份 Markdown / 133 个本地链接、Catalog
+  freshness 和 `git diff --check` 通过。
+- [x] 真实 `http://127.0.0.1:31994/` 浏览器验收恢复 15 个 Layer；初始视野加载 48 张 z12 瓦片，
+  1.8× 后加载 z13 瓦片，拖动后仍保持 48 张在线瓦片，卫星/网格/纯色均可切换，console error 为 0。
+
+## 地图主视区与 Agent Workspace 视觉优化
+
+状态：实现并通过真实 Harness 浏览器验收（2026-09-01）
+
+- [x] 在 1120×912 真实视口将地图从 410×754 扩大到 466×758，Agent 栏从固定 390 px 收敛到
+  344 px；原生 composer 随同变为 324 px，模型切换、附件与发送控件仍完整可用。
+- [x] Legend 默认由 196×175 展开态改为 168×33 收起态；历史 Workspace 恢复不再自动弹开 Layers
+  drawer，导入成功后仍会主动打开，用户可随时通过地图左上角入口控制。
+- [x] 输入、中间、最终与当前步骤图层分别以 32%、42%、68%、82% 的角色强度叠加用户主透明度；
+  Legend 显示实际合成百分比，选中/步骤高亮仍保留动态描边与聚焦。
+- [x] 右侧 Agent Workspace 增加状态圆点、标题强调、Goal 强调面、Tool Trace 时间线、卡片层级、
+  渐变背景和更克制的阴影；完整 Agent Stream、Result Center、Run history 和原生 composer 未删减。
+- [x] client build、TypeScript、`git diff --check`、完整 Node 门禁 81/81 与相关 UI/地图回归 16/16
+  通过；真实浏览器恢复 767 个可见 SVG features，卫星影像在线且布局无自动遮挡。
+
+## 新会话自动定位
+
+状态：代码完成；真实系统定位等待用户开启 Windows 权限（2026-09-01）
+
+- [x] 新 Session 先等待 canonical Workspace 恢复；只对确认没有 Layer 的空会话定位，历史分析视野不被
+  电脑位置覆盖。
+- [x] 浏览器权限为 `granted` 或首次 `prompt` 时自动请求高精度位置，不再要求用户先点击地图按钮；
+  桌面定位超时由 10 秒放宽为 30 秒，并保留失败后的手动重试入口。
+- [x] 当前位置、精度圆和视野仅保存在浏览器 React 状态，不写 Workspace、不调用 Agent/RPC；分析 Layer
+  到达后地图切回真实数据范围。
+- [x] 新增 4 项定位回归，client build 与 TypeScript 通过；真实 Harness 新建空会话已确认自动进入
+  “正在准备定位”，当前机器随后因 Windows 当前用户位置权限为 `Deny` 返回超时。
+
+## 卫星影像视觉巡检 Agent
+
+状态：实现并通过真实 Harness / Esri 端到端验收（2026-09-01）
+
+- [x] 新增 `inspect_satellite_view` Harness Tool：只读取用户显式授权的当前地图视野，最多请求
+  16 张 Esri World Imagery RGB 瓦片，裁剪到最长边 768 px，并以有界颜色优势/边缘规则初筛
+  water、vegetation、built_up 和 bare_ground；不创建或伪造矢量 Layer。
+- [x] 新增 `imagery/view` / `imagery/latest`、真实预览与 RGBA Overlay、地图统计卡、Tool Trace、
+  Agent Stream 和通用 Result Center 结构化统计；结果明确是显示像素份额与启发式置信度，不是
+  NDVI、多光谱分类、变化检测或真实面积。
+- [x] 定位信息默认只保存在浏览器；必须点击地图 `AI` 才将当前 bbox/zoom 写入本地 Session 并允许
+  Esri 请求。本机定位视野已真实处理 12 张瓦片和 768×537 RGB 像素，但精确位置与截图不进入仓库。
+- [x] 真实运行发现当前 Harness 事件顺序为 `turn/start → user/message`；修复 Run Manifest 对旧逆序
+  的单向假设，Result Center 随当前 Prompt 动态出现统计、来源、警告和 Run 下载。新增连续两轮
+  回归，防止首轮缺失或上一轮 Prompt 错绑。
+- [x] Esri 首次请求曾返回瞬时 SSL EOF，Native Agent 没有回退到 Scenario，而是自主重试并成功；
+  最终 Tool Trace、Result Center、Run history 和 Agent Stream 全部收敛为可核查成功状态。
+- [x] 新建独立 `examples/topics/03-satellite-visual-inspection`，包含一个 Prompt、一份来源审计、一项
+  Topic 测试和公开纽约视野的真实 `media/final.png`；公开 Demo 隐藏全部矢量显示，不提交本机定位素材。
+- [x] `inspect_satellite_view@0.2.0` 支持用户 Prompt 中的真实 `place_name`；Esri World Geocoding
+  解析武汉市洪山区得分 100，以约 114.3378431°E、30.502804299°N 为候选中心生成有界视野，并明确
+  该窗口不是洪山区官方行政边界全覆盖。
+- [x] 巡检蒙版升级为会话级 Raster Overlay Layer：进入 Layers 面板和顶部/步骤 Layer 计数，支持显隐、
+  连续透明度、±10% 按钮和百分比显示。Host RPC 按 Session 持久化；真实刷新验收恢复
+  `visible=true`、`opacity=0.62`，地图实际 Overlay opacity 同为 0.62。
+- [x] 完成短 Prompt“请对武汉市洪山区做一次卫星影像视觉巡检。”的真实 Native Agent 录制；Provider
+  经真实 retry 后成功，Tool 读取 16 张 Esri 瓦片、处理 768×668 RGB 像素，92.1% 获得初筛类别，
+  全流程输出为本地 1920×1080、60 fps、H.264 High、113.1 秒 MP4。
+- [x] 录制脚本按截图真实 magic bytes 写 PNG/JPEG 扩展名，编码器兼容两种格式，不再把 Browser 返回的
+  JPEG 字节误命名为 `.png`。
+- [x] 最终本地门禁通过：Node 103/103、Python 40/40、TypeScript、peer dependencies、Catalog、
+  69 份 Markdown/135 个本地链接、六 Scenario freshness、7 个 Demo GIF、真实浏览器刷新恢复和
+  `git diff --check`。
+
+## 洪山区行政边界裁剪与地图飞行动画
+
+状态：实现、真实 Agent 录制并通过全量本地门禁（2026-09-01）
+
+- [x] 地名解析完成后，地图使用约 3.3 秒的三段视野插值：先从当前区域缩小，再平移到目标区域，
+  最后放大到行政区范围；动画结束后视野与实际分析 bbox 一致，不用预设城市坐标。
+- [x] `inspect_satellite_view@0.3.0` 在 Esri 地名候选之外，通过 OpenStreetMap Nominatim 获取真实
+  Polygon/MultiPolygon；在 Web Mercator 像素空间生成边界蒙版，只统计行政区内像素，并让区外
+  Overlay alpha 为 0。前端同步绘制边界线和区外暗化，不再把候选 extent 矩形冒充行政区。
+- [x] 边界能力保留明确来源与限制：OSM relation / attribution / ODbL 进入结构化结果；它是可审计
+  的 OSM 行政边界，不宣称为中国官方法定边界。Nominatim 没有返回可用多边形时，系统显式回退到
+  有界候选视野并在结果中说明，而不是伪造轮廓。
+- [x] 真实 Native Harness Session `session-36d74ae3-5cb2-407e-95b8-6a782cecf6ed` 使用短 Prompt
+  “请巡检武汉市洪山区卫星影像，只报告结果，不解释原因。”完成运行：Esri score 100、OSM relation
+  3080399、702 个边界坐标点、12 张 z11 瓦片、683×533 像素，其中行政区内 108,502 像素，
+  classified ratio 0.938619；Raster Layer 最终保持可见且透明度为 62%。
+- [x] 生成本地 `hongshan-boundary-agent-flow-1080p60.mp4`：原生 1920×1080 源帧、60 fps、
+  H.264 High / Level 4.2、111.5 秒、16,067,699 bytes；SHA256 为
+  `93697579AAA3682FE8871AF88BBB37F668006D83BA9F39E099AB34370E838865`。MP4 与原始帧按仓库策略
+  被 `.gitignore` 排除，仅提交可复核 Manifest。
+- [x] 最终门禁通过：client build、Catalog、69 份 Markdown / 135 个本地链接、六 Scenario freshness、
+  Node 104/104、Python 41/41、peer dependencies、7 个 Demo GIF、视频 ffprobe 和 `git diff --check`。
+
+## Agent Markdown 与渐进式影像巡检反馈
+
+状态：实现并通过真实 Harness 浏览器验收（2026-09-01）
+
+- [x] Agent Stream 接入安全的 Markdown 子集渲染：标题、段落、列表、强调、代码、引用、链接和表格
+  均转换为 React 结构，不再暴露完整消息中的 `#`、`**`、反引号或表格竖线；模型 HTML 始终转义，
+  未使用 `dangerouslySetInnerHTML`。
+- [x] `inspect_satellite_view` 在完成 Esri 地名与 OSM Polygon/MultiPolygon 解析后立即写入 Session 级
+  `imagery/target.json`，随后按 30% 影像获取、70% 区内分类、90% 结果生成、100% 完成更新；写入均
+  原子化，并带 Tool step ID 防止同 Session 上一轮目标闪回。
+- [x] 新增 loopback-only `imagery/target` 只读 RPC；Provider 只允许该 action 并发读取原子快照，
+  其余同 Workspace 写请求继续串行。地图在 Tool Result 前完成飞行，到达后先显示真实 OSM 边界和
+  加载动画，最终 `imagery/latest` 到达后再显示 Raster Overlay 与统计卡。
+- [x] 真实新会话 `session-6ee6180d-9a39-42c8-902e-1f313efccc73` 从电脑当前位置发起洪山区短 Prompt；
+  页面真实观察到渐进加载卡，首轮 Esri TLS EOF 显式失败后 Native Agent 自主重试，最终加载 OSM
+  relation 3080399、108,502 个区内像素、93.8619% 初筛分类和可控 Raster Layer。历史会话中的
+  Markdown 表格验收为 1 个真实 `<table>`，原始 pipe 表头计数为 0。
+- [x] 最终全量门禁通过：可复现 client build、TypeScript、Catalog、69 份 Markdown / 135 个本地链接、
+  六 Scenario freshness、Node 105/105、Python 41/41、peer dependencies、7 个 Demo GIF 和
+  `git diff --check`；预览服务继续运行在 `http://127.0.0.1:31994/`。
+
+## 2026-09-05：布局优化与洪山区发布版实录
+
+状态：本地实现、测试和真实会话录制完成；未提交、推送或部署。
+
+- [x] 地图/统计卡分区、原生 composer 实测留白、可折叠诊断和下载、较大字号、流式阅读跟随。
+- [x] CSS 演示模式保留原生模型菜单；解决焦点造成的外层滚动与标题裁切，并隐藏电脑定位。
+- [x] 地名解析先发布 target，稳定概览瓦片衔接飞行；独立 canonical 读取，修复其阻塞历史/进度轮询的问题。
+- [x] 经用户同意显式导入真实历史地名/行政边界缓存。新增来源与几何校验，不跨会话自动读数据，
+  未命中不套用缓存；影像和分类始终重新执行。使用真实 OSM 702 点边界的测试验证重新获取瓦片、
+  更换影像后分类确实变化、区外 alpha=0，并覆盖缓存不匹配和缺少来源信息。
+- [x] 最终会话 `session-f9bb5bfa-d16b-41d0-98d3-3ab93c5459f2` 成功运行：12 张在线 Esri 瓦片、
+  108,502 个区内像素，蒙版 `raster_inspection-99f92bd6a39a4946`，最终不透明度 52%。
+  工具还在 running 时已真实观察到洪山区边界与 30% 巡检进度。
+- [x] 同一会话新素材制成 67 秒 1080p/60 fps 导出 MP4，步骤字幕、同帧报告局部放大、结果动态框、
+  原创轻配乐、封面与发布简介。源是目标 8 fps 的浏览器截图，不宣称原生 60 fps 录屏。
+  源画幅变化和采集超时、未采集等待段均在 Manifest 披露，没有合成假 Agent 输出。
+- [x] 本地 Node 107/107、Python 43/43、TypeScript、client build、真实浏览器交互通过；MP4 的
+  ffprobe 与整段解码通过。布局在 1920×1080 和普通 1280×800 窗口核查。
+
+发布包：[洪山区实录视频与文案](examples/topics/03-satellite-visual-inspection/media/hongshan-publish-20260905.md)。
+
+## 2026-09-05：地图移动顺滑度优化
+
+- [x] 连续 Mercator 相机与对数缩放，平移/缩放重叠、按航程调整时长，消除三段各自启停。
+- [x] 保留出发时真实 pan/zoom；行政区候选范围到真实边界缓动调整；到达提示仅淡出不移位。
+- [x] 详细瓦片稳定复用、最多 128 张缓存与加载后淡入；飞行时跳过未显示的复杂边界路径生成。
+- [x] 本地 TypeScript、可复现 client build 与基于真实洪山区边界的曲线/瓦片回归通过。
+- [ ] 实机连续帧率/完整视觉验收：页面已刷新，但后续截图与只读状态请求均被审批服务 502 阻断，
+  没有绕过。算法的 60 Hz 采样不等于实机 60 fps；旧发布 MP4 未重录。无提交、推送或部署。
+
+## 2026-09-05：代码同步前验证
+
+- 用户授权同步当前相关代码与文档到 GitHub；不部署。现有工作流仅执行验证与插件生命周期测试。
+- Node 全量 112/112、Python 43/43、TypeScript、可复现 client build、版本目录、六案例 freshness、
+  70 份 Markdown / 140 个本地链接、七个 Demo GIF 检查通过。
+- 待同步文本的常见凭据特征扫描未命中；运行会话、临时录制帧、MP4 与本机宣传文案未纳入 Git。
+- 地图实际帧率验收限制及边界缓存来源说明仍保留，不因代码同步而标记为解决。

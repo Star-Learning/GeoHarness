@@ -7,7 +7,7 @@ const SAFE_ID = /^[a-z0-9][a-z0-9._-]{0,119}$/u
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,119}$/u
 const CAPABILITY = /^[a-z][a-z0-9.-]{0,119}$/u
 const SEMVER = /^[0-9]+\.[0-9]+\.[0-9]+$/u
-const MAP_EFFECTS = new Set(['none', 'add-layer', 'export'])
+const MAP_EFFECTS = new Set(['none', 'add-layer', 'add-overlay', 'export'])
 
 function object(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)

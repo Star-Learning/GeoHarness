@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-31",
+  "topicId": "02-firehouse-coverage",
+  "source": {
+    "kind": "real-native-harness-agent-session",
+    "sessionId": "session-04649b30-4fe2-488f-8d76-6c1f0e474a46",
+    "model": "deepseek-v4-flash-ascend1",
+    "datasetId": "nyc-fire-coverage-official",
+    "promptSha256": "b95ea32b36441b057250a625af5bbe0e7bd6245c73aa3d41f7ea90331b3b3c51"
+  },
+  "video": {
+    "file": "agent-flow-1080p60.mp4",
+    "codec": "h264",
+    "profile": "High",
+    "pixelFormat": "yuv420p",
+    "width": 1920,
+    "height": 1080,
+    "framesPerSecond": 60,
+    "durationSeconds": 477.5,
+    "hasAudio": false,
+    "sha256": "c9e120464460f64a59664d84b9c9b083d95de71cc71f2ae6ccf6f0d5d6aeaa85"
+  },
+  "editing": {
+    "speedFactor": 4,
+    "sourceDurationSeconds": 3289.15,
+    "keptSourceRangesSeconds": [
+      [0, 1160],
+      [1435, 2165]
+    ],
+    "endHoldSeconds": 5,
+    "excludedNonGeoHarnessDesktopFrames": true,
+    "notes": "Long provider waits were accelerated. A foreground interval that showed unrelated applications was removed; the retained ranges preserve the real Agent order and Tool outputs."
+  },
+  "verifiedResults": {
+    "inputBuildings": 360,
+    "firehouses": 48,
+    "bufferMeters": 500,
+    "uncoveredBuildings": 26,
+    "uncoveredAreaSquareMeters": 10503.3,
+    "nearestDistanceMeters": {
+      "minimum": 505.5,
+      "maximum": 674.61,
+      "mean": 553.57
+    },
+    "districts": {
+      "MN-101": {
+        "count": 2,
+        "areaSquareMeters": 2979.37
+      },
+      "MN-102": {
+        "count": 0,
+        "areaSquareMeters": 0
+      },
+      "MN-103": {
+        "count": 24,
+        "areaSquareMeters": 7523.93
+      }
+    },
+    "exports": [
+      "exports/uncovered_buildings_nearest_firehouse.geojson",
+      "exports/district_uncovered_statistics.csv"
+    ]
+  }
+}

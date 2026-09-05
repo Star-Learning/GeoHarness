@@ -148,19 +148,29 @@ session/disposed → 完成后释放 Session 队列
 Tool 参数与状态、输入/输出 Layer、最终回答引用、错误分类和 retry，但不会把
 `assistant/chunk` 中的隐藏 reasoning 写入 GeoHarness Workspace。
 
+真实 `0.1.1-rc.2` 会话已经确认 `turn/start` 先于该轮 `user/message`。Run projector 不再假定
+文档示例中的固定先后关系，而是为未绑定 Goal 的 turn 保留 start event，等真实用户消息到达后
+再创建 Run；兼容测试同时覆盖 `user/message → turn/start`。该适配是当前 Harness 源码/运行事件
+得出的真实集成方式，不依赖猜测 API 顺序。
+
 `session/flush` 是本版本确认过的真实集成点：Harness 在 flush 时会等待监听器返回的 Promise，
 因此 Session event log 与相应的 Run Manifest 不会在正常 flush 后发生时序缺口。客户端通过
 loopback-only `agent/runs` RPC 恢复最近运行，并与 `sessions.history` 的实时 Agent Stream 分工：
 前者负责可恢复摘要，后者负责当轮流式展示。完整 schema、并发一致性和五类修订验证见
 [`run-manifest.md`](run-manifest.md)。
 
-## 数据发现与 13 个 Geo Tools
+## 数据发现与 14 个 Geo Tools
 
-Host 通过当前 `@deepseek-ai/dsh-tools` API 注册 13 个 `defineTool` consumer。新增的
-`discover_datasets` 返回部署可用的数据能力；`list_layers(dataset_id)` 激活所选 catalog，
-其他 11 个分析/导出工具只接受返回的 canonical Layer ID。
+Host 通过当前 `@deepseek-ai/dsh-tools` API 注册 14 个 `defineTool` consumer。`discover_datasets`
+返回部署可用的数据能力；`inspect_dataset` 和 `list_layers(dataset_id)` 检查或激活所选 catalog，
+矢量分析/导出工具只接受返回的 canonical Layer ID。`inspect_satellite_view@0.3.0` 是例外：它接收
+用户授权的当前视野，或接收 Agent 从用户 Prompt 原样提取的 `place_name`，通过 Esri World Geocoding
+实时解析候选中心；对具有行政区 Polygon/MultiPolygon 的地名，再从 OpenStreetMap Nominatim 获取
+边界并以其 bbox 有界读取最多 16 张 World Imagery RGB 瓦片。边界在 Web Mercator 像素空间栅格化，
+边界外像素不进入类别统计且 Overlay alpha 为 0。它不会加载 Scenario，也不会把 Raster Overlay 或
+OSM 边界伪装成 canonical GeoPackage Layer。
 
-Platform Phase 6 后，这 13 个 Tool 的 name、semver、capability、parameters、`ToolResult@1.0`、
+Platform Phase 6 后，这 14 个 Tool 的 name、semver、capability、parameters、`ToolResult@1.0`、
 timeout 和 map effect 由 `catalog/builtin-tools.json` 驱动注册；Dataset discovery 和
 `list_layers` enum 由实际 `dataset.json` 生成。第三方 Tool 仍注册到相同官方 ToolRuntime，
 Agent Stream 与 Result Center 不需要识别具体 Tool 名。版本冲突或缺失 executor 会在 Host
@@ -194,6 +204,15 @@ GeoHarness Host 在官方 Connection generic RPC 上注册 loopback-only `/geoha
 通过后，客户端的 `registerWorkspaceProjection` 合并图层并保留可见性与透明度状态。地图支持
 Layer 显隐、连续透明度拖动、要素检查、pointer pan、fit bounds、工具栏缩放和 0.7×–5×
 鼠标滚轮缩放。正式客户端构建产物不再嵌入七个 Scenario GeoJSON。
+
+Raster Overlay 使用独立的 `imagery/latest` 投影恢复，不进入 canonical Registry。Host 的
+`imagery/preference` RPC 按 Session 和 Raster Layer ID 持久化 `visible` / `opacity`；客户端将它与
+矢量 Layer 一起显示在 Layers 面板，并将实际 SVG image opacity 绑定到同一值。Named-place 结果到达
+前，Python Tool 会先把解析后的 bbox、OSM geometry 和阶段写入原子的 `imagery/target` 快照。该只读
+RPC 是 Provider 唯一绕过同 Workspace 写队列的进度读，因而可在慢速瓦片获取/分类进程仍运行时读取，
+不允许修改 Layer 或 Workspace。客户端从当前 bounds 依次插值到 departure、approach 和目标边界，
+到达后显示 OSM 边界与加载进度；最终 `imagery/latest` 到达才揭示 Overlay/统计。
+`prefers-reduced-motion` 用户直接切换到目标范围。
 
 ## Scenario 仍保留，但仅是确定性回归
 

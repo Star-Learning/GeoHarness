@@ -75,6 +75,39 @@ test('Native Harness events project to reasoning-free versioned Run Manifests', 
   assert.doesNotMatch(JSON.stringify(runs), /hidden reasoning/)
 })
 
+test('Run Manifest binds the real request when Harness starts a turn before appending user/message', () => {
+  const runs = projectRunManifests('current-order-session', [
+    at(0, 'turn/start', { turn: 1 }),
+    at(1, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '巡检第一处卫星影像。' }] }),
+    at(2, 'tool/call', { turn: 1, step: 1, callId: 'inspect-1', name: 'inspect_satellite_view', arguments: '{}' }),
+    at(3, 'tool/result', {
+      turn: 1,
+      step: 1,
+      message: { source: { kind: 'tool', callId: 'inspect-1' }, content: [{ type: 'tool-result', content: [{ type: 'text', text: 'Inspected current view' }] }] },
+      meta: { success: true, summary: 'Inspected current view', outputs: [], data: { classified_pixel_ratio: 0.81 } },
+    }),
+    at(4, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    at(5, 'turn/start', { turn: 2 }),
+    at(6, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '巡检第二处卫星影像。' }] }),
+    at(7, 'tool/call', { turn: 2, step: 1, callId: 'inspect-2', name: 'inspect_satellite_view', arguments: '{}' }),
+    at(8, 'tool/result', {
+      turn: 2,
+      step: 1,
+      message: { source: { kind: 'tool', callId: 'inspect-2' }, content: [{ type: 'tool-result', content: [{ type: 'text', text: 'Inspected revised view' }] }] },
+      meta: { success: true, summary: 'Inspected revised view', outputs: [], data: { classified_pixel_ratio: 0.91 } },
+    }),
+    at(9, 'turn/end', { turn: 2, reason: { kind: 'completed' } }),
+  ])
+
+  assert.equal(runs.length, 2)
+  assert.deepEqual(runs.map(run => [run.turn, run.user_event_seq, run.user_goal]), [
+    [1, 1, '巡检第一处卫星影像。'],
+    [2, 6, '巡检第二处卫星影像。'],
+  ])
+  assert.equal(runs[0].tool_calls[0].result_data.classified_pixel_ratio, 0.81)
+  assert.equal(runs[1].tool_calls[0].result_data.classified_pixel_ratio, 0.91)
+})
+
 test('the mounted plugin persists a real Native Session Run and restores it through RPC', async t => {
   const temporary = await mkdtemp(join(tmpdir(), 'geoharness-platform-phase4-run-'))
   t.after(() => rm(temporary, { recursive: true, force: true }))
@@ -216,7 +249,7 @@ test('Provider serializes one Workspace while allowing independent Sessions to p
 test('the Agent workspace renders persisted Run comparison without exposing reasoning', async () => {
   const client = await readFile(join(bundleRoot, 'src', 'client.tsx'), 'utf8')
   for (const marker of [
-    "'agent/runs'", 'RUN MANIFEST · REVISIONS', 'Executed', 'Reused', 'New outputs',
+    "'agent/runs'", '运行历史', 'Executed', 'Reused', 'New outputs',
     'run.errors', 'run.tool_calls',
   ]) assert.ok(client.includes(marker), `Run history UI is missing ${marker}`)
   const styles = await readFile(join(bundleRoot, 'src', 'styles.css'), 'utf8')
