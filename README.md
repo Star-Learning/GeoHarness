@@ -1,10 +1,25 @@
 # GeoHarness
 
-GeoHarness 是 DeepSeek Harness 的 Agentic GIS 插件。直接用自然语言描述空间分析需求，Agent 会选择数据与 GIS 工具，并同步展示执行过程、地图图层和最终结果。
+GeoHarness 是 **DeepSeek Harness 的 Agentic GIS 插件**。用自然语言描述需求，Agent 自动发现数据、选择工具，并同步展示执行过程、地图图层和分析报告。
 
-开发者可从 [文档导航](docs/README.md) 开始阅读；当前主计划是 [GIS Agent 平台 v1.0 开发文档](docs/planning/geoharness-platform-v1.0.md)，最初方案保留为历史规划基线，真实 API 以 [当前 Harness 集成方式](docs/architecture/harness-integration.md) 为准。
+[快速安装](#安装) · [开始使用](#使用) · [更多案例](#案例) · [开发文档](docs/README.md)
+
+## 核心演示：一句话巡检卫星影像
+
+> 巡检武汉市洪山区卫星影像，输出中文简报、分类表与局限。
+
+**输入需求 → Agent 调用工具 → 地图定位 → 行政边界裁剪 → 巡检蒙版 → 图层控制与报告**
+
+![GeoHarness 核心流程：地图定位、行政边界裁剪、影像巡检、图层控制与 Agent 报告](examples/topics/03-satellite-visual-inspection/media/core-workflow.gif)
+
+真实会话剪辑，约 28 秒。使用真实历史地名与 OSM 边界缓存，重新获取 Esri 影像并计算；这是 RGB 启发式视觉初筛，不是遥感分割模型或实测面积。[案例与来源](examples/topics/03-satellite-visual-inspection/README.md)
+
+<details>
+<summary>查看矢量分析主界面</summary>
 
 ![GeoHarness 主界面](examples/scenarios/05-parameter-revision/screenshots/result-200m.jpg)
+
+</details>
 
 ## 安装
 
@@ -22,24 +37,38 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web add ./bundle/geoharness-bun
 npx @deepseek-ai/dsh@0.1.1-rc.2 web
 ```
 
-打开 `http://127.0.0.1:3080` 即可使用。当前正式版本为 `v1.0.0`，兼容 DeepSeek Harness `0.1.1-rc.2`；完整环境范围见[兼容矩阵](docs/releases/compatibility-matrix.md)。GeoHarness 以源码插件形式安装，因此请保留完整仓库目录，不要单独移动 `bundle/geoharness-bundle`。
+打开 `http://127.0.0.1:3080`。兼容 DeepSeek Harness `0.1.1-rc.2`，环境详情见[兼容矩阵](docs/releases/compatibility-matrix.md)。请保留完整仓库，插件运行依赖其中的 Python 后端和数据目录。
 
-卸载插件：
+<details>
+<summary>卸载插件</summary>
 
 ```sh
 npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @geoharness/harness-plugin
 ```
 
+</details>
+
 ## 使用
 
-1. 打开左下角“设置”，配置 LLM Provider、Base URL 和 API Key。
-2. 新建或选择一个项目与会话。
-3. 可点击顶部“导入数据”上传 GeoJSON、Shapefile ZIP、GeoPackage 或 CSV 经纬度文件；也可让 Agent 使用部署的数据目录。
-4. 在右侧对话框输入 GIS 需求，例如：`找出距离 Broadway 275 米内的建筑，展示相关图层并报告数量。`
-5. GeoHarness 会根据输入自动发现数据、规划步骤并调用 GIS 工具，不需要选择预设案例。
-6. 右侧可查看 Agent 的流式输出和执行进度；中间地图会同步显示图层与结果，可拖动、缩放和查看要素。
+1. 打开左下角“设置”，配置 LLM Provider、Base URL 和 API Key，新建或选择项目与会话。
+2. 做矢量分析时，导入 GeoJSON、Shapefile ZIP、GeoPackage 或 CSV 经纬度文件，也可使用已配置的数据目录；按地名巡检卫星影像时无需先导入矢量数据。
+3. 在右侧输入需求。Agent 自动发现数据、规划步骤、调用工具，不需要选择预设案例；模型仍通过原生对话框切换。
+4. 查看右侧流式输出、执行进度与报告，在地图上拖动、缩放，控制图层显隐和透明度。
+
+可以试试：
+
+- **影像巡检：**`巡检武汉市洪山区卫星影像，输出中文简报与分类表。`
+- **空间查询：**`找出距离 Broadway 275 米内的建筑，展示相关图层并报告数量。`
+- **继续追问：**`把范围改成 200 米，并导出结果。`
+
+影像巡检需要访问 Esri / OpenStreetMap；地名或边界服务不可用时会明确说明。分析当前定位视野前，先点击地图工具栏的 `AI` 按钮授权。
 
 ## 案例
+
+除了上面的影像巡检，还可查看[消防覆盖盲区](examples/topics/02-firehouse-coverage/README.md)等[综合分析专题](examples/topics/README.md)。以下七个真实数据案例各自保留独立数据、测试和 GIF。
+
+<details>
+<summary>展开七个矢量分析案例与 GIF</summary>
 
 ### 01 · 建筑数据检查
 
@@ -61,7 +90,7 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @geoharness/harness-
 
 ### 04 · Broadway 可达性分析
 
-创建 Broadway 300 米服务范围，筛选附近 249 栋建筑并按社区分区汇总。
+按到 Broadway 的 300 米直线距离筛选附近 249 栋建筑，并按社区分区汇总；不是道路网络行程时间分析。
 
 ![Broadway 可达性分析](examples/scenarios/04-road-accessibility/media/demo.gif)
 
@@ -82,3 +111,5 @@ npx @deepseek-ai/dsh@0.1.1-rc.2 plugin --profile web remove @geoharness/harness-
 检查纽约市官方数据中的 133 栋建筑，汇总几何质量、建造年份和屋顶高度。
 
 ![NYC 官方建筑数据检查](examples/scenarios/07-official-nyc-building-inspection/media/demo.gif)
+
+</details>

@@ -54,3 +54,20 @@ Tool 读取 12 张真实 World Imagery 瓦片，将 683×533 RGB 影像裁剪为
 - 未使用 NIR/SWIR/热红外，不能计算 NDVI、NDWI、NBR 或地表温度。
 - 行政区裁剪边界来自 OpenStreetMap 社区数据并遵循 ODbL，不是法定或官方边界来源；正式用途仍需与
   主管部门数据核对。
+
+## README 核心流程 GIF
+
+![真实会话：输入、定位、边界、巡检、图层与报告](media/core-workflow.gif)
+
+这是 2026-09-05 真实洪山区会话的约 28 秒精简剪辑，展示输入、工具执行、地图飞行、边界裁剪、
+巡检处理、蒙版生成、Agent 报告和图层显隐/透明度。该次运行复用经用户同意导入的真实历史地名与
+OSM 边界缓存，影像重新下载、结果重新计算；它不同于上面的 2026-09-01 在线解析记录。
+GIF 来源早于连续飞行优化，不作为新版相机顺滑度或原生 60 fps 的验收材料。
+
+- [剪辑区间与参数](media/core-workflow.storyboard.json)
+- [源视频与 GIF 哈希、帧数和时长](media/core-workflow.manifest.json)
+- [真实会话录制说明](media/hongshan-publish-20260905.md)
+
+复现：本机保留 `media/hongshan-publish-20260905.mp4`，安装 FFmpeg 与 Pillow 后，在仓库根目录
+运行 `python scripts/build-readme-gif.py`。只校验已提交 GIF 可运行 `python scripts/build-readme-gif.py --check`，
+不需要原始视频或 FFmpeg；MP4 不进入 Git。

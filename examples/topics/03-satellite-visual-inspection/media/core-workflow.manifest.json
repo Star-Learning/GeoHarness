@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "source_video": "hongshan-publish-20260905.mp4",
+  "source_sha256": "12f3d58a51f23db57f8448c7cf924b28bcd82f629fcc099e338a1bbe6ce9a157",
+  "source_manifest": "hongshan-publish-20260905.manifest.json",
+  "source_session": "session-f9bb5bfa-d16b-41d0-98d3-3ab93c5459f2",
+  "storyboard_sha256": "c345b7bb6d2e730ae76444487f224dbcca2c9aab625adf27a8a15b3674e54445",
+  "output": "core-workflow.gif",
+  "size": [
+    960,
+    540
+  ],
+  "frames": 131,
+  "duration_ms": 28100,
+  "sampled_frames": 132,
+  "palette_colors": 128,
+  "bytes": 5415797,
+  "sha256": "5ed1d14f049942af61fd69ea00285fe95c3ffbca6d06a6e1c3fb0258f0ad6106",
+  "segments": [
+    {
+      "role": "input",
+      "start": 0,
+      "end": 4,
+      "duration": 2.5,
+      "fps": 2,
+      "sampled_frames": 5,
+      "gif_start_ms": 0,
+      "gif_end_ms": 2500
+    },
+    {
+      "role": "plan",
+      "start": 5.5,
+      "end": 8.5,
+      "duration": 1.5,
+      "fps": 4,
+      "sampled_frames": 6,
+      "gif_start_ms": 2500,
+      "gif_end_ms": 4000
+    },
+    {
+      "role": "flight",
+      "start": 9.5,
+      "end": 15.125,
+      "duration": 5.6,
+      "fps": 8,
+      "sampled_frames": 45,
+      "gif_start_ms": 4000,
+      "gif_end_ms": 9600
+    },
+    {
+      "role": "boundary",
+      "start": 15.125,
+      "end": 18.875,
+      "duration": 2,
+      "fps": 4,
+      "sampled_frames": 8,
+      "gif_start_ms": 9600,
+      "gif_end_ms": 11600
+    },
+    {
+      "role": "inspection",
+      "start": 20.875,
+      "end": 25.375,
+      "duration": 2,
+      "fps": 4,
+      "sampled_frames": 8,
+      "gif_start_ms": 11600,
+      "gif_end_ms": 13600
+    },
+    {
+      "role": "layers",
+      "start": 25.375,
+      "end": 29.375,
+      "duration": 2,
+      "fps": 4,
+      "sampled_frames": 8,
+      "gif_start_ms": 13600,
+      "gif_end_ms": 15600
+    },
+    {
+      "role": "report",
+      "start": 36,
+      "end": 45,
+      "duration": 4,
+      "fps": 6,
+      "sampled_frames": 24,
+      "gif_start_ms": 15600,
+      "gif_end_ms": 19600
+    },
+    {
+      "role": "layer_controls",
+      "start": 48,
+      "end": 51,
+      "duration": 1.5,
+      "fps": 4,
+      "sampled_frames": 6,
+      "gif_start_ms": 19600,
+      "gif_end_ms": 21100
+    },
+    {
+      "role": "visibility_opacity",
+      "start": 51,
+      "end": 59,
+      "duration": 4,
+      "fps": 4,
+      "sampled_frames": 16,
+      "gif_start_ms": 21100,
+      "gif_end_ms": 25100
+    },
+    {
+      "role": "result",
+      "start": 60,
+      "end": 64,
+      "duration": 3,
+      "fps": 2,
+      "sampled_frames": 6,
+      "gif_start_ms": 25100,
+      "gif_end_ms": 28100
+    }
+  ],
+  "source_limitations": "One bounded capture call timed out after frame 613; all persisted frames retained. Viewport changed from 1080p to 1440p mid-capture. Output normalized with Lanczos. No missing frames inside either saved sequence; unrecorded inter-chunk waits are omitted.",
+  "edits": "Chronological excerpts, shorter waits, Lanczos downscale, shared palette and duplicate-frame optimization only. No synthetic motion. Not a recording of the newer continuous-flight code.",
+  "analysis_limitations": "RGB heuristic visual screening, not a trained segmentation model or measured area. Real cached geocoding/OSM boundary; newly acquired imagery and recomputed classification in the source run."
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "source_video": "hongshan-publish-20260905.mp4",
+  "source_manifest": "hongshan-publish-20260905.manifest.json",
+  "output": "core-workflow.gif",
+  "size": [960, 540],
+  "palette_colors": 128,
+  "max_bytes": 6000000,
+  "loop": 0,
+  "description": "Chronological excerpts of the real 2026-09-05 Hongshan Agent session. No synthetic UI, map motion, text, statistics or interpolation frames. Source predates the continuous-flight update.",
+  "segments": [
+    {"role": "input", "start": 0, "end": 4, "duration": 2.5, "fps": 2},
+    {"role": "plan", "start": 5.5, "end": 8.5, "duration": 1.5, "fps": 4},
+    {"role": "flight", "start": 9.5, "end": 15.125, "duration": 5.6, "fps": 8},
+    {"role": "boundary", "start": 15.125, "end": 18.875, "duration": 2, "fps": 4},
+    {"role": "inspection", "start": 20.875, "end": 25.375, "duration": 2, "fps": 4},
+    {"role": "layers", "start": 25.375, "end": 29.375, "duration": 2, "fps": 4},
+    {"role": "report", "start": 36, "end": 45, "duration": 4, "fps": 6},
+    {"role": "layer_controls", "start": 48, "end": 51, "duration": 1.5, "fps": 4},
+    {"role": "visibility_opacity", "start": 51, "end": 59, "duration": 4, "fps": 4},
+    {"role": "result", "start": 60, "end": 64, "duration": 3, "fps": 2}
+  ]
+}

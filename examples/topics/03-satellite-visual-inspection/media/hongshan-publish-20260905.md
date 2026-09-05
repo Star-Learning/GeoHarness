@@ -2,7 +2,7 @@
 
 推荐标题：**GeoHarness：一句话，让 GIS Agent 巡检洪山区**
 
-视频：[67 秒横屏发布版](hongshan-publish-20260905.mp4)
+本地视频：`hongshan-publish-20260905.mp4`（67 秒横屏发布版；MP4 不进入 Git）。
 
 封面：[1920×1080 封面](hongshan-publish-20260905.cover.jpg)
 

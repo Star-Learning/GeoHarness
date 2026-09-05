@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -159,4 +160,37 @@ test('the root README presents the concise installation, usage and Scenario path
     '不需要选择预设案例', 'docs/README.md',
   ]) assert.ok(readme.includes(marker), `root README is missing ${marker}`)
   assert.doesNotMatch(readme, /currently at Phase 0|contains no GIS backend/u)
+})
+
+test('README leads with an audited, bounded real-workflow GIF and folds the original examples', async () => {
+  const media = join(repositoryRoot, 'examples/topics/03-satellite-visual-inspection/media')
+  const [readme, gif, story, audit, recording] = await Promise.all([
+    readFile(join(repositoryRoot, 'README.md'), 'utf8'),
+    readFile(join(media, 'core-workflow.gif')),
+    readFile(join(media, 'core-workflow.storyboard.json'), 'utf8').then(JSON.parse),
+    readFile(join(media, 'core-workflow.manifest.json'), 'utf8').then(JSON.parse),
+    readFile(join(media, 'hongshan-publish-20260905.manifest.json'), 'utf8').then(JSON.parse),
+  ])
+  assert.ok(readme.indexOf('media/core-workflow.gif') < readme.indexOf('## 安装'))
+  assert.match(readme, /<summary>展开七个矢量分析案例与 GIF<\/summary>/u)
+  assert.match(readme, /真实历史地名与 OSM 边界缓存/u)
+  assert.match(readme, /不是遥感分割模型或实测面积/u)
+  assert.equal(gif.length, audit.bytes)
+  assert.ok(gif.length > 1_000_000 && gif.length <= story.max_bytes)
+  assert.deepEqual(gifMetadata(gif), { width: 960, height: 540, frames: audit.frames })
+  assert.ok(audit.frames >= 40)
+  assert.equal(audit.sha256, createHash('sha256').update(gif).digest('hex'))
+  assert.equal(audit.source_sha256, recording.sha256)
+  assert.equal(audit.source_session, recording.session_id)
+  const roles = new Set(story.segments.map(segment => segment.role))
+  for (const role of ['input', 'plan', 'flight', 'boundary', 'inspection', 'layers', 'report', 'visibility_opacity', 'result']) {
+    assert.ok(roles.has(role), `missing real workflow phase: ${role}`)
+  }
+  assert.equal(audit.duration_ms, Math.round(story.segments.reduce((sum, s) => sum + s.duration, 0) * 1000))
+  let previousEnd = 0
+  for (const segment of story.segments) {
+    assert.ok(segment.start >= previousEnd && segment.start < segment.end)
+    assert.ok(segment.end <= recording.duration_seconds)
+    previousEnd = segment.end
+  }
 })
